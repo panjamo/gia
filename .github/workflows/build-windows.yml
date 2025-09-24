@@ -27,3 +27,4 @@ jobs:
       with:
         name: gia-windows
         path: target/x86_64-pc-windows-msvc/release/gia.exe
+        overwrite: true
