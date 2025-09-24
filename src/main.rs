@@ -1,3 +1,4 @@
+mod api_key;
 mod clipboard;
 mod gemini;
 mod logging;
