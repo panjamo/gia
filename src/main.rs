@@ -17,6 +17,7 @@ struct Config {
     prompt: String,
     use_stdin_input: bool,
     use_stdout_output: bool,
+    prompt_only: bool,
 }
 
 impl Config {
@@ -31,11 +32,18 @@ impl Config {
                     .required(false)
             )
             .arg(
+                Arg::new("prompt-only")
+                    .short('p')
+                    .long("prompt-only")
+                    .help("Use only command-line arguments as prompt (no stdin/clipboard input)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
                 Arg::new("stdin")
                     .short('s')
                     .long("stdin")
                     .help("Read input from stdin instead of clipboard")
-                    .action(clap::ArgAction::SetTrue),
+                    .action(clap::ArgAction::SetTrue)
             )
             .arg(
                 Arg::new("stdout")
@@ -52,10 +60,20 @@ impl Config {
             .cloned()
             .collect();
         
+        let prompt_only = matches.get_flag("prompt-only");
+        let use_stdin_input = matches.get_flag("stdin");
+        
+        // Validate conflicting flags
+        if prompt_only && use_stdin_input {
+            eprintln!("Error: Cannot use --prompt-only (-p) with --stdin (-s)");
+            std::process::exit(1);
+        }
+        
         Self {
             prompt: prompt_parts.join(" "),
-            use_stdin_input: matches.get_flag("stdin"),
+            use_stdin_input,
             use_stdout_output: matches.get_flag("stdout"),
+            prompt_only,
         }
     }
 }
@@ -72,6 +90,12 @@ fn read_stdin() -> Result<String> {
 }
 
 fn get_input_text(config: &Config) -> Result<String> {
+    // If prompt-only mode, just return the prompt
+    if config.prompt_only {
+        log_info("Using prompt-only mode (no additional input)");
+        return Ok(config.prompt.clone());
+    }
+    
     let mut input_text = String::new();
     
     // Add prompt prefix if not empty
@@ -89,7 +113,7 @@ fn get_input_text(config: &Config) -> Result<String> {
         log_info("Reading input from clipboard");
         read_clipboard()?
     };
-
+    
     input_text.push_str(&main_input);
     Ok(input_text)
 }
@@ -119,7 +143,11 @@ async fn main() -> Result<()> {
 
     if input_text.trim().is_empty() {
         log_error("No input text provided");
-        eprintln!("Error: No input text provided. Provide input via clipboard or stdin.");
+        if config.prompt_only {
+            eprintln!("Error: No prompt text provided. Use command line arguments to specify the prompt.");
+        } else {
+            eprintln!("Error: No input text provided. Provide input via clipboard or stdin.");
+        }
         std::process::exit(1);
     }
 

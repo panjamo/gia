@@ -25,6 +25,8 @@ echo "# Copy some text to clipboard first, then run:"
 echo "# ./target/release/gia 'Summarize this text'"
 echo "# Or without prompt (just process clipboard data):"
 echo "# ./target/release/gia"
+echo "# Or prompt-only mode (no additional input):"
+echo "# ./target/release/gia -p 'What is artificial intelligence?'"
 echo
 echo "----------------------------------------"
 
@@ -52,7 +54,13 @@ echo "Vec and HashMap" | ./target/release/gia "What are the main differences bet
 echo
 echo "----------------------------------------"
 
-echo "6. Using debug logging:"
+echo "6. Prompt-only mode (no additional input):"
+echo "Command: gia -p 'What are the main features of Rust?' --stdout"
+./target/release/gia -p "What are the main features of Rust?" --stdout
+echo
+echo "----------------------------------------"
+
+echo "7. Using debug logging:"
 echo "Command: echo 'world' | RUST_LOG=debug gia 'Hello' --stdin --stdout"
 echo "world" | RUST_LOG=debug ./target/release/gia "Hello" --stdin --stdout 2>/dev/null
 echo
@@ -66,6 +74,10 @@ echo "# ./target/release/gia 'Translate to Spanish'"
 echo "# ./target/release/gia                        # No prompt, just process clipboard"
 echo "# ./target/release/gia 'Explain this concept' --stdout  # Output to terminal"
 echo
+echo "Prompt-only examples (no additional input needed):"
+echo "./target/release/gia -p 'Write a haiku about programming' --stdout"
+echo "./target/release/gia -p 'What is the difference between a compiler and interpreter?'"
+echo
 
 echo "=== Examples completed ==="
 echo
@@ -78,3 +90,7 @@ echo "gia 'Explain this'           # Clipboard input, clipboard output (default)
 echo "gia                          # Process clipboard without additional prompt"
 echo "gia 'Summarize' --stdout     # Clipboard input, stdout output"
 echo "echo 'text' | gia 'Process this' --stdin  # Stdin input, clipboard output"
+echo
+echo "Prompt-only mode:"
+echo "gia -p 'Your question here'  # Direct question to AI, no additional input"
+echo "gia -p 'Question' --stdout   # Prompt-only with stdout output"

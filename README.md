@@ -50,11 +50,23 @@ gia "Summarize this text"
 
 # Or without prompt (just process clipboard data):
 gia
+
+# Prompt-only mode (no additional input):
+gia -p "What is artificial intelligence?"
 ```
 
 ### Using stdin/stdout
 ```bash
 echo "What is Rust?" | gia "Explain this" --stdin --stdout
+```
+
+### Prompt-only mode
+```bash
+# Direct question to AI (no additional input)
+gia -p "What are the benefits of functional programming?"
+
+# Works with output redirection
+gia -p "Write a haiku about coding" --stdout
 ```
 
 ### Mixed operations
@@ -69,6 +81,7 @@ echo "Machine learning algorithms" | gia "Explain in simple terms" --stdin
 ### Command line options
 
 - `[PROMPT_TEXT]` - Optional prompt text for the AI (prepended to input data)
+- `-p, --prompt-only` - Use only command-line arguments as prompt (no stdin/clipboard input)
 - `-s, --stdin` - Read input data from stdin instead of clipboard
 - `-t, --stdout` - Write response to stdout instead of clipboard
 
@@ -93,6 +106,9 @@ gia "What are the benefits of using Rust for this project?"
 
 # Or copy complete question to clipboard and just run:
 gia
+
+# Direct question without any input:
+gia -p "What are the benefits of using Rust?"
 ```
 
 ### Code explanation
@@ -113,6 +129,9 @@ gia "Translate to Spanish"
 
 # Get output to terminal instead
 gia "Explain this concept" --stdout
+
+# Ask direct questions
+gia -p "How does machine learning work?"
 ```
 
 ## Dependencies
