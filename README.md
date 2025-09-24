@@ -118,6 +118,7 @@ gia --list-conversations
 - `-o, --clipboard-output` - Write response to clipboard instead of stdout
 - `-r, --resume [ID]` - Resume last conversation or specify conversation ID
 - `-l, --list-conversations` - List all saved conversations
+- `-m, --model <MODEL>` - Specify Gemini model (default: gemini-2.5-flash-lite) see https://ai.google.dev/gemini-api/docs/models
 
 ## Logging
 
