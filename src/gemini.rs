@@ -1,8 +1,8 @@
+use crate::logging::{log_debug, log_error, log_info};
 use anyhow::{Context, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::env;
-use crate::logging::{log_info, log_debug, log_error};
 
 const GEMINI_API_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -62,11 +62,11 @@ pub struct GeminiClient {
 
 impl GeminiClient {
     pub fn new() -> Result<Self> {
-        let api_key = env::var("GEMINI_API_KEY")
-            .context("GEMINI_API_KEY environment variable not set")?;
-        
+        let api_key =
+            env::var("GEMINI_API_KEY").context("GEMINI_API_KEY environment variable not set")?;
+
         log_info("Initializing Gemini API client");
-        
+
         Ok(Self {
             client: Client::new(),
             api_key,
@@ -75,8 +75,11 @@ impl GeminiClient {
     }
 
     pub async fn generate_content(&self, prompt: &str) -> Result<String> {
-        log_debug(&format!("Sending request to Gemini API with prompt length: {}", prompt.len()));
-        
+        log_debug(&format!(
+            "Sending request to Gemini API with prompt length: {}",
+            prompt.len()
+        ));
+
         let request = GeminiRequest {
             contents: vec![Content {
                 parts: vec![Part {
@@ -105,7 +108,10 @@ impl GeminiClient {
             .context("Failed to send request to Gemini API")?;
 
         if !response.status().is_success() {
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
             log_error(&format!("Gemini API error: {}", error_text));
             return Err(anyhow::anyhow!("Gemini API request failed: {}", error_text));
         }
@@ -117,13 +123,16 @@ impl GeminiClient {
 
         let generated_text = gemini_response
             .candidates
-            .get(0)
-            .and_then(|candidate| candidate.content.parts.get(0))
+            .first()
+            .and_then(|candidate| candidate.content.parts.first())
             .map(|part| part.text.clone())
             .context("No generated content in response")?;
 
-        log_info(&format!("Received response from Gemini API, length: {}", generated_text.len()));
-        
+        log_info(&format!(
+            "Received response from Gemini API, length: {}",
+            generated_text.len()
+        ));
+
         Ok(generated_text)
     }
 }

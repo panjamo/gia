@@ -1,4 +1,4 @@
-use log::{error, warn, info, debug, trace};
+use log::{debug, error, info, trace, warn};
 use std::io::Write;
 
 pub fn init_logging() {

@@ -1,6 +1,6 @@
+use crate::logging::{log_debug, log_info};
 use anyhow::{Context, Result};
 use arboard::Clipboard;
-use crate::logging::{log_info, log_debug};
 
 pub struct ClipboardManager {
     clipboard: Clipboard,
@@ -9,30 +9,30 @@ pub struct ClipboardManager {
 impl ClipboardManager {
     pub fn new() -> Result<Self> {
         log_debug("Initializing clipboard manager");
-        let clipboard = Clipboard::new()
-            .context("Failed to initialize clipboard")?;
-        
+        let clipboard = Clipboard::new().context("Failed to initialize clipboard")?;
+
         Ok(Self { clipboard })
     }
 
     pub fn get_text(&mut self) -> Result<String> {
         log_debug("Reading text from clipboard");
-        
-        let text = self.clipboard
+
+        let text = self
+            .clipboard
             .get_text()
             .context("Failed to read text from clipboard")?;
-        
+
         log_info(&format!("Read {} characters from clipboard", text.len()));
         Ok(text)
     }
 
     pub fn set_text(&mut self, text: &str) -> Result<()> {
         log_debug(&format!("Writing {} characters to clipboard", text.len()));
-        
+
         self.clipboard
             .set_text(text)
             .context("Failed to write text to clipboard")?;
-        
+
         log_info("Successfully wrote text to clipboard");
         Ok(())
     }
