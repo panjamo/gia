@@ -1,6 +1,6 @@
+use crate::logging::{log_error, log_info, log_warn};
 use anyhow::Result;
 use std::env;
-use crate::logging::{log_error, log_info, log_warn};
 
 const GEMINI_API_KEY_URL: &str = "https://makersuite.google.com/app/apikey";
 const GEMINI_DOCS_URL: &str = "https://ai.google.dev/gemini-api/docs/api-key";
@@ -53,7 +53,7 @@ fn handle_api_key_error() -> Result<String> {
 
     // Ask user if they want to open the API key page
     eprintln!("Would you like to open the API key page in your browser? (y/N)");
-    
+
     let mut input = String::new();
     if std::io::stdin().read_line(&mut input).is_ok() {
         let response = input.trim().to_lowercase();
@@ -70,7 +70,7 @@ fn handle_api_key_error() -> Result<String> {
 
 fn open_browser(url: &str) {
     log_info(&format!("Attempting to open browser to: {}", url));
-    
+
     match webbrowser::open(url) {
         Ok(_) => {
             log_info("Successfully opened browser");
@@ -91,18 +91,21 @@ pub fn validate_api_key_format(api_key: &str) -> bool {
         log_warn("API key length is not 39 characters (expected for Google API keys)");
         return false;
     }
-    
+
     if !api_key.starts_with("AIza") {
         log_warn("API key does not start with 'AIza' (expected for Google API keys)");
         return false;
     }
-    
+
     // Check if it contains only valid characters (alphanumeric, dash, underscore)
-    if !api_key.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+    if !api_key
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
         log_warn("API key contains invalid characters");
         return false;
     }
-    
+
     log_info("API key format validation passed");
     true
 }

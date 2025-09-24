@@ -7,7 +7,6 @@ use anyhow::{Context, Result};
 use clap::{Arg, Command};
 use std::io::{self, Read};
 
-
 use crate::clipboard::{read_clipboard, write_clipboard};
 use crate::gemini::GeminiClient;
 use crate::logging::{init_logging, log_debug, log_error, log_info};
@@ -15,41 +14,41 @@ use crate::logging::{init_logging, log_debug, log_error, log_info};
 #[derive(Debug)]
 struct Config {
     prompt: String,
+    use_clipboard_input: bool,
     use_stdin_input: bool,
-    use_stdout_output: bool,
-    prompt_only: bool,
+    use_clipboard_output: bool,
 }
 
 impl Config {
     fn from_args() -> Self {
         let matches = Command::new("gia")
             .version("0.1.0")
-            .about("AI CLI tool using Google Gemini API (clipboard default)")
+            .about("AI CLI tool using Google Gemini API (stdout default)")
             .arg(
                 Arg::new("prompt")
                     .help("Prompt text for the AI")
                     .num_args(0..)
-                    .required(false)
+                    .required(false),
             )
             .arg(
-                Arg::new("prompt-only")
-                    .short('p')
-                    .long("prompt-only")
-                    .help("Use only command-line arguments as prompt (no stdin/clipboard input)")
-                    .action(clap::ArgAction::SetTrue)
+                Arg::new("clipboard-input")
+                    .short('c')
+                    .long("clipboard-input")
+                    .help("Add clipboard content to prompt")
+                    .action(clap::ArgAction::SetTrue),
             )
             .arg(
                 Arg::new("stdin")
                     .short('s')
                     .long("stdin")
-                    .help("Read input from stdin instead of clipboard")
-                    .action(clap::ArgAction::SetTrue)
+                    .help("Add stdin content to prompt")
+                    .action(clap::ArgAction::SetTrue),
             )
             .arg(
-                Arg::new("stdout")
-                    .short('t')
-                    .long("stdout")
-                    .help("Write output to stdout instead of clipboard")
+                Arg::new("clipboard-output")
+                    .short('o')
+                    .long("clipboard-output")
+                    .help("Write output to clipboard instead of stdout")
                     .action(clap::ArgAction::SetTrue),
             )
             .get_matches();
@@ -59,21 +58,12 @@ impl Config {
             .unwrap_or_default()
             .cloned()
             .collect();
-        
-        let prompt_only = matches.get_flag("prompt-only");
-        let use_stdin_input = matches.get_flag("stdin");
-        
-        // Validate conflicting flags
-        if prompt_only && use_stdin_input {
-            eprintln!("Error: Cannot use --prompt-only (-p) with --stdin (-s)");
-            std::process::exit(1);
-        }
-        
+
         Self {
             prompt: prompt_parts.join(" "),
-            use_stdin_input,
-            use_stdout_output: matches.get_flag("stdout"),
-            prompt_only,
+            use_clipboard_input: matches.get_flag("clipboard-input"),
+            use_stdin_input: matches.get_flag("stdin"),
+            use_clipboard_output: matches.get_flag("clipboard-output"),
         }
     }
 }
@@ -90,42 +80,44 @@ fn read_stdin() -> Result<String> {
 }
 
 fn get_input_text(config: &Config) -> Result<String> {
-    // If prompt-only mode, just return the prompt
-    if config.prompt_only {
-        log_info("Using prompt-only mode (no additional input)");
-        return Ok(config.prompt.clone());
-    }
-    
     let mut input_text = String::new();
-    
-    // Add prompt prefix if not empty
+
+    // Start with command line prompt
     if !config.prompt.is_empty() {
-        log_info("Adding command line prompt as prefix");
+        log_info("Using command line prompt");
         input_text.push_str(&config.prompt);
-        input_text.push_str("\n\n");
     }
 
-    // Get main input from clipboard or stdin
-    let main_input = if config.use_stdin_input {
-        log_info("Reading input from stdin");
-        read_stdin()?
-    } else {
-        log_info("Reading input from clipboard");
-        read_clipboard()?
-    };
-    
-    input_text.push_str(&main_input);
+    // Add additional input if requested
+    if config.use_clipboard_input {
+        log_info("Adding clipboard input");
+        let clipboard_input = read_clipboard()?;
+        if !input_text.is_empty() {
+            input_text.push_str("\n\n");
+        }
+        input_text.push_str(&clipboard_input);
+    }
+
+    if config.use_stdin_input {
+        log_info("Adding stdin input");
+        let stdin_input = read_stdin()?;
+        if !input_text.is_empty() {
+            input_text.push_str("\n\n");
+        }
+        input_text.push_str(&stdin_input);
+    }
+
     Ok(input_text)
 }
 
 fn output_text(text: &str, config: &Config) -> Result<()> {
-    if config.use_stdout_output {
+    if config.use_clipboard_output {
+        log_info("Writing response to clipboard");
+        write_clipboard(text)
+    } else {
         log_info("Writing response to stdout");
         print!("{}", text);
         Ok(())
-    } else {
-        log_info("Writing response to clipboard");
-        write_clipboard(text)
     }
 }
 
@@ -143,11 +135,7 @@ async fn main() -> Result<()> {
 
     if input_text.trim().is_empty() {
         log_error("No input text provided");
-        if config.prompt_only {
-            eprintln!("Error: No prompt text provided. Use command line arguments to specify the prompt.");
-        } else {
-            eprintln!("Error: No input text provided. Provide input via clipboard or stdin.");
-        }
+        eprintln!("Error: No input text provided. Provide prompt as command line arguments or use -c/-s for additional input.");
         std::process::exit(1);
     }
 

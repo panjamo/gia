@@ -19,78 +19,66 @@ cargo build --release
 echo
 
 # Basic examples
-echo "1. Default usage (clipboard to clipboard):"
-echo "Command: gia 'Summarize this text' (copy text to clipboard first)"
+echo "1. Default usage (command line prompt to stdout):"
+echo "Command: gia 'What is artificial intelligence?'"
+./target/release/gia "What is artificial intelligence?"
+echo
+echo "----------------------------------------"
+
+echo "2. Using additional clipboard input:"
+echo "Command: gia 'Explain this code' -c (copy code to clipboard first)"
+echo "# Copy some code to clipboard first, then run:"
+echo "# ./target/release/gia 'Explain this code' -c"
+echo
+echo "----------------------------------------"
+
+echo "3. Using additional stdin input:"
+echo "Command: echo 'fn fibonacci(n: u32) -> u32 { if n <= 1 { n } else { fibonacci(n-1) + fibonacci(n-2) } }' | gia 'Explain this Rust code' -s"
+echo "fn fibonacci(n: u32) -> u32 { if n <= 1 { n } else { fibonacci(n-1) + fibonacci(n-2) } }" | ./target/release/gia "Explain this Rust code" -s
+echo
+echo "----------------------------------------"
+
+echo "4. Output to clipboard:"
+echo "Command: gia 'Write a haiku about programming' -o"
+./target/release/gia "Write a haiku about programming" -o
+echo "# Output written to clipboard"
+echo
+echo "----------------------------------------"
+
+echo "5. Combining clipboard and stdin input:"
+echo "Command: echo 'extra context' | gia 'Main question about this topic' -c -s"
 echo "# Copy some text to clipboard first, then run:"
-echo "# ./target/release/gia 'Summarize this text'"
-echo "# Or without prompt (just process clipboard data):"
-echo "# ./target/release/gia"
-echo "# Or prompt-only mode (no additional input):"
-echo "# ./target/release/gia -p 'What is artificial intelligence?'"
+echo "# echo 'extra context' | ./target/release/gia 'Main question about this topic' -c -s"
 echo
 echo "----------------------------------------"
 
-echo "2. Using stdin input with stdout output:"
-echo "Command: echo 'Explain async/await in Rust' | gia 'Please explain' --stdin --stdout"
-echo "Explain async/await in Rust" | ./target/release/gia "Please explain" --stdin --stdout
+echo "6. Using debug logging:"
+echo "Command: RUST_LOG=debug gia 'What are the main features of Rust?'"
+RUST_LOG=debug ./target/release/gia "What are the main features of Rust?" 2>/dev/null
 echo
 echo "----------------------------------------"
 
-echo "3. Code explanation with stdin:"
-echo "Command: echo 'fn fibonacci(n: u32) -> u32 { if n <= 1 { n } else { fibonacci(n-1) + fibonacci(n-2) } }' | gia 'Explain this Rust code' --stdin --stdout"
-echo "fn fibonacci(n: u32) -> u32 { if n <= 1 { n } else { fibonacci(n-1) + fibonacci(n-2) } }" | ./target/release/gia "Explain this Rust code" --stdin --stdout
+
 echo
 echo "----------------------------------------"
 
-echo "4. Creative prompt with stdin:"
-echo "Command: echo 'coding late at night' | gia 'Write a haiku about' --stdin --stdout"
-echo "coding late at night" | ./target/release/gia "Write a haiku about" --stdin --stdout
-echo
-echo "----------------------------------------"
-
-echo "5. Technical question with context:"
-echo "Command: echo 'Vec and HashMap' | gia 'What are the main differences between these Rust types' --stdin --stdout"
-echo "Vec and HashMap" | ./target/release/gia "What are the main differences between these Rust types" --stdin --stdout
-echo
-echo "----------------------------------------"
-
-echo "6. Prompt-only mode (no additional input):"
-echo "Command: gia -p 'What are the main features of Rust?' --stdout"
-./target/release/gia -p "What are the main features of Rust?" --stdout
-echo
-echo "----------------------------------------"
-
-echo "7. Using debug logging:"
-echo "Command: echo 'world' | RUST_LOG=debug gia 'Hello' --stdin --stdout"
-echo "world" | RUST_LOG=debug ./target/release/gia "Hello" --stdin --stdout 2>/dev/null
-echo
-echo "----------------------------------------"
-
-# Clipboard examples (commented out as they require user interaction)
-echo "Clipboard examples (default behavior - uncomment to test):"
+# Additional examples (commented out as they require user interaction)
+echo "Additional examples (uncomment to test):"
 echo "# Copy some text to clipboard first, then run:"
-echo "# ./target/release/gia 'Summarize this'"
-echo "# ./target/release/gia 'Translate to Spanish'"
-echo "# ./target/release/gia                        # No prompt, just process clipboard"
-echo "# ./target/release/gia 'Explain this concept' --stdout  # Output to terminal"
-echo
-echo "Prompt-only examples (no additional input needed):"
-echo "./target/release/gia -p 'Write a haiku about programming' --stdout"
-echo "./target/release/gia -p 'What is the difference between a compiler and interpreter?'"
+echo "# ./target/release/gia 'Summarize this text' -c"
+echo "# ./target/release/gia 'Translate to Spanish' -c -o"
+echo "# ./target/release/gia 'Fix any errors in this code' -c"
 echo
 
 echo "=== Examples completed ==="
 echo
 echo "To run with different log levels:"
-echo "echo 'input' | RUST_LOG=info gia 'your prompt' --stdin --stdout"
-echo "echo 'input' | RUST_LOG=debug gia 'your prompt' --stdin --stdout"
+echo "RUST_LOG=info gia 'your prompt here'"
+echo "RUST_LOG=debug gia 'your prompt here'"
 echo
-echo "Default clipboard operations:"
-echo "gia 'Explain this'           # Clipboard input, clipboard output (default)"
-echo "gia                          # Process clipboard without additional prompt"
-echo "gia 'Summarize' --stdout     # Clipboard input, stdout output"
-echo "echo 'text' | gia 'Process this' --stdin  # Stdin input, clipboard output"
-echo
-echo "Prompt-only mode:"
-echo "gia -p 'Your question here'  # Direct question to AI, no additional input"
-echo "gia -p 'Question' --stdout   # Prompt-only with stdout output"
+echo "Basic operations:"
+echo "gia 'Your question here'               # Direct AI question (default)"
+echo "gia 'Explain this' -c                  # Add clipboard input"
+echo "echo 'data' | gia 'Analyze this' -s   # Add stdin input"
+echo "gia 'Write a poem' -o                  # Output to clipboard"
+echo "gia 'Translate this' -c -o             # Clipboard input, clipboard output"

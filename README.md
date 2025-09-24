@@ -4,8 +4,9 @@ A command-line tool that sends text prompts to Google's Gemini API and returns A
 
 ## Features
 
-- Read prompts from command line and data from clipboard (default) or stdin
-- Output responses to clipboard (default) or stdout
+- Uses command line arguments as the main prompt
+- Optional additional input from clipboard or stdin
+- Output responses to stdout (default) or clipboard
 - Comprehensive logging to stderr
 - Simple and fast CLI interface
 
@@ -35,55 +36,58 @@ To get a Gemini API key, visit: https://makersuite.google.com/app/apikey
 
 ## Default Behavior
 
-GIA uses clipboard by default for both input and output:
-- **Input**: Prompt from command line + data from clipboard
-- **Output**: Response written to clipboard
+GIA uses command line arguments as the main prompt:
+- **Input**: Prompt from command line arguments (required)
+- **Additional Input**: Optional clipboard (-c) or stdin (-s) content
+- **Output**: Response written to stdout (default)
 
-Use flags to override defaults for stdin/stdout.
+Use flags to add additional input or redirect output.
 
 ## Usage
 
-### Basic usage (clipboard to clipboard - default)
+### Basic usage (command line prompt to stdout - default)
 ```bash
-# Copy data to clipboard first, then:
-gia "Summarize this text"
+# Direct AI questions:
+gia "What is artificial intelligence?"
+gia "Explain quantum computing"
 
-# Or without prompt (just process clipboard data):
-gia
+# With additional clipboard input:
+gia "Summarize this text" -c
 
-# Prompt-only mode (no additional input):
-gia -p "What is artificial intelligence?"
+# With additional stdin input:
+echo "data to process" | gia "Analyze this data" -s
 ```
 
-### Using stdin/stdout
+### Adding input sources
 ```bash
-echo "What is Rust?" | gia "Explain this" --stdin --stdout
+# Add clipboard content to prompt:
+gia "Explain this code" -c
+
+# Add stdin content to prompt:
+echo "machine learning data" | gia "Analyze this" -s
+
+# Combine both:
+echo "extra context" | gia "Main question about this topic" -c -s
 ```
 
-### Prompt-only mode
+### Output options
 ```bash
-# Direct question to AI (no additional input)
-gia -p "What are the benefits of functional programming?"
+# Default stdout output:
+gia "What is machine learning?"
 
-# Works with output redirection
-gia -p "Write a haiku about coding" --stdout
-```
+# Output to clipboard instead:
+gia "Write a poem about coding" -o
 
-### Mixed operations
-```bash
-# Clipboard input, stdout output
-gia "Translate to Spanish" --stdout
-
-# Stdin input, clipboard output (default output)
-echo "Machine learning algorithms" | gia "Explain in simple terms" --stdin
+# With additional input and clipboard output:
+gia "Translate to Spanish" -c -o
 ```
 
 ### Command line options
 
-- `[PROMPT_TEXT]` - Optional prompt text for the AI (prepended to input data)
-- `-p, --prompt-only` - Use only command-line arguments as prompt (no stdin/clipboard input)
-- `-s, --stdin` - Read input data from stdin instead of clipboard
-- `-t, --stdout` - Write response to stdout instead of clipboard
+- `[PROMPT_TEXT]` - Prompt text for the AI (main input)
+- `-c, --clipboard-input` - Add clipboard content to prompt
+- `-s, --stdin` - Add stdin content to prompt  
+- `-o, --clipboard-output` - Write response to clipboard instead of stdout
 
 ## Logging
 
@@ -101,37 +105,30 @@ RUST_LOG=debug gia -p "Hello world"
 
 ### Simple question
 ```bash
-# Copy question to clipboard, then:
-gia "What are the benefits of using Rust for this project?"
-
-# Or copy complete question to clipboard and just run:
-gia
-
-# Direct question without any input:
-gia -p "What are the benefits of using Rust?"
+# Direct questions:
+gia "What are the benefits of using Rust?"
+gia "How does machine learning work?"
+gia "Write a haiku about programming"
 ```
 
 ### Code explanation
 ```bash
-echo "fn main() { println!('Hello'); }" | gia "Explain this Rust code" --stdin --stdout
+# Copy code to clipboard first, then:
+gia "Explain this Rust code" -c
+
+# Or pipe code via stdin:
+echo "fn main() { println!('Hello'); }" | gia "Explain this Rust code" -s
 ```
 
-### Working with clipboard (default)
+### Working with clipboard
 ```bash
-# Copy some text to clipboard first, then:
-gia "Summarize this text"
+# Copy text to clipboard first, then add it to your prompt:
+gia "Summarize this text" -c
+gia "Translate to Spanish" -c
+gia "Fix any errors in this code" -c
 
-# Process clipboard content without additional prompt:
-gia
-
-# Translate text from clipboard to clipboard
-gia "Translate to Spanish"
-
-# Get output to terminal instead
-gia "Explain this concept" --stdout
-
-# Ask direct questions
-gia -p "How does machine learning work?"
+# Output to clipboard instead of stdout:
+gia "Rewrite this professionally" -c -o
 ```
 
 ## Dependencies
