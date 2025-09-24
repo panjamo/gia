@@ -110,8 +110,11 @@ impl GeminiClient {
                                 }
                                 Err(fallback_error) => {
                                     log_error("Alternative API key also failed");
-                                    if fallback_error.to_string().contains("429 Too Many Requests") {
-                                        eprintln!("⚠️  Rate limit exceeded on all available API keys.");
+                                    if fallback_error.to_string().contains("429 Too Many Requests")
+                                    {
+                                        eprintln!(
+                                            "⚠️  Rate limit exceeded on all available API keys."
+                                        );
                                     }
                                     Err(fallback_error)
                                 }
@@ -119,7 +122,9 @@ impl GeminiClient {
                         }
                         Err(_) => {
                             log_warn("No alternative API keys available for fallback");
-                            eprintln!("⚠️  Rate limit exceeded and no alternative API keys available.");
+                            eprintln!(
+                                "⚠️  Rate limit exceeded and no alternative API keys available."
+                            );
                             Err(e)
                         }
                     }
@@ -197,8 +202,10 @@ impl GeminiClient {
                             "Service unavailable (attempt {}/{}), retrying in {}ms",
                             attempt, MAX_RETRIES, delay_ms
                         ));
-                        eprintln!("⚠️  Service temporarily unavailable, retrying in {}ms... ({}/{})", 
-                                 delay_ms, attempt, MAX_RETRIES);
+                        eprintln!(
+                            "⚠️  Service temporarily unavailable, retrying in {}ms... ({}/{})",
+                            delay_ms, attempt, MAX_RETRIES
+                        );
                         sleep(Duration::from_millis(delay_ms)).await;
                         continue;
                     } else {
