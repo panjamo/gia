@@ -66,7 +66,7 @@ pub struct GeminiClient {
 }
 
 impl GeminiClient {
-    pub fn new() -> Result<Self> {
+    pub fn new(model: String) -> Result<Self> {
         let api_key = get_random_api_key()?;
 
         if !validate_api_key_format(&api_key) {
@@ -77,12 +77,12 @@ impl GeminiClient {
             eprintln!();
         }
 
-        log_info("Initializing Gemini API client");
+        log_info(&format!("Initializing Gemini API client with model: {}", model));
 
         Ok(Self {
             client: Client::new(),
             current_api_key: api_key,
-            model: "gemini-1.5-flash".to_string(),
+            model,
         })
     }
 

@@ -21,6 +21,7 @@ struct Config {
     use_clipboard_output: bool,
     resume_conversation: Option<String>, // None = new, Some("") = latest, Some(id) = specific
     list_conversations: bool,
+    model: String,
 }
 
 impl Config {
@@ -72,6 +73,15 @@ impl Config {
                     .help("List all saved conversations")
                     .action(clap::ArgAction::SetTrue),
             )
+            .arg(
+                Arg::new("model")
+                    .short('m')
+                    .long("model")
+                    .help("Specify the Gemini model to use (see https://ai.google.dev/gemini-api/docs)")
+                    .value_name("MODEL")
+                    .default_value("gemini-2.5-flash-lite")
+                    .action(clap::ArgAction::Set),
+            )
             .get_matches();
 
         let prompt_parts: Vec<String> = matches
@@ -89,6 +99,7 @@ impl Config {
             use_clipboard_output: matches.get_flag("clipboard-output"),
             resume_conversation,
             list_conversations: matches.get_flag("list-conversations"),
+            model: matches.get_one::<String>("model").unwrap().clone(),
         }
     }
 }
@@ -240,7 +251,7 @@ async fn main() -> Result<()> {
     conversation.truncate_if_needed(8000); // Conservative limit for context window
 
     // Initialize Gemini client
-    let mut client = GeminiClient::new().context("Failed to initialize Gemini client")?;
+    let mut client = GeminiClient::new(config.model.clone()).context("Failed to initialize Gemini client")?;
 
     // Generate content
     log_info("Sending request to Gemini API");
