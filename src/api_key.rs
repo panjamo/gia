@@ -139,7 +139,7 @@ fn handle_api_key_error() -> Result<Vec<String>> {
     }
 
     Err(anyhow::anyhow!(
-        "API keys are required. Visit {} to get your API keys or configure them in the Windows registry.",
+        "API keys are required. Visit {} to get your API keys.",
         GEMINI_API_KEY_URL
     ))
 }
