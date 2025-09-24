@@ -31,6 +31,11 @@ cargo run -- "your prompt here"
 # After building
 ./target/release/gia "your prompt here"
 ./target/debug/gia "your prompt here"
+
+# Resume conversations
+cargo run -- --resume "continue previous conversation"
+cargo run -- --resume abc123 "continue specific conversation"
+cargo run -- --list-conversations  # List all saved conversations
 ```
 
 ### Environment Setup
@@ -63,6 +68,7 @@ RUST_LOG=error cargo run -- "test"  # Error logging only
 - `gemini.rs` - Gemini API client with rate limit fallback logic  
 - `api_key.rs` - API key management (multiple keys, validation, fallback)
 - `clipboard.rs` - Clipboard operations using arboard
+- `conversation.rs` - Conversation management with persistent storage
 - `logging.rs` - Structured logging to stderr
 
 ### Key Design Patterns
@@ -78,6 +84,12 @@ RUST_LOG=error cargo run -- "test"  # Error logging only
 1. Stdout (default)
 2. Clipboard (with `-o` flag)
 
+**Conversation Management**: Persistent conversation storage allowing users to resume previous conversations:
+- Local JSON-based storage in `~/.gia/conversations/`
+- Automatic conversation history inclusion in prompts
+- Context window management with automatic truncation
+- Support for resuming latest or specific conversations
+
 **Error Handling**: Comprehensive error handling with user-friendly messages for common issues like missing API keys, authentication failures, and rate limits.
 
 ### API Key Management
@@ -89,11 +101,20 @@ The `api_key.rs` module handles:
 - Alternative key selection for fallback scenarios
 - User guidance when keys are missing or invalid
 
+### Conversation Management
+The `conversation.rs` module handles:
+- Persistent conversation storage in JSON format
+- Automatic conversation history management
+- Context window optimization through intelligent truncation
+- UUID-based conversation identification
+- Conversation listing and resumption functionality
+
 ### Testing
 Tests use the `serial_test` crate to prevent environment variable conflicts when running in parallel. Tests cover:
 - API key parsing and validation
 - Multi-key fallback logic
 - Input/output handling
+- Conversation creation, serialization, and history management
 
 ## Important Notes
 

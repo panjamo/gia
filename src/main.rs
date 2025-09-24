@@ -1,5 +1,6 @@
 mod api_key;
 mod clipboard;
+mod conversation;
 mod gemini;
 mod logging;
 
@@ -8,6 +9,7 @@ use clap::{Arg, Command};
 use std::io::{self, Read};
 
 use crate::clipboard::{read_clipboard, write_clipboard};
+use crate::conversation::{Conversation, ConversationManager, MessageRole};
 use crate::gemini::GeminiClient;
 use crate::logging::{init_logging, log_debug, log_error, log_info};
 
@@ -17,6 +19,8 @@ struct Config {
     use_clipboard_input: bool,
     use_stdin_input: bool,
     use_clipboard_output: bool,
+    resume_conversation: Option<String>, // None = new, Some("") = latest, Some(id) = specific
+    list_conversations: bool,
 }
 
 impl Config {
@@ -51,6 +55,22 @@ impl Config {
                     .help("Write output to clipboard instead of stdout")
                     .action(clap::ArgAction::SetTrue),
             )
+            .arg(
+                Arg::new("resume")
+                    .short('r')
+                    .long("resume")
+                    .help("Resume last conversation or specify conversation ID")
+                    .value_name("ID")
+                    .num_args(0..=1)
+                    .default_missing_value(""),
+            )
+            .arg(
+                Arg::new("list-conversations")
+                    .short('l')
+                    .long("list-conversations")
+                    .help("List all saved conversations")
+                    .action(clap::ArgAction::SetTrue),
+            )
             .get_matches();
 
         let prompt_parts: Vec<String> = matches
@@ -59,11 +79,15 @@ impl Config {
             .cloned()
             .collect();
 
+        let resume_conversation = matches.get_one::<String>("resume").cloned();
+
         Self {
             prompt: prompt_parts.join(" "),
             use_clipboard_input: matches.get_flag("clipboard-input"),
             use_stdin_input: matches.get_flag("stdin"),
             use_clipboard_output: matches.get_flag("clipboard-output"),
+            resume_conversation,
+            list_conversations: matches.get_flag("list-conversations"),
         }
     }
 }
@@ -130,6 +154,52 @@ async fn main() -> Result<()> {
     let config = Config::from_args();
     log_debug(&format!("Configuration: {:?}", config));
 
+    // Initialize conversation manager
+    let conversation_manager =
+        ConversationManager::new().context("Failed to initialize conversation manager")?;
+
+    // Handle list conversations command
+    if config.list_conversations {
+        return handle_list_conversations(&conversation_manager);
+    }
+
+    // Determine conversation mode
+    let mut conversation = match &config.resume_conversation {
+        None => {
+            // New conversation
+            log_info("Starting new conversation");
+            Conversation::new()
+        }
+        Some(id) if id.is_empty() => {
+            // Resume latest conversation
+            log_info("Attempting to resume latest conversation");
+            match conversation_manager.get_latest_conversation()? {
+                Some(conv) => {
+                    log_info(&format!("Resumed conversation: {}", conv.id));
+                    conv
+                }
+                None => {
+                    log_info("No previous conversations found, starting new conversation");
+                    Conversation::new()
+                }
+            }
+        }
+        Some(id) => {
+            // Resume specific conversation
+            log_info(&format!("Attempting to resume conversation: {}", id));
+            match conversation_manager.load_conversation(id) {
+                Ok(conv) => {
+                    log_info(&format!("Resumed conversation: {}", conv.id));
+                    conv
+                }
+                Err(_) => {
+                    eprintln!("❌ Conversation '{}' not found. Use --list-conversations to see available conversations.", id);
+                    std::process::exit(1);
+                }
+            }
+        }
+    };
+
     // Get input text
     let input_text = get_input_text(&config).context("Failed to get input text")?;
 
@@ -144,19 +214,53 @@ async fn main() -> Result<()> {
         input_text.len()
     ));
 
+    // Build context prompt with conversation history
+    let context_prompt = conversation.build_context_prompt(&input_text);
+
+    // Truncate conversation if it's getting too long
+    conversation.truncate_if_needed(8000); // Conservative limit for context window
+
     // Initialize Gemini client
     let mut client = GeminiClient::new().context("Failed to initialize Gemini client")?;
 
     // Generate content
     log_info("Sending request to Gemini API");
     let response = client
-        .generate_content(&input_text)
+        .generate_content(&context_prompt)
         .await
         .context("Failed to generate content")?;
+
+    // Add messages to conversation
+    conversation.add_message(MessageRole::User, input_text);
+    conversation.add_message(MessageRole::Assistant, response.clone());
+
+    // Save conversation
+    conversation_manager
+        .save_conversation(&conversation)
+        .context("Failed to save conversation")?;
 
     // Output response
     output_text(&response, &config).context("Failed to output response")?;
 
     log_info("Successfully completed request");
+    Ok(())
+}
+
+fn handle_list_conversations(conversation_manager: &ConversationManager) -> Result<()> {
+    match conversation_manager.list_conversations()? {
+        conversations if conversations.is_empty() => {
+            println!("No saved conversations found.");
+        }
+        conversations => {
+            println!("Saved Conversations:");
+            println!("===================");
+            for summary in conversations {
+                println!("{}", summary.format_for_display());
+            }
+            println!();
+            println!("Use 'gia --resume <id>' to continue a conversation.");
+            println!("Use 'gia --resume' to continue the most recent conversation.");
+        }
+    }
     Ok(())
 }

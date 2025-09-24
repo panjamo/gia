@@ -1,0 +1,391 @@
+use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::{Path, PathBuf};
+use uuid::Uuid;
+
+use crate::logging::{log_debug, log_info, log_warn};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Message {
+    pub role: MessageRole,
+    pub content: String,
+    pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum MessageRole {
+    User,
+    Assistant,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Conversation {
+    pub id: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub messages: Vec<Message>,
+}
+
+impl Conversation {
+    pub fn new() -> Self {
+        let now = Utc::now();
+        Self {
+            id: Uuid::new_v4().to_string(),
+            created_at: now,
+            updated_at: now,
+            messages: Vec::new(),
+        }
+    }
+
+    pub fn add_message(&mut self, role: MessageRole, content: String) {
+        let message = Message {
+            role,
+            content,
+            timestamp: Utc::now(),
+        };
+        self.messages.push(message);
+        self.updated_at = Utc::now();
+    }
+
+    pub fn build_context_prompt(&self, new_user_message: &str) -> String {
+        let mut context = String::new();
+
+        // Add conversation history if we have any messages
+        if !self.messages.is_empty() {
+            context.push_str("Previous conversation:\n");
+            for message in &self.messages {
+                match message.role {
+                    MessageRole::User => context.push_str("User: "),
+                    MessageRole::Assistant => context.push_str("Assistant: "),
+                }
+                context.push_str(&message.content);
+                context.push('\n');
+            }
+            context.push('\n');
+        }
+
+        // Add the new user message
+        context.push_str("User: ");
+        context.push_str(new_user_message);
+
+        context
+    }
+
+    pub fn truncate_if_needed(&mut self, max_length: usize) {
+        let current_length = self.estimate_token_length();
+        if current_length <= max_length {
+            return;
+        }
+
+        log_info(&format!(
+            "Conversation too long ({} chars), truncating to fit context window",
+            current_length
+        ));
+
+        // Keep removing oldest messages until we're under the limit
+        while self.estimate_token_length() > max_length && self.messages.len() > 2 {
+            self.messages.remove(0);
+            log_debug("Removed oldest message to fit context window");
+        }
+
+        // If still too long and we have messages, keep only the most recent pair
+        if self.estimate_token_length() > max_length && self.messages.len() > 2 {
+            let last_messages = self.messages.split_off(self.messages.len() - 2);
+            self.messages = last_messages;
+            log_warn("Had to truncate conversation to only the last 2 messages");
+        }
+    }
+
+    fn estimate_token_length(&self) -> usize {
+        // Rough estimation: ~4 characters per token
+        let content_length: usize = self
+            .messages
+            .iter()
+            .map(|m| m.content.len() + 20) // +20 for role prefix and formatting
+            .sum();
+        content_length
+    }
+}
+
+pub struct ConversationManager {
+    conversations_dir: PathBuf,
+}
+
+impl ConversationManager {
+    pub fn new() -> Result<Self> {
+        let conversations_dir = Self::get_conversations_dir()?;
+
+        // Ensure the conversations directory exists
+        if !conversations_dir.exists() {
+            fs::create_dir_all(&conversations_dir)
+                .context("Failed to create conversations directory")?;
+            log_info(&format!(
+                "Created conversations directory: {:?}",
+                conversations_dir
+            ));
+        }
+
+        Ok(Self { conversations_dir })
+    }
+
+    fn get_conversations_dir() -> Result<PathBuf> {
+        let home_dir =
+            dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
+        Ok(home_dir.join(".gia").join("conversations"))
+    }
+
+    pub fn save_conversation(&self, conversation: &Conversation) -> Result<()> {
+        let filename = format!("{}.json", conversation.id);
+        let file_path = self.conversations_dir.join(filename);
+
+        let json_content = serde_json::to_string_pretty(conversation)
+            .context("Failed to serialize conversation")?;
+
+        fs::write(&file_path, json_content).context("Failed to write conversation file")?;
+
+        log_debug(&format!("Saved conversation to: {:?}", file_path));
+        Ok(())
+    }
+
+    pub fn load_conversation(&self, id: &str) -> Result<Conversation> {
+        // First try exact match
+        let filename = format!("{}.json", id);
+        let file_path = self.conversations_dir.join(filename);
+
+        if file_path.exists() {
+            let content =
+                fs::read_to_string(&file_path).context("Failed to read conversation file")?;
+            let conversation: Conversation =
+                serde_json::from_str(&content).context("Failed to deserialize conversation")?;
+            log_debug(&format!("Loaded conversation from: {:?}", file_path));
+            return Ok(conversation);
+        }
+
+        // If exact match fails, try partial match (prefix)
+        let entries = fs::read_dir(&self.conversations_dir)
+            .context("Failed to read conversations directory")?;
+
+        let mut matching_files = Vec::new();
+
+        for entry in entries {
+            let entry = entry.context("Failed to read directory entry")?;
+            let path = entry.path();
+
+            if let Some(stem) = path.file_stem() {
+                if let Some(stem_str) = stem.to_str() {
+                    if stem_str.starts_with(id) {
+                        matching_files.push(path);
+                    }
+                }
+            }
+        }
+
+        match matching_files.len() {
+            0 => Err(anyhow::anyhow!("Conversation with ID '{}' not found", id)),
+            1 => {
+                let file_path = &matching_files[0];
+                let content =
+                    fs::read_to_string(file_path).context("Failed to read conversation file")?;
+
+                let conversation: Conversation =
+                    serde_json::from_str(&content).context("Failed to deserialize conversation")?;
+
+                log_debug(&format!("Loaded conversation from: {:?}", file_path));
+                Ok(conversation)
+            }
+            _ => {
+                let matches: Vec<String> = matching_files
+                    .iter()
+                    .filter_map(|p| p.file_stem()?.to_str().map(|s| s.to_string()))
+                    .collect();
+                Err(anyhow::anyhow!(
+                    "Ambiguous conversation ID '{}'. Multiple matches found: {}. Use a more specific ID.",
+                    id,
+                    matches.join(", ")
+                ))
+            }
+        }
+    }
+
+    pub fn get_latest_conversation(&self) -> Result<Option<Conversation>> {
+        let mut latest_conversation: Option<Conversation> = None;
+        let mut latest_time = DateTime::<Utc>::MIN_UTC;
+
+        // Read all conversation files
+        let entries = fs::read_dir(&self.conversations_dir)
+            .context("Failed to read conversations directory")?;
+
+        for entry in entries {
+            let entry = entry.context("Failed to read directory entry")?;
+            let path = entry.path();
+
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                match self.load_conversation_from_path(&path) {
+                    Ok(conversation) => {
+                        if conversation.updated_at > latest_time {
+                            latest_time = conversation.updated_at;
+                            latest_conversation = Some(conversation);
+                        }
+                    }
+                    Err(e) => {
+                        log_warn(&format!(
+                            "Failed to load conversation from {:?}: {}",
+                            path, e
+                        ));
+                    }
+                }
+            }
+        }
+
+        Ok(latest_conversation)
+    }
+
+    pub fn list_conversations(&self) -> Result<Vec<ConversationSummary>> {
+        let mut summaries = Vec::new();
+
+        let entries = fs::read_dir(&self.conversations_dir)
+            .context("Failed to read conversations directory")?;
+
+        for entry in entries {
+            let entry = entry.context("Failed to read directory entry")?;
+            let path = entry.path();
+
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                match self.load_conversation_from_path(&path) {
+                    Ok(conversation) => {
+                        let summary = ConversationSummary::from_conversation(&conversation);
+                        summaries.push(summary);
+                    }
+                    Err(e) => {
+                        log_warn(&format!(
+                            "Failed to load conversation from {:?}: {}",
+                            path, e
+                        ));
+                    }
+                }
+            }
+        }
+
+        // Sort by updated_at descending (newest first)
+        summaries.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        Ok(summaries)
+    }
+
+    fn load_conversation_from_path(&self, path: &Path) -> Result<Conversation> {
+        let content = fs::read_to_string(path).context("Failed to read conversation file")?;
+
+        let conversation: Conversation =
+            serde_json::from_str(&content).context("Failed to deserialize conversation")?;
+
+        Ok(conversation)
+    }
+}
+
+#[derive(Debug)]
+pub struct ConversationSummary {
+    pub id: String,
+    #[allow(dead_code)]
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub message_count: usize,
+    pub first_user_message: Option<String>,
+}
+
+impl ConversationSummary {
+    pub fn from_conversation(conversation: &Conversation) -> Self {
+        let first_user_message = conversation
+            .messages
+            .iter()
+            .find(|m| matches!(m.role, MessageRole::User))
+            .map(|m| {
+                // Truncate to first 50 characters for summary
+                if m.content.len() > 50 {
+                    format!("{}...", &m.content[..47])
+                } else {
+                    m.content.clone()
+                }
+            });
+
+        Self {
+            id: conversation.id.clone(),
+            created_at: conversation.created_at,
+            updated_at: conversation.updated_at,
+            message_count: conversation.messages.len(),
+            first_user_message,
+        }
+    }
+
+    pub fn format_for_display(&self) -> String {
+        let age = Utc::now() - self.updated_at;
+        let age_str = if age.num_days() > 0 {
+            format!("{} days ago", age.num_days())
+        } else if age.num_hours() > 0 {
+            format!("{} hours ago", age.num_hours())
+        } else {
+            format!("{} minutes ago", age.num_minutes().max(1))
+        };
+
+        let default_message = "(no messages)".to_string();
+        let preview = self.first_user_message.as_ref().unwrap_or(&default_message);
+
+        format!(
+            "{} | {} messages | {} | {}",
+            &self.id[..8], // Show first 8 chars of ID
+            self.message_count,
+            age_str,
+            preview
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_conversation_creation() {
+        let conversation = Conversation::new();
+        assert!(!conversation.id.is_empty());
+        assert_eq!(conversation.messages.len(), 0);
+    }
+
+    #[test]
+    fn test_add_message() {
+        let mut conversation = Conversation::new();
+        conversation.add_message(MessageRole::User, "Hello".to_string());
+
+        assert_eq!(conversation.messages.len(), 1);
+        assert!(matches!(conversation.messages[0].role, MessageRole::User));
+        assert_eq!(conversation.messages[0].content, "Hello");
+    }
+
+    #[test]
+    fn test_build_context_prompt() {
+        let mut conversation = Conversation::new();
+        conversation.add_message(MessageRole::User, "What's the weather?".to_string());
+        conversation.add_message(MessageRole::Assistant, "It's sunny.".to_string());
+
+        let context = conversation.build_context_prompt("What about tomorrow?");
+        assert!(context.contains("Previous conversation:"));
+        assert!(context.contains("User: What's the weather?"));
+        assert!(context.contains("Assistant: It's sunny."));
+        assert!(context.contains("User: What about tomorrow?"));
+    }
+
+    #[test]
+    fn test_truncate_if_needed() {
+        let mut conversation = Conversation::new();
+        conversation.add_message(MessageRole::User, "A".repeat(1000));
+        conversation.add_message(MessageRole::Assistant, "B".repeat(1000));
+        conversation.add_message(MessageRole::User, "C".repeat(1000));
+        conversation.add_message(MessageRole::Assistant, "D".repeat(1000));
+
+        conversation.truncate_if_needed(2500); // Should keep last 2 messages
+
+        assert_eq!(conversation.messages.len(), 2);
+        assert!(conversation.messages[0].content.contains('C'));
+        assert!(conversation.messages[1].content.contains('D'));
+    }
+}

@@ -7,6 +7,8 @@ A command-line tool that sends text prompts to Google's Gemini API and returns A
 - Uses command line arguments as the main prompt
 - Optional additional input from clipboard or stdin
 - Output responses to stdout (default) or clipboard
+- Persistent conversation history with resume capability
+- Multi-API key support with automatic fallback
 - Comprehensive logging to stderr
 - Simple and fast CLI interface
 
@@ -95,12 +97,27 @@ gia "Write a poem about coding" -o
 gia "Translate to Spanish" -c -o
 ```
 
+### Conversation Management
+
+```bash
+# Resume latest conversation:
+gia --resume "continue our discussion"
+
+# Resume specific conversation by ID:
+gia --resume abc12345 "follow up question"
+
+# List all saved conversations:
+gia --list-conversations
+```
+
 ### Command line options
 
 - `[PROMPT_TEXT]` - Prompt text for the AI (main input)
 - `-c, --clipboard-input` - Add clipboard content to prompt
 - `-s, --stdin` - Add stdin content to prompt  
 - `-o, --clipboard-output` - Write response to clipboard instead of stdout
+- `-r, --resume [ID]` - Resume last conversation or specify conversation ID
+- `-l, --list-conversations` - List all saved conversations
 
 ## Logging
 
