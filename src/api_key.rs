@@ -195,28 +195,6 @@ fn get_api_keys_from_registry() -> Result<Vec<String>> {
     }
 }
 
-pub fn set_api_keys_in_registry(keys: Vec<String>) -> Result<()> {
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let (key, _) = hkcu
-        .create_subkey(REGISTRY_PATH)
-        .map_err(|e| anyhow::anyhow!("Failed to create registry key {}: {}", REGISTRY_PATH, e))?;
-
-    key.set_value(REGISTRY_KEY_NAME, &keys).map_err(|e| {
-        anyhow::anyhow!("Failed to set registry value {}: {}", REGISTRY_KEY_NAME, e)
-    })?;
-
-    log_info(&format!(
-        "Successfully stored {} API keys in registry",
-        keys.len()
-    ));
-    Ok(())
-}
-
-// Backward compatibility function
-pub fn get_api_key() -> Result<String> {
-    get_random_api_key()
-}
-
 fn handle_api_key_error() -> Result<Vec<String>> {
     eprintln!();
     eprintln!("🔑 API Keys Required");
