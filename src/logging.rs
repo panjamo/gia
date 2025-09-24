@@ -21,6 +21,7 @@ pub fn log_error(msg: &str) {
     error!("{}", msg);
 }
 
+#[allow(dead_code)]
 pub fn log_warn(msg: &str) {
     warn!("{}", msg);
 }
@@ -33,6 +34,7 @@ pub fn log_debug(msg: &str) {
     debug!("{}", msg);
 }
 
+#[allow(dead_code)]
 pub fn log_trace(msg: &str) {
     trace!("{}", msg);
 }

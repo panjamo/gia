@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use arboard::Clipboard;
-use crate::logging::{log_info, log_debug, log_error};
+use crate::logging::{log_info, log_debug};
 
 pub struct ClipboardManager {
     clipboard: Clipboard,
