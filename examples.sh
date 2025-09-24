@@ -23,6 +23,8 @@ echo "1. Default usage (clipboard to clipboard):"
 echo "Command: gia 'Summarize this text' (copy text to clipboard first)"
 echo "# Copy some text to clipboard first, then run:"
 echo "# ./target/release/gia 'Summarize this text'"
+echo "# Or without prompt (just process clipboard data):"
+echo "# ./target/release/gia"
 echo
 echo "----------------------------------------"
 
@@ -61,6 +63,7 @@ echo "Clipboard examples (default behavior - uncomment to test):"
 echo "# Copy some text to clipboard first, then run:"
 echo "# ./target/release/gia 'Summarize this'"
 echo "# ./target/release/gia 'Translate to Spanish'"
+echo "# ./target/release/gia                        # No prompt, just process clipboard"
 echo "# ./target/release/gia 'Explain this concept' --stdout  # Output to terminal"
 echo
 
@@ -72,5 +75,6 @@ echo "echo 'input' | RUST_LOG=debug gia 'your prompt' --stdin --stdout"
 echo
 echo "Default clipboard operations:"
 echo "gia 'Explain this'           # Clipboard input, clipboard output (default)"
+echo "gia                          # Process clipboard without additional prompt"
 echo "gia 'Summarize' --stdout     # Clipboard input, stdout output"
 echo "echo 'text' | gia 'Process this' --stdin  # Stdin input, clipboard output"

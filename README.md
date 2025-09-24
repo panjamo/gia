@@ -47,6 +47,9 @@ Use flags to override defaults for stdin/stdout.
 ```bash
 # Copy data to clipboard first, then:
 gia "Summarize this text"
+
+# Or without prompt (just process clipboard data):
+gia
 ```
 
 ### Using stdin/stdout
@@ -65,7 +68,7 @@ echo "Machine learning algorithms" | gia "Explain in simple terms" --stdin
 
 ### Command line options
 
-- `<PROMPT_TEXT>` - Prompt text for the AI (required, prepended to input data)
+- `[PROMPT_TEXT]` - Optional prompt text for the AI (prepended to input data)
 - `-s, --stdin` - Read input data from stdin instead of clipboard
 - `-t, --stdout` - Write response to stdout instead of clipboard
 
@@ -85,8 +88,11 @@ RUST_LOG=debug gia -p "Hello world"
 
 ### Simple question
 ```bash
-# Copy question context to clipboard, then:
+# Copy question to clipboard, then:
 gia "What are the benefits of using Rust for this project?"
+
+# Or copy complete question to clipboard and just run:
+gia
 ```
 
 ### Code explanation
@@ -98,6 +104,9 @@ echo "fn main() { println!('Hello'); }" | gia "Explain this Rust code" --stdin -
 ```bash
 # Copy some text to clipboard first, then:
 gia "Summarize this text"
+
+# Process clipboard content without additional prompt:
+gia
 
 # Translate text from clipboard to clipboard
 gia "Translate to Spanish"

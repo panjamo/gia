@@ -27,8 +27,8 @@ impl Config {
             .arg(
                 Arg::new("prompt")
                     .help("Prompt text for the AI")
-                    .num_args(1..)
-                    .required(true),
+                    .num_args(0..)
+                    .required(false)
             )
             .arg(
                 Arg::new("stdin")
@@ -51,7 +51,7 @@ impl Config {
             .unwrap_or_default()
             .cloned()
             .collect();
-
+        
         Self {
             prompt: prompt_parts.join(" "),
             use_stdin_input: matches.get_flag("stdin"),
@@ -73,11 +73,13 @@ fn read_stdin() -> Result<String> {
 
 fn get_input_text(config: &Config) -> Result<String> {
     let mut input_text = String::new();
-
-    // Add prompt prefix
-    log_info("Adding command line prompt as prefix");
-    input_text.push_str(&config.prompt);
-    input_text.push_str("\n\n");
+    
+    // Add prompt prefix if not empty
+    if !config.prompt.is_empty() {
+        log_info("Adding command line prompt as prefix");
+        input_text.push_str(&config.prompt);
+        input_text.push_str("\n\n");
+    }
 
     // Get main input from clipboard or stdin
     let main_input = if config.use_stdin_input {
@@ -117,7 +119,7 @@ async fn main() -> Result<()> {
 
     if input_text.trim().is_empty() {
         log_error("No input text provided");
-        eprintln!("Error: No input text provided. Provide prompt and input via clipboard/stdin.");
+        eprintln!("Error: No input text provided. Provide input via clipboard or stdin.");
         std::process::exit(1);
     }
 
