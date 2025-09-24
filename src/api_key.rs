@@ -31,6 +31,7 @@ pub fn get_api_keys() -> Result<Vec<String>> {
     handle_api_key_error()
 }
 
+#[allow(dead_code)]
 pub fn get_random_api_key() -> Result<String> {
     let keys = get_api_keys()?;
     let mut rng = rand::thread_rng();
@@ -40,6 +41,7 @@ pub fn get_random_api_key() -> Result<String> {
         .ok_or_else(|| anyhow::anyhow!("No API keys available"))
 }
 
+#[allow(dead_code)]
 pub fn get_next_api_key(current_key: &str) -> Result<String> {
     let keys = get_api_keys()?;
 
@@ -160,6 +162,7 @@ fn open_browser(url: &str) {
     }
 }
 
+#[allow(dead_code)]
 pub fn validate_api_key_format(api_key: &str) -> bool {
     // Basic validation for Google API keys
     // They typically start with "AIza" and are 39 characters long

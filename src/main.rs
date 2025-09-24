@@ -3,6 +3,7 @@ mod clipboard;
 mod conversation;
 mod gemini;
 mod logging;
+mod provider;
 
 use anyhow::{Context, Result};
 use clap::{Arg, Command};
@@ -10,8 +11,8 @@ use std::io::{self, Read};
 
 use crate::clipboard::{read_clipboard, write_clipboard};
 use crate::conversation::{Conversation, ConversationManager, MessageRole};
-use crate::gemini::GeminiClient;
 use crate::logging::{init_logging, log_debug, log_error, log_info};
+use crate::provider::{ProviderConfig, ProviderFactory};
 
 #[derive(Debug)]
 struct Config {
@@ -251,13 +252,25 @@ async fn main() -> Result<()> {
     // Truncate conversation if it's getting too long
     conversation.truncate_if_needed(8000); // Conservative limit for context window
 
-    // Initialize Gemini client
-    let mut client =
-        GeminiClient::new(config.model.clone()).context("Failed to initialize Gemini client")?;
+    // Get API keys
+    let api_keys = crate::api_key::get_api_keys().context("Failed to get API keys")?;
+
+    // Initialize AI provider
+    let provider_config = ProviderConfig {
+        model: config.model.clone(),
+        api_keys,
+    };
+
+    let mut provider = ProviderFactory::create_provider(provider_config)
+        .context("Failed to initialize AI provider")?;
 
     // Generate content
-    log_info("Sending request to Gemini API");
-    let response = client
+    log_info(&format!(
+        "Sending request to {} API using model: {}",
+        provider.provider_name(),
+        provider.model_name()
+    ));
+    let response = provider
         .generate_content(&context_prompt)
         .await
         .context("Failed to generate content")?;

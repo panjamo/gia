@@ -1,103 +1,61 @@
-use crate::api_key::{get_next_api_key, get_random_api_key, validate_api_key_format};
 use crate::logging::{log_debug, log_error, log_info, log_warn};
+use crate::provider::AiProvider;
 use anyhow::{Context, Result};
+use async_trait::async_trait;
 use genai::chat::{ChatMessage, ChatRequest};
 use genai::Client;
+use rand::prelude::*;
 use std::env;
 
 const GEMINI_API_KEY_URL: &str = "https://makersuite.google.com/app/apikey";
 
+#[derive(Debug)]
 pub struct GeminiClient {
     client: Client,
-    current_api_key: String,
+    api_keys: Vec<String>,
+    current_key_index: usize,
     model: String,
 }
 
 impl GeminiClient {
-    pub fn new(model: String) -> Result<Self> {
-        let api_key = get_random_api_key()?;
+    pub fn new(model: String, api_keys: Vec<String>) -> Result<Self> {
+        if api_keys.is_empty() {
+            return Err(anyhow::anyhow!("No API keys provided"));
+        }
 
-        if !validate_api_key_format(&api_key) {
-            log_error("API key format validation failed, but continuing anyway");
-            eprintln!("⚠️  Warning: The API key format seems incorrect.");
-            eprintln!("   Expected format: AIzaSy... (39 characters)");
-            eprintln!("   If you encounter authentication errors, please check your API key.");
-            eprintln!();
+        // Validate API key formats
+        for key in &api_keys {
+            if !validate_api_key_format(key) {
+                log_warn(&format!(
+                    "API key format validation failed for key: {}",
+                    key
+                ));
+                eprintln!("⚠️  Warning: API key format seems incorrect.");
+                eprintln!("   Expected format: AIzaSy... (39 characters)");
+            }
         }
 
         log_info(&format!(
-            "Initializing Gemini API client with model: {}",
-            model
+            "Initializing Gemini API client with model: {} and {} API key(s)",
+            model,
+            api_keys.len()
         ));
 
-        // Set the API key in the environment for genai to use
-        env::set_var("GEMINI_API_KEY", &api_key);
+        // Start with a random key
+        let mut rng = rand::thread_rng();
+        let current_key_index = (0..api_keys.len()).choose(&mut rng).unwrap_or(0);
+
+        // Set the initial API key
+        env::set_var("GEMINI_API_KEY", &api_keys[current_key_index]);
 
         let client = Client::default();
 
         Ok(Self {
             client,
-            current_api_key: api_key,
+            api_keys,
+            current_key_index,
             model,
         })
-    }
-
-    pub async fn generate_content(&mut self, prompt: &str) -> Result<String> {
-        // Try with current API key first
-        match self
-            .try_generate_content(prompt, &self.current_api_key.clone())
-            .await
-        {
-            Ok(result) => Ok(result),
-            Err(e) => {
-                // Check if it's a rate limit error and we can try another key
-                if e.to_string().contains("429") || e.to_string().contains("Too Many Requests") {
-                    log_info("Rate limit hit, trying to fallback to another API key");
-
-                    match get_next_api_key(&self.current_api_key) {
-                        Ok(next_key) => {
-                            log_info("Found alternative API key, retrying request");
-                            self.current_api_key = next_key.clone();
-
-                            match self.try_generate_content(prompt, &next_key).await {
-                                Ok(result) => {
-                                    log_info("Successfully used alternative API key");
-                                    Ok(result)
-                                }
-                                Err(fallback_error) => {
-                                    log_error("Alternative API key also failed");
-                                    if fallback_error.to_string().contains("429")
-                                        || fallback_error.to_string().contains("Too Many Requests")
-                                    {
-                                        eprintln!(
-                                            "⚠️  Rate limit exceeded on all available API keys."
-                                        );
-                                    }
-                                    Err(fallback_error)
-                                }
-                            }
-                        }
-                        Err(_) => {
-                            log_warn("No alternative API keys available for fallback");
-                            eprintln!(
-                                "⚠️  Rate limit exceeded and no alternative API keys available."
-                            );
-                            Err(e)
-                        }
-                    }
-                } else {
-                    // Check if it's an authentication error
-                    if e.to_string().contains("401")
-                        || e.to_string().contains("403")
-                        || e.to_string().contains("authentication")
-                        || e.to_string().contains("permission")
-                    {
-                        return self.handle_auth_error(&e.to_string());
-                    }
-                    Err(e)
-                }
-            }
-        }
     }
 
     async fn try_generate_content(&self, prompt: &str, api_key: &str) -> Result<String> {
@@ -138,6 +96,16 @@ impl GeminiClient {
         ));
 
         Ok(generated_text.to_string())
+    }
+
+    fn try_next_api_key(&mut self) -> Result<String> {
+        if self.api_keys.len() <= 1 {
+            return Err(anyhow::anyhow!("No alternative API keys available"));
+        }
+
+        // Find next available key (simple round-robin)
+        self.current_key_index = (self.current_key_index + 1) % self.api_keys.len();
+        Ok(self.api_keys[self.current_key_index].clone())
     }
 
     fn handle_auth_error(&self, error_text: &str) -> Result<String> {
@@ -184,5 +152,159 @@ impl GeminiClient {
         Err(anyhow::anyhow!(
             "Authentication failed. Please check your API key and billing settings."
         ))
+    }
+}
+
+#[async_trait]
+impl AiProvider for GeminiClient {
+    async fn generate_content(&mut self, prompt: &str) -> Result<String> {
+        let current_key = self.api_keys[self.current_key_index].clone();
+
+        // Try with current API key first
+        match self.try_generate_content(prompt, &current_key).await {
+            Ok(result) => Ok(result),
+            Err(e) => {
+                let error_string = e.to_string();
+
+                // Check if it's a rate limit error and we can try another key
+                if error_string.contains("429") || error_string.contains("Too Many Requests") {
+                    log_info("Rate limit hit, trying to fallback to another API key");
+
+                    match self.try_next_api_key() {
+                        Ok(next_key) => {
+                            log_info("Found alternative API key, retrying request");
+
+                            match self.try_generate_content(prompt, &next_key).await {
+                                Ok(result) => {
+                                    log_info("Successfully used alternative API key");
+                                    Ok(result)
+                                }
+                                Err(fallback_error) => {
+                                    log_error("Alternative API key also failed");
+                                    let fallback_error_string = fallback_error.to_string();
+                                    if fallback_error_string.contains("429")
+                                        || fallback_error_string.contains("Too Many Requests")
+                                    {
+                                        eprintln!(
+                                            "⚠️  Rate limit exceeded on all available API keys."
+                                        );
+                                    }
+                                    Err(fallback_error)
+                                }
+                            }
+                        }
+                        Err(_) => {
+                            log_warn("No alternative API keys available for fallback");
+                            eprintln!(
+                                "⚠️  Rate limit exceeded and no alternative API keys available."
+                            );
+                            Err(e)
+                        }
+                    }
+                } else {
+                    // Check if it's an authentication error
+                    if error_string.contains("401")
+                        || error_string.contains("403")
+                        || error_string.contains("authentication")
+                        || error_string.contains("permission")
+                    {
+                        return self.handle_auth_error(&error_string);
+                    }
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    fn model_name(&self) -> &str {
+        &self.model
+    }
+
+    fn provider_name(&self) -> &str {
+        "Gemini"
+    }
+}
+
+pub fn validate_api_key_format(api_key: &str) -> bool {
+    // Basic validation for Google API keys
+    // They typically start with "AIza" and are 39 characters long
+    if api_key.len() != 39 {
+        log_warn("API key length is not 39 characters (expected for Google API keys)");
+        return false;
+    }
+
+    if !api_key.starts_with("AIza") {
+        log_warn("API key does not start with 'AIza' (expected for Google API keys)");
+        return false;
+    }
+
+    // Check if it contains only valid characters (alphanumeric, dash, underscore)
+    if !api_key
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
+        log_warn("API key contains invalid characters");
+        return false;
+    }
+
+    log_info("API key format validation passed");
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_valid_api_key_format() {
+        let valid_key = "AIzaSyDummyKeyForTesting123456789012345";
+        assert_eq!(valid_key.len(), 39);
+        assert!(validate_api_key_format(valid_key));
+    }
+
+    #[test]
+    fn test_invalid_api_key_length() {
+        let short_key = "AIzaShort";
+        assert!(!validate_api_key_format(short_key));
+    }
+
+    #[test]
+    fn test_invalid_api_key_prefix() {
+        let wrong_prefix = "WRONG_DummyKeyForTesting123456789012345";
+        assert_eq!(wrong_prefix.len(), 39);
+        assert!(!validate_api_key_format(wrong_prefix));
+    }
+
+    #[test]
+    fn test_invalid_characters() {
+        let invalid_chars = "AIzaSyDummy@Key#ForTesting1234567890123";
+        assert_eq!(invalid_chars.len(), 39);
+        assert!(!validate_api_key_format(invalid_chars));
+    }
+
+    #[tokio::test]
+    async fn test_gemini_client_creation() {
+        let test_keys = vec![
+            "AIzaSyKey1ForTesting123456789012345".to_string(),
+            "AIzaSyKey2ForTesting123456789012345".to_string(),
+        ];
+        let model = "gemini-2.5-flash-lite".to_string();
+
+        let client = GeminiClient::new(model.clone(), test_keys.clone());
+        assert!(client.is_ok());
+
+        let client = client.unwrap();
+        assert_eq!(client.model_name(), &model);
+        assert_eq!(client.provider_name(), "Gemini");
+        assert_eq!(client.api_keys.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_gemini_client_empty_keys() {
+        let empty_keys = vec![];
+        let model = "gemini-2.5-flash-lite".to_string();
+
+        let result = GeminiClient::new(model, empty_keys);
+        assert!(result.is_err());
     }
 }
