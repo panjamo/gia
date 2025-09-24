@@ -110,12 +110,16 @@ impl GeminiClient {
                                 }
                                 Err(fallback_error) => {
                                     log_error("Alternative API key also failed");
+                                    if fallback_error.to_string().contains("429 Too Many Requests") {
+                                        eprintln!("⚠️  Rate limit exceeded on all available API keys.");
+                                    }
                                     Err(fallback_error)
                                 }
                             }
                         }
                         Err(_) => {
                             log_warn("No alternative API keys available for fallback");
+                            eprintln!("⚠️  Rate limit exceeded and no alternative API keys available.");
                             Err(e)
                         }
                     }
@@ -177,8 +181,7 @@ impl GeminiClient {
 
                 // Handle quota/billing errors (don't retry, but allow key fallback)
                 if status == StatusCode::TOO_MANY_REQUESTS {
-                    eprintln!("⚠️  Rate limit exceeded with current API key.");
-                    log_info("Will attempt to use alternative API key if available");
+                    log_info("Rate limit exceeded with current API key, will attempt to use alternative API key if available");
                     return Err(anyhow::anyhow!(
                         "Gemini API request failed ({}): {}",
                         status,
