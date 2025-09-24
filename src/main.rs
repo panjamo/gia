@@ -13,44 +13,48 @@ use crate::logging::{init_logging, log_info, log_debug, log_error};
 
 #[derive(Debug)]
 struct Config {
-    prompt: Option<String>,
-    use_clipboard_input: bool,
-    use_clipboard_output: bool,
+    prompt: String,
+    use_stdin_input: bool,
+    use_stdout_output: bool,
 }
 
 impl Config {
     fn from_args() -> Self {
         let matches = Command::new("gia")
             .version("0.1.0")
-            .about("AI CLI tool using Google Gemini API")
+            .about("AI CLI tool using Google Gemini API (clipboard default)")
             .arg(
                 Arg::new("prompt")
-                    .short('p')
-                    .long("prompt")
-                    .value_name("TEXT")
                     .help("Prompt text for the AI")
-                    .required(false)
+                    .num_args(1..)
+                    .required(true)
             )
             .arg(
-                Arg::new("clipboard-input")
-                    .short('i')
-                    .long("clipboard-input")
-                    .help("Read prompt from clipboard instead of stdin")
+                Arg::new("stdin")
+                    .short('s')
+                    .long("stdin")
+                    .help("Read input from stdin instead of clipboard")
                     .action(clap::ArgAction::SetTrue)
             )
             .arg(
-                Arg::new("clipboard-output")
-                    .short('o')
-                    .long("clipboard-output")
-                    .help("Write response to clipboard instead of stdout")
+                Arg::new("stdout")
+                    .short('t')
+                    .long("stdout")
+                    .help("Write output to stdout instead of clipboard")
                     .action(clap::ArgAction::SetTrue)
             )
             .get_matches();
 
+        let prompt_parts: Vec<String> = matches
+            .get_many::<String>("prompt")
+            .unwrap_or_default()
+            .map(|s| s.clone())
+            .collect();
+        
         Self {
-            prompt: matches.get_one::<String>("prompt").cloned(),
-            use_clipboard_input: matches.get_flag("clipboard-input"),
-            use_clipboard_output: matches.get_flag("clipboard-output"),
+            prompt: prompt_parts.join(" "),
+            use_stdin_input: matches.get_flag("stdin"),
+            use_stdout_output: matches.get_flag("stdout"),
         }
     }
 }
@@ -68,20 +72,18 @@ fn read_stdin() -> Result<String> {
 fn get_input_text(config: &Config) -> Result<String> {
     let mut input_text = String::new();
     
-    // Add prompt prefix if provided
-    if let Some(ref prompt) = config.prompt {
-        log_info("Adding command line prompt as prefix");
-        input_text.push_str(prompt);
-        input_text.push_str("\n\n");
-    }
+    // Add prompt prefix
+    log_info("Adding command line prompt as prefix");
+    input_text.push_str(&config.prompt);
+    input_text.push_str("\n\n");
     
-    // Get main input from stdin or clipboard
-    let main_input = if config.use_clipboard_input {
-        log_info("Reading input from clipboard");
-        read_clipboard()?
-    } else {
+    // Get main input from clipboard or stdin
+    let main_input = if config.use_stdin_input {
         log_info("Reading input from stdin");
         read_stdin()?
+    } else {
+        log_info("Reading input from clipboard");
+        read_clipboard()?
     };
     
     input_text.push_str(&main_input);
@@ -89,13 +91,13 @@ fn get_input_text(config: &Config) -> Result<String> {
 }
 
 fn output_text(text: &str, config: &Config) -> Result<()> {
-    if config.use_clipboard_output {
-        log_info("Writing response to clipboard");
-        write_clipboard(text)
-    } else {
+    if config.use_stdout_output {
         log_info("Writing response to stdout");
         print!("{}", text);
         Ok(())
+    } else {
+        log_info("Writing response to clipboard");
+        write_clipboard(text)
     }
 }
 
@@ -114,7 +116,7 @@ async fn main() -> Result<()> {
 
     if input_text.trim().is_empty() {
         log_error("No input text provided");
-        eprintln!("Error: No input text provided. Use --prompt or provide input via stdin/clipboard.");
+        eprintln!("Error: No input text provided. Provide prompt and input via clipboard/stdin.");
         std::process::exit(1);
     }
 

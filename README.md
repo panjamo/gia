@@ -4,8 +4,8 @@ A command-line tool that sends text prompts to Google's Gemini API and returns A
 
 ## Features
 
-- Read prompts from stdin, clipboard, or command line arguments
-- Output responses to stdout or clipboard
+- Read prompts from command line and data from clipboard (default) or stdin
+- Output responses to clipboard (default) or stdout
 - Comprehensive logging to stderr
 - Simple and fast CLI interface
 
@@ -33,39 +33,41 @@ set GEMINI_API_KEY=your_api_key_here
 
 To get a Gemini API key, visit: https://makersuite.google.com/app/apikey
 
+## Default Behavior
+
+GIA uses clipboard by default for both input and output:
+- **Input**: Prompt from command line + data from clipboard
+- **Output**: Response written to clipboard
+
+Use flags to override defaults for stdin/stdout.
+
 ## Usage
 
-### Basic usage (stdin to stdout)
+### Basic usage (clipboard to clipboard - default)
 ```bash
-echo "What is Rust?" | gia
+# Copy data to clipboard first, then:
+gia "Summarize this text"
 ```
 
-### Using command line prompt as prefix
+### Using stdin/stdout
 ```bash
-# Prompt will be prepended to stdin input
-echo "Machine learning algorithms" | gia --prompt "Explain in simple terms:"
-
-# Prompt will be prepended to clipboard input  
-gia -p "Summarize this text:" -i
+echo "What is Rust?" | gia "Explain this" --stdin --stdout
 ```
 
-### Clipboard operations
+### Mixed operations
 ```bash
-# Read prompt from clipboard, output to stdout
-gia -i
+# Clipboard input, stdout output
+gia "Translate to Spanish" --stdout
 
-# Read from stdin, output to clipboard
-echo "Summarize this text" | gia -o
-
-# Read from clipboard, output to clipboard
-gia -i -o
+# Stdin input, clipboard output (default output)
+echo "Machine learning algorithms" | gia "Explain in simple terms" --stdin
 ```
 
 ### Command line options
 
-- `-p, --prompt <TEXT>` - Prepend prompt text to input from stdin/clipboard
-- `-i, --clipboard-input` - Read prompt from clipboard instead of stdin
-- `-o, --clipboard-output` - Write response to clipboard instead of stdout
+- `<PROMPT_TEXT>` - Prompt text for the AI (required, prepended to input data)
+- `-s, --stdin` - Read input data from stdin instead of clipboard
+- `-t, --stdout` - Write response to stdout instead of clipboard
 
 ## Logging
 
@@ -83,21 +85,25 @@ RUST_LOG=debug gia -p "Hello world"
 
 ### Simple question
 ```bash
-gia -p "What are the benefits of using Rust?"
+# Copy question context to clipboard, then:
+gia "What are the benefits of using Rust for this project?"
 ```
 
 ### Code explanation
 ```bash
-echo "fn main() { println!('Hello'); }" | gia -p "Explain this Rust code:"
+echo "fn main() { println!('Hello'); }" | gia "Explain this Rust code" --stdin --stdout
 ```
 
-### Working with clipboard
+### Working with clipboard (default)
 ```bash
 # Copy some text to clipboard first, then:
-gia -p "Summarize this text:" -i
+gia "Summarize this text"
 
 # Translate text from clipboard to clipboard
-gia -p "Translate to Spanish:" -i -o
+gia "Translate to Spanish"
+
+# Get output to terminal instead
+gia "Explain this concept" --stdout
 ```
 
 ## Dependencies

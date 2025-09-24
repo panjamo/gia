@@ -19,55 +19,58 @@ cargo build --release
 echo
 
 # Basic examples
-echo "1. Prompt with stdin input:"
-echo "Command: echo 'programming language' | gia -p 'What is Rust'"
-echo "programming language" | ./target/release/gia -p "What is Rust"
+echo "1. Default usage (clipboard to clipboard):"
+echo "Command: gia 'Summarize this text' (copy text to clipboard first)"
+echo "# Copy some text to clipboard first, then run:"
+echo "# ./target/release/gia 'Summarize this text'"
 echo
 echo "----------------------------------------"
 
-echo "2. Using stdin input:"
-echo "Command: echo 'Explain async/await in Rust' | gia"
-echo "Explain async/await in Rust" | ./target/release/gia
+echo "2. Using stdin input with stdout output:"
+echo "Command: echo 'Explain async/await in Rust' | gia 'Please explain' --stdin --stdout"
+echo "Explain async/await in Rust" | ./target/release/gia "Please explain" --stdin --stdout
 echo
 echo "----------------------------------------"
 
-echo "3. Code explanation example:"
-echo "Command: echo 'fn fibonacci(n: u32) -> u32 { if n <= 1 { n } else { fibonacci(n-1) + fibonacci(n-2) } }' | gia -p 'Explain this Rust code:'"
-echo "fn fibonacci(n: u32) -> u32 { if n <= 1 { n } else { fibonacci(n-1) + fibonacci(n-2) } }" | ./target/release/gia -p "Explain this Rust code:"
+echo "3. Code explanation with stdin:"
+echo "Command: echo 'fn fibonacci(n: u32) -> u32 { if n <= 1 { n } else { fibonacci(n-1) + fibonacci(n-2) } }' | gia 'Explain this Rust code' --stdin --stdout"
+echo "fn fibonacci(n: u32) -> u32 { if n <= 1 { n } else { fibonacci(n-1) + fibonacci(n-2) } }" | ./target/release/gia "Explain this Rust code" --stdin --stdout
 echo
 echo "----------------------------------------"
 
 echo "4. Creative prompt with stdin:"
-echo "Command: echo 'coding late at night' | gia -p 'Write a haiku about:'"
-echo "coding late at night" | ./target/release/gia -p "Write a haiku about:"
+echo "Command: echo 'coding late at night' | gia 'Write a haiku about' --stdin --stdout"
+echo "coding late at night" | ./target/release/gia "Write a haiku about" --stdin --stdout
 echo
 echo "----------------------------------------"
 
 echo "5. Technical question with context:"
-echo "Command: echo 'Vec and HashMap' | gia -p 'What are the main differences between these Rust types:'"
-echo "Vec and HashMap" | ./target/release/gia -p "What are the main differences between these Rust types:"
+echo "Command: echo 'Vec and HashMap' | gia 'What are the main differences between these Rust types' --stdin --stdout"
+echo "Vec and HashMap" | ./target/release/gia "What are the main differences between these Rust types" --stdin --stdout
 echo
 echo "----------------------------------------"
 
 echo "6. Using debug logging:"
-echo "Command: echo 'world' | RUST_LOG=debug gia -p 'Hello'"
-echo "world" | RUST_LOG=debug ./target/release/gia -p "Hello" 2>/dev/null
+echo "Command: echo 'world' | RUST_LOG=debug gia 'Hello' --stdin --stdout"
+echo "world" | RUST_LOG=debug ./target/release/gia "Hello" --stdin --stdout 2>/dev/null
 echo
 echo "----------------------------------------"
 
 # Clipboard examples (commented out as they require user interaction)
-echo "Clipboard examples (uncomment to test):"
+echo "Clipboard examples (default behavior - uncomment to test):"
 echo "# Copy some text to clipboard first, then run:"
-echo "# gia -p 'Summarize:' -i"
-echo "# gia -p 'Translate to Spanish:' -i -o"
+echo "# ./target/release/gia 'Summarize this'"
+echo "# ./target/release/gia 'Translate to Spanish'"
+echo "# ./target/release/gia 'Explain this concept' --stdout  # Output to terminal"
 echo
 
 echo "=== Examples completed ==="
 echo
 echo "To run with different log levels:"
-echo "echo 'input' | RUST_LOG=info gia -p 'your prompt:'"
-echo "echo 'input' | RUST_LOG=debug gia -p 'your prompt:'"
+echo "echo 'input' | RUST_LOG=info gia 'your prompt' --stdin --stdout"
+echo "echo 'input' | RUST_LOG=debug gia 'your prompt' --stdin --stdout"
 echo
-echo "For clipboard operations:"
-echo "gia -p 'Explain:' -i     # Prompt + clipboard input"
-echo "echo 'text' | gia -o    # Stdin to clipboard"
+echo "Default clipboard operations:"
+echo "gia 'Explain this'           # Clipboard input, clipboard output (default)"
+echo "gia 'Summarize' --stdout     # Clipboard input, stdout output"
+echo "echo 'text' | gia 'Process this' --stdin  # Stdin input, clipboard output"
