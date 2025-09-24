@@ -1,63 +1,11 @@
 use crate::api_key::{get_next_api_key, get_random_api_key, validate_api_key_format};
 use crate::logging::{log_debug, log_error, log_info, log_warn};
 use anyhow::{Context, Result};
-use reqwest::{Client, StatusCode};
-use serde::{Deserialize, Serialize};
-use std::time::Duration;
-use tokio::time::sleep;
+use genai::chat::{ChatMessage, ChatRequest};
+use genai::Client;
+use std::env;
 
-const GEMINI_API_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta";
 const GEMINI_API_KEY_URL: &str = "https://makersuite.google.com/app/apikey";
-const MAX_RETRIES: usize = 3;
-const RETRY_DELAY_MS: u64 = 1000;
-
-#[derive(Debug, Serialize)]
-struct GeminiRequest {
-    contents: Vec<Content>,
-    #[serde(rename = "generationConfig")]
-    generation_config: GenerationConfig,
-}
-
-#[derive(Debug, Serialize)]
-struct Content {
-    parts: Vec<Part>,
-}
-
-#[derive(Debug, Serialize)]
-struct Part {
-    text: String,
-}
-
-#[derive(Debug, Serialize)]
-struct GenerationConfig {
-    temperature: f32,
-    #[serde(rename = "topP")]
-    top_p: f32,
-    #[serde(rename = "topK")]
-    top_k: i32,
-    #[serde(rename = "maxOutputTokens")]
-    max_output_tokens: i32,
-}
-
-#[derive(Debug, Deserialize)]
-struct GeminiResponse {
-    candidates: Vec<Candidate>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Candidate {
-    content: ResponseContent,
-}
-
-#[derive(Debug, Deserialize)]
-struct ResponseContent {
-    parts: Vec<ResponsePart>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ResponsePart {
-    text: String,
-}
 
 pub struct GeminiClient {
     client: Client,
@@ -77,10 +25,18 @@ impl GeminiClient {
             eprintln!();
         }
 
-        log_info(&format!("Initializing Gemini API client with model: {}", model));
+        log_info(&format!(
+            "Initializing Gemini API client with model: {}",
+            model
+        ));
+
+        // Set the API key in the environment for genai to use
+        env::set_var("GEMINI_API_KEY", &api_key);
+
+        let client = Client::default();
 
         Ok(Self {
-            client: Client::new(),
+            client,
             current_api_key: api_key,
             model,
         })
@@ -94,8 +50,8 @@ impl GeminiClient {
         {
             Ok(result) => Ok(result),
             Err(e) => {
-                // Check if it's a 429 error and we can try another key
-                if e.to_string().contains("429 Too Many Requests") {
+                // Check if it's a rate limit error and we can try another key
+                if e.to_string().contains("429") || e.to_string().contains("Too Many Requests") {
                     log_info("Rate limit hit, trying to fallback to another API key");
 
                     match get_next_api_key(&self.current_api_key) {
@@ -110,7 +66,8 @@ impl GeminiClient {
                                 }
                                 Err(fallback_error) => {
                                     log_error("Alternative API key also failed");
-                                    if fallback_error.to_string().contains("429 Too Many Requests")
+                                    if fallback_error.to_string().contains("429")
+                                        || fallback_error.to_string().contains("Too Many Requests")
                                     {
                                         eprintln!(
                                             "⚠️  Rate limit exceeded on all available API keys."
@@ -129,6 +86,14 @@ impl GeminiClient {
                         }
                     }
                 } else {
+                    // Check if it's an authentication error
+                    if e.to_string().contains("401")
+                        || e.to_string().contains("403")
+                        || e.to_string().contains("authentication")
+                        || e.to_string().contains("permission")
+                    {
+                        return self.handle_auth_error(&e.to_string());
+                    }
                     Err(e)
                 }
             }
@@ -141,140 +106,38 @@ impl GeminiClient {
             prompt.len()
         ));
 
-        let request = GeminiRequest {
-            contents: vec![Content {
-                parts: vec![Part {
-                    text: prompt.to_string(),
-                }],
-            }],
-            generation_config: GenerationConfig {
-                temperature: 0.7,
-                top_p: 0.9,
-                top_k: 40,
-                max_output_tokens: 8192,
-            },
-        };
+        // Update the API key in environment for this request
+        env::set_var("GEMINI_API_KEY", api_key);
 
-        let url = format!(
-            "{}/models/{}:generateContent?key={}",
-            GEMINI_API_BASE_URL, self.model, api_key
-        );
+        // Create the chat request
+        let chat_req = ChatRequest::new(vec![ChatMessage::user(prompt)]);
 
-        // Retry loop for 503 Service Unavailable errors
-        for attempt in 1..=MAX_RETRIES {
-            let response = self
-                .client
-                .post(&url)
-                .json(&request)
-                .send()
-                .await
-                .context("Failed to send request to Gemini API")?;
+        // Send the request using genai
+        let chat_res = self
+            .client
+            .exec_chat(&self.model, chat_req, None)
+            .await
+            .context("Failed to send request to Gemini API")?;
 
-            if !response.status().is_success() {
-                let status = response.status();
-                let error_text = response
-                    .text()
-                    .await
-                    .unwrap_or_else(|_| "Unknown error".to_string());
+        // Extract the response text
+        let generated_text = chat_res
+            .content_text_as_str()
+            .context("Failed to extract text from Gemini response")?;
 
-                log_error(&format!("Gemini API error ({}): {}", status, error_text));
-
-                // Handle authentication errors specifically (don't retry)
-                if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
-                    return self.handle_auth_error(&error_text);
-                }
-
-                // Handle quota/billing errors (don't retry, but allow key fallback)
-                if status == StatusCode::TOO_MANY_REQUESTS {
-                    log_info("Rate limit exceeded with current API key, will attempt to use alternative API key if available");
-                    return Err(anyhow::anyhow!(
-                        "Gemini API request failed ({}): {}",
-                        status,
-                        error_text
-                    ));
-                }
-
-                // Handle 503 Service Unavailable - retry with exponential backoff
-                if status == StatusCode::SERVICE_UNAVAILABLE {
-                    if attempt < MAX_RETRIES {
-                        let delay_ms = RETRY_DELAY_MS * (attempt as u64);
-                        log_warn(&format!(
-                            "Service unavailable (attempt {}/{}), retrying in {}ms",
-                            attempt, MAX_RETRIES, delay_ms
-                        ));
-                        eprintln!(
-                            "⚠️  Service temporarily unavailable, retrying in {}ms... ({}/{})",
-                            delay_ms, attempt, MAX_RETRIES
-                        );
-                        sleep(Duration::from_millis(delay_ms)).await;
-                        continue;
-                    } else {
-                        log_error("Max retries exceeded for service unavailable error");
-                        eprintln!("❌ Service unavailable after {} attempts", MAX_RETRIES);
-                    }
-                }
-
-                return Err(anyhow::anyhow!(
-                    "Gemini API request failed ({}): {}",
-                    status,
-                    error_text
-                ));
-            }
-
-            // Success - parse response
-            let gemini_response: GeminiResponse = response
-                .json()
-                .await
-                .context("Failed to parse Gemini API response")?;
-
-            // Check if we have any candidates
-            if gemini_response.candidates.is_empty() {
-                log_error("Gemini API returned no candidates");
-                return Err(anyhow::anyhow!(
-                    "No content was generated by the AI. The response contained no candidates."
-                ));
-            }
-
-            // Get the first candidate
-            let candidate = gemini_response
-                .candidates
-                .first()
-                .ok_or_else(|| anyhow::anyhow!("No candidates in response"))?;
-
-            // Check if candidate has content parts
-            if candidate.content.parts.is_empty() {
-                log_error("Candidate has no content parts");
-                return Err(anyhow::anyhow!(
-                    "No content was generated by the AI. The response candidate contained no content parts."
-                ));
-            }
-
-            // Get the generated text
-            let generated_text = candidate
-                .content
-                .parts
-                .first()
-                .map(|part| part.text.clone())
-                .ok_or_else(|| anyhow::anyhow!("No text content in response part"))?;
-
-            // Check if the generated text is empty or just whitespace
-            if generated_text.trim().is_empty() {
-                log_error("Generated text is empty");
-                return Err(anyhow::anyhow!(
-                    "No content was generated by the AI. The response was empty or contained only whitespace."
-                ));
-            }
-
-            log_info(&format!(
-                "Received response from Gemini API, length: {}",
-                generated_text.len()
+        // Check if the generated text is empty or just whitespace
+        if generated_text.trim().is_empty() {
+            log_error("Generated text is empty");
+            return Err(anyhow::anyhow!(
+                "No content was generated by the AI. The response was empty or contained only whitespace."
             ));
-
-            return Ok(generated_text);
         }
 
-        // This should never be reached due to the return statements above
-        unreachable!()
+        log_info(&format!(
+            "Received response from Gemini API, length: {}",
+            generated_text.len()
+        ));
+
+        Ok(generated_text.to_string())
     }
 
     fn handle_auth_error(&self, error_text: &str) -> Result<String> {

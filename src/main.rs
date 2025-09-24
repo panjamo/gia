@@ -231,7 +231,8 @@ async fn main() -> Result<()> {
     };
 
     // Get input text
-    let input_text = get_input_text(&config, Some(&final_prompt)).context("Failed to get input text")?;
+    let input_text =
+        get_input_text(&config, Some(&final_prompt)).context("Failed to get input text")?;
 
     if input_text.trim().is_empty() {
         log_error("No input text provided");
@@ -251,7 +252,8 @@ async fn main() -> Result<()> {
     conversation.truncate_if_needed(8000); // Conservative limit for context window
 
     // Initialize Gemini client
-    let mut client = GeminiClient::new(config.model.clone()).context("Failed to initialize Gemini client")?;
+    let mut client =
+        GeminiClient::new(config.model.clone()).context("Failed to initialize Gemini client")?;
 
     // Generate content
     log_info("Sending request to Gemini API");
