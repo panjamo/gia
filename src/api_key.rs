@@ -2,13 +2,9 @@ use crate::logging::{log_debug, log_error, log_info, log_warn};
 use anyhow::Result;
 use rand::seq::SliceRandom;
 use std::env;
-use winreg::enums::*;
-use winreg::RegKey;
 
 const GEMINI_API_KEY_URL: &str = "https://makersuite.google.com/app/apikey";
 const GEMINI_DOCS_URL: &str = "https://ai.google.dev/gemini-api/docs/api-key";
-const REGISTRY_PATH: &str = "Software\\GIA";
-const REGISTRY_KEY_NAME: &str = "GEMINI_API_KEYS";
 
 pub fn get_api_keys() -> Result<Vec<String>> {
     // First try environment variable - now supports pipe-separated keys
@@ -31,24 +27,8 @@ pub fn get_api_keys() -> Result<Vec<String>> {
         }
     }
 
-    // Try to get keys from Windows registry
-    match get_api_keys_from_registry() {
-        Ok(keys) if !keys.is_empty() => {
-            log_info(&format!(
-                "Found {} API keys in Windows registry",
-                keys.len()
-            ));
-            Ok(keys)
-        }
-        Ok(_) => {
-            log_error("No API keys found in registry");
-            handle_api_key_error()
-        }
-        Err(e) => {
-            log_error(&format!("Failed to read API keys from registry: {}", e));
-            handle_api_key_error()
-        }
-    }
+    // If we reach here, no valid keys were found
+    handle_api_key_error()
 }
 
 pub fn get_random_api_key() -> Result<String> {
@@ -115,86 +95,6 @@ pub fn get_next_api_key(current_key: &str) -> Result<String> {
     Ok(selected_key)
 }
 
-fn get_api_keys_from_registry() -> Result<Vec<String>> {
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let key = hkcu
-        .open_subkey(REGISTRY_PATH)
-        .map_err(|e| anyhow::anyhow!("Failed to open registry key {}: {}", REGISTRY_PATH, e))?;
-
-    // Try to read as Vec<String> first
-    match key.get_value::<Vec<String>, _>(REGISTRY_KEY_NAME) {
-        Ok(values) => {
-            log_debug(&format!(
-                "get_api_keys_from_registry: Successfully read Vec<String> with {} items",
-                values.len()
-            ));
-            for (i, val) in values.iter().enumerate() {
-                log_debug(&format!(
-                    "get_api_keys_from_registry: Raw value {}: '{}'",
-                    i, val
-                ));
-            }
-
-            // Filter out empty strings and trim whitespace
-            let filtered_keys: Vec<String> = values
-                .into_iter()
-                .map(|k| k.trim().to_string())
-                .filter(|k| !k.is_empty())
-                .collect();
-
-            log_debug(&format!(
-                "get_api_keys_from_registry: Filtered keys: {} items",
-                filtered_keys.len()
-            ));
-            for (i, key) in filtered_keys.iter().enumerate() {
-                log_debug(&format!(
-                    "get_api_keys_from_registry: Filtered key {}: '{}'",
-                    i, key
-                ));
-            }
-
-            Ok(filtered_keys)
-        }
-        Err(e) => {
-            log_warn(&format!(
-                "Failed to read as Vec<String>, trying as String: {}",
-                e
-            ));
-
-            // Try to read as a single string and split it
-            match key.get_value::<String, _>(REGISTRY_KEY_NAME) {
-                Ok(single_value) => {
-                    log_debug(&format!(
-                        "get_api_keys_from_registry: Successfully read String: '{}'",
-                        single_value
-                    ));
-
-                    // Split by newlines or semicolons and filter out empty strings
-                    let keys: Vec<String> = single_value
-                        .lines()
-                        .chain(single_value.split(';'))
-                        .map(|k| k.trim().to_string())
-                        .filter(|k| !k.is_empty())
-                        .collect();
-
-                    log_debug(&format!(
-                        "get_api_keys_from_registry: Parsed {} keys from string",
-                        keys.len()
-                    ));
-                    Ok(keys)
-                }
-                Err(string_err) => {
-                    log_error(&format!("Failed to read as String either: {}", string_err));
-                    Err(anyhow::anyhow!(
-                        "Failed to read API keys from registry: {}",
-                        string_err
-                    ))
-                }
-            }
-        }
-    }
-}
-
 fn handle_api_key_error() -> Result<Vec<String>> {
     eprintln!();
     eprintln!("🔑 API Keys Required");
@@ -208,16 +108,7 @@ fn handle_api_key_error() -> Result<Vec<String>> {
     eprintln!("3. Click 'Create API Key'");
     eprintln!("4. Copy the generated key");
     eprintln!();
-    eprintln!("To store multiple API keys in Windows registry:");
-    eprintln!("1. Open Registry Editor (regedit)");
-    eprintln!("2. Navigate to: HKEY_CURRENT_USER\\{}", REGISTRY_PATH);
-    eprintln!(
-        "3. Create a Multi-String Value (REG_MULTI_SZ) named: {}",
-        REGISTRY_KEY_NAME
-    );
-    eprintln!("4. Add each API key on a separate line");
-    eprintln!();
-    eprintln!("Alternatively, set API key(s) as environment variable:");
+    eprintln!("Set API key(s) as environment variable:");
     eprintln!();
     eprintln!("Single key:");
     eprintln!("Windows (Command Prompt):");
