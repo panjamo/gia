@@ -62,7 +62,8 @@ impl Config {
                     .help("Resume last conversation or specify conversation ID")
                     .value_name("ID")
                     .num_args(0..=1)
-                    .default_missing_value(""),
+                    .default_missing_value("")
+                    .action(clap::ArgAction::Set),
             )
             .arg(
                 Arg::new("list-conversations")
@@ -103,13 +104,14 @@ fn read_stdin() -> Result<String> {
     Ok(buffer)
 }
 
-fn get_input_text(config: &Config) -> Result<String> {
+fn get_input_text(config: &Config, prompt_override: Option<&str>) -> Result<String> {
     let mut input_text = String::new();
 
-    // Start with command line prompt
-    if !config.prompt.is_empty() {
+    // Start with command line prompt (or override)
+    let prompt_to_use = prompt_override.unwrap_or(&config.prompt);
+    if !prompt_to_use.is_empty() {
         log_info("Using command line prompt");
-        input_text.push_str(&config.prompt);
+        input_text.push_str(prompt_to_use);
     }
 
     // Add additional input if requested
@@ -163,17 +165,17 @@ async fn main() -> Result<()> {
         return handle_list_conversations(&conversation_manager);
     }
 
-    // Determine conversation mode
-    let mut conversation = match &config.resume_conversation {
+    // Determine conversation mode and adjust prompt if needed
+    let (mut conversation, final_prompt) = match &config.resume_conversation {
         None => {
             // New conversation
             log_info("Starting new conversation");
-            Conversation::new()
+            (Conversation::new(), config.prompt.clone())
         }
         Some(id) if id.is_empty() => {
             // Resume latest conversation
             log_info("Attempting to resume latest conversation");
-            match conversation_manager.get_latest_conversation()? {
+            let conv = match conversation_manager.get_latest_conversation()? {
                 Some(conv) => {
                     log_info(&format!("Resumed conversation: {}", conv.id));
                     conv
@@ -182,26 +184,43 @@ async fn main() -> Result<()> {
                     log_info("No previous conversations found, starting new conversation");
                     Conversation::new()
                 }
-            }
+            };
+            (conv, config.prompt.clone())
         }
         Some(id) => {
-            // Resume specific conversation
+            // Try to resume specific conversation, if not found treat id as prompt
             log_info(&format!("Attempting to resume conversation: {}", id));
             match conversation_manager.load_conversation(id) {
                 Ok(conv) => {
                     log_info(&format!("Resumed conversation: {}", conv.id));
-                    conv
+                    (conv, config.prompt.clone())
                 }
                 Err(_) => {
-                    eprintln!("❌ Conversation '{}' not found. Use --list-conversations to see available conversations.", id);
-                    std::process::exit(1);
+                    log_info(&format!("Conversation '{}' not found, treating as prompt and resuming latest conversation", id));
+                    let conv = match conversation_manager.get_latest_conversation()? {
+                        Some(conv) => {
+                            log_info(&format!("Resumed latest conversation: {}", conv.id));
+                            conv
+                        }
+                        None => {
+                            log_info("No previous conversations found, starting new conversation");
+                            Conversation::new()
+                        }
+                    };
+                    // Combine the "failed ID" with the regular prompt
+                    let combined_prompt = if config.prompt.is_empty() {
+                        id.clone()
+                    } else {
+                        format!("{} {}", id, config.prompt)
+                    };
+                    (conv, combined_prompt)
                 }
             }
         }
     };
 
     // Get input text
-    let input_text = get_input_text(&config).context("Failed to get input text")?;
+    let input_text = get_input_text(&config, Some(&final_prompt)).context("Failed to get input text")?;
 
     if input_text.trim().is_empty() {
         log_error("No input text provided");
