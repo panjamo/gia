@@ -32,6 +32,19 @@ On Windows:
 set GEMINI_API_KEY=your_api_key_here
 ```
 
+For automatic fallback on rate limits, set multiple keys separated by pipe (`|`):
+
+```bash
+export GEMINI_API_KEY="key1|key2|key3"
+```
+
+On Windows:
+```cmd
+set GEMINI_API_KEY=key1|key2|key3
+```
+
+GIA will randomly select an API key for each request and automatically fallback to other keys if it encounters a "429 Too Many Requests" error.
+
 To get a Gemini API key, visit: https://makersuite.google.com/app/apikey
 
 ## Default Behavior

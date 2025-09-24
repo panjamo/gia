@@ -9,7 +9,9 @@ echo
 # Check if GEMINI_API_KEY is set
 if [ -z "$GEMINI_API_KEY" ]; then
     echo "Error: GEMINI_API_KEY environment variable not set"
-    echo "Please set it with: export GEMINI_API_KEY='your_api_key_here'"
+    echo "Please set it with:"
+    echo "  Single key: export GEMINI_API_KEY='your_api_key_here'"
+    echo "  Multiple keys (for rate limit fallback): export GEMINI_API_KEY='key1|key2|key3'"
     exit 1
 fi
 

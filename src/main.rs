@@ -145,7 +145,7 @@ async fn main() -> Result<()> {
     ));
 
     // Initialize Gemini client
-    let client = GeminiClient::new().context("Failed to initialize Gemini client")?;
+    let mut client = GeminiClient::new().context("Failed to initialize Gemini client")?;
 
     // Generate content
     log_info("Sending request to Gemini API");

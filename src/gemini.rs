@@ -1,5 +1,5 @@
-use crate::api_key::{get_api_key, validate_api_key_format};
-use crate::logging::{log_debug, log_error, log_info};
+use crate::api_key::{get_next_api_key, get_random_api_key, validate_api_key_format};
+use crate::logging::{log_debug, log_error, log_info, log_warn};
 use anyhow::{Context, Result};
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
@@ -57,13 +57,13 @@ struct ResponsePart {
 
 pub struct GeminiClient {
     client: Client,
-    api_key: String,
+    current_api_key: String,
     model: String,
 }
 
 impl GeminiClient {
     pub fn new() -> Result<Self> {
-        let api_key = get_api_key()?;
+        let api_key = get_random_api_key()?;
 
         if !validate_api_key_format(&api_key) {
             log_error("API key format validation failed, but continuing anyway");
@@ -77,12 +77,52 @@ impl GeminiClient {
 
         Ok(Self {
             client: Client::new(),
-            api_key,
+            current_api_key: api_key,
             model: "gemini-1.5-flash".to_string(),
         })
     }
 
-    pub async fn generate_content(&self, prompt: &str) -> Result<String> {
+    pub async fn generate_content(&mut self, prompt: &str) -> Result<String> {
+        // Try with current API key first
+        match self
+            .try_generate_content(prompt, &self.current_api_key.clone())
+            .await
+        {
+            Ok(result) => Ok(result),
+            Err(e) => {
+                // Check if it's a 429 error and we can try another key
+                if e.to_string().contains("429 Too Many Requests") {
+                    log_info("Rate limit hit, trying to fallback to another API key");
+
+                    match get_next_api_key(&self.current_api_key) {
+                        Ok(next_key) => {
+                            log_info("Found alternative API key, retrying request");
+                            self.current_api_key = next_key.clone();
+
+                            match self.try_generate_content(prompt, &next_key).await {
+                                Ok(result) => {
+                                    log_info("Successfully used alternative API key");
+                                    Ok(result)
+                                }
+                                Err(fallback_error) => {
+                                    log_error("Alternative API key also failed");
+                                    Err(fallback_error)
+                                }
+                            }
+                        }
+                        Err(_) => {
+                            log_warn("No alternative API keys available for fallback");
+                            Err(e)
+                        }
+                    }
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    async fn try_generate_content(&self, prompt: &str, api_key: &str) -> Result<String> {
         log_debug(&format!(
             "Sending request to Gemini API with prompt length: {}",
             prompt.len()
@@ -104,7 +144,7 @@ impl GeminiClient {
 
         let url = format!(
             "{}/models/{}:generateContent?key={}",
-            GEMINI_API_BASE_URL, self.model, self.api_key
+            GEMINI_API_BASE_URL, self.model, api_key
         );
 
         let response = self
@@ -131,8 +171,8 @@ impl GeminiClient {
 
             // Handle quota/billing errors
             if status == StatusCode::TOO_MANY_REQUESTS {
-                eprintln!("⚠️  Rate limit exceeded. Please wait and try again.");
-                eprintln!("   If this persists, check your API quota at: https://console.cloud.google.com/");
+                eprintln!("⚠️  Rate limit exceeded with current API key.");
+                log_info("Will attempt to use alternative API key if available");
             }
 
             return Err(anyhow::anyhow!(
