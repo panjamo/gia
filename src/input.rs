@@ -7,13 +7,14 @@ use crate::logging::{log_debug, log_info};
 
 pub fn read_stdin() -> Result<String> {
     log_debug("Reading from stdin");
-    let mut buffer = String::new();
+    let mut buffer = Vec::new();
     io::stdin()
-        .read_to_string(&mut buffer)
+        .read_to_end(&mut buffer)
         .context("Failed to read from stdin")?;
 
-    log_info(&format!("Read {} characters from stdin", buffer.len()));
-    Ok(buffer)
+    let text = String::from_utf8_lossy(&buffer).to_string();
+    log_info(&format!("Read {} characters from stdin", text.len()));
+    Ok(text)
 }
 
 pub fn get_input_text(config: &Config, prompt_override: Option<&str>) -> Result<String> {
