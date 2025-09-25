@@ -21,6 +21,7 @@ struct Config {
     use_stdin_input: bool,
     use_clipboard_output: bool,
     resume_conversation: Option<String>, // None = new, Some("") = latest, Some(id) = specific
+    resume_last: bool, // true = resume latest conversation
     list_conversations: bool,
     model: String,
 }
@@ -68,6 +69,12 @@ impl Config {
                     .action(clap::ArgAction::Set),
             )
             .arg(
+                Arg::new("resume-last")
+                    .short('R')
+                    .help("Resume the very last conversation")
+                    .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
                 Arg::new("list-conversations")
                     .short('l')
                     .long("list-conversations")
@@ -99,6 +106,7 @@ impl Config {
             use_stdin_input: matches.get_flag("stdin"),
             use_clipboard_output: matches.get_flag("clipboard-output"),
             resume_conversation,
+            resume_last: matches.get_flag("resume-last"),
             list_conversations: matches.get_flag("list-conversations"),
             model: matches.get_one::<String>("model").unwrap().clone(),
         }
@@ -178,54 +186,70 @@ async fn main() -> Result<()> {
     }
 
     // Determine conversation mode and adjust prompt if needed
-    let (mut conversation, final_prompt) = match &config.resume_conversation {
-        None => {
-            // New conversation
-            log_info("Starting new conversation");
-            (Conversation::new(), config.prompt.clone())
-        }
-        Some(id) if id.is_empty() => {
-            // Resume latest conversation
-            log_info("Attempting to resume latest conversation");
-            let conv = match conversation_manager.get_latest_conversation()? {
-                Some(conv) => {
-                    log_info(&format!("Resumed conversation: {}", conv.id));
-                    conv
-                }
-                None => {
-                    log_info("No previous conversations found, starting new conversation");
-                    Conversation::new()
-                }
-            };
-            (conv, config.prompt.clone())
-        }
-        Some(id) => {
-            // Try to resume specific conversation, if not found treat id as prompt
-            log_info(&format!("Attempting to resume conversation: {}", id));
-            match conversation_manager.load_conversation(id) {
-                Ok(conv) => {
-                    log_info(&format!("Resumed conversation: {}", conv.id));
-                    (conv, config.prompt.clone())
-                }
-                Err(_) => {
-                    log_info(&format!("Conversation '{}' not found, treating as prompt and resuming latest conversation", id));
-                    let conv = match conversation_manager.get_latest_conversation()? {
-                        Some(conv) => {
-                            log_info(&format!("Resumed latest conversation: {}", conv.id));
-                            conv
-                        }
-                        None => {
-                            log_info("No previous conversations found, starting new conversation");
-                            Conversation::new()
-                        }
-                    };
-                    // Combine the "failed ID" with the regular prompt
-                    let combined_prompt = if config.prompt.is_empty() {
-                        id.clone()
-                    } else {
-                        format!("{} {}", id, config.prompt)
-                    };
-                    (conv, combined_prompt)
+    let (mut conversation, final_prompt) = if config.resume_last {
+        // Resume latest conversation with -R flag
+        log_info("Attempting to resume latest conversation (-R flag)");
+        let conv = match conversation_manager.get_latest_conversation()? {
+            Some(conv) => {
+                log_info(&format!("Resumed conversation: {}", conv.id));
+                conv
+            }
+            None => {
+                log_info("No previous conversations found, starting new conversation");
+                Conversation::new()
+            }
+        };
+        (conv, config.prompt.clone())
+    } else {
+        match &config.resume_conversation {
+            None => {
+                // New conversation
+                log_info("Starting new conversation");
+                (Conversation::new(), config.prompt.clone())
+            }
+            Some(id) if id.is_empty() => {
+                // Resume latest conversation
+                log_info("Attempting to resume latest conversation");
+                let conv = match conversation_manager.get_latest_conversation()? {
+                    Some(conv) => {
+                        log_info(&format!("Resumed conversation: {}", conv.id));
+                        conv
+                    }
+                    None => {
+                        log_info("No previous conversations found, starting new conversation");
+                        Conversation::new()
+                    }
+                };
+                (conv, config.prompt.clone())
+            }
+            Some(id) => {
+                // Try to resume specific conversation, if not found treat id as prompt
+                log_info(&format!("Attempting to resume conversation: {}", id));
+                match conversation_manager.load_conversation(id) {
+                    Ok(conv) => {
+                        log_info(&format!("Resumed conversation: {}", conv.id));
+                        (conv, config.prompt.clone())
+                    }
+                    Err(_) => {
+                        log_info(&format!("Conversation '{}' not found, treating as prompt and resuming latest conversation", id));
+                        let conv = match conversation_manager.get_latest_conversation()? {
+                            Some(conv) => {
+                                log_info(&format!("Resumed latest conversation: {}", conv.id));
+                                conv
+                            }
+                            None => {
+                                log_info("No previous conversations found, starting new conversation");
+                                Conversation::new()
+                            }
+                        };
+                        // Combine the "failed ID" with the regular prompt
+                        let combined_prompt = if config.prompt.is_empty() {
+                            id.clone()
+                        } else {
+                            format!("{} {}", id, config.prompt)
+                        };
+                        (conv, combined_prompt)
+                    }
                 }
             }
         }
