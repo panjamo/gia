@@ -93,6 +93,9 @@ gia "What is machine learning?"
 # Output to clipboard instead:
 gia "Write a poem about coding" -o
 
+# Output to clipboard AND open browser preview:
+gia "Generate markdown documentation" -O
+
 # With additional input and clipboard output:
 gia "Translate to Spanish" -c -o
 ```
@@ -115,8 +118,9 @@ gia --list-conversations
 
 - `[PROMPT_TEXT]` - Prompt text for the AI (main input)
 - `-c, --clipboard-input` - Add clipboard content to prompt
-- `-s, --stdin` - Add stdin content to prompt  
+- `-s, --stdin` - Add stdin content to prompt
 - `-o, --clipboard-output` - Write response to clipboard instead of stdout
+- `-O` - Write output to clipboard AND open browser preview
 - `-r, --resume [ID]` - Resume last conversation or specify conversation ID
 - `-R` - Resume the very last conversation
 - `-l, --list-conversations` - List all saved conversations
@@ -167,12 +171,15 @@ gia "Rewrite this professionally" -c -o
 ## Dependencies
 
 - `tokio` - Async runtime
-- `reqwest` - HTTP client for Gemini API
+- `genai` - Gemini API client
 - `serde` - JSON serialization
 - `clap` - Command line parsing
 - `anyhow` - Error handling
 - `log` + `env_logger` - Logging
 - `arboard` - Clipboard operations
+- `webbrowser` - Browser opening
+- `comrak` - Markdown to HTML rendering
+- `base64` - Base64 encoding for data URLs
 
 ## License
 
