@@ -1,5 +1,6 @@
 mod api_key;
 mod app;
+mod browser_preview;
 mod cli;
 mod clipboard;
 mod constants;

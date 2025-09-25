@@ -1,11 +1,18 @@
 use clap::{Arg, Command};
 
 #[derive(Debug)]
+pub enum OutputMode {
+    Stdout,
+    Clipboard,
+    ClipboardWithPreview,
+}
+
+#[derive(Debug)]
 pub struct Config {
     pub prompt: String,
     pub use_clipboard_input: bool,
     pub use_stdin_input: bool,
-    pub use_clipboard_output: bool,
+    pub output_mode: OutputMode,
     pub resume_conversation: Option<String>, // None = new, Some("") = latest, Some(id) = specific
     pub resume_last: bool,                   // true = resume latest conversation
     pub list_conversations: bool,
@@ -42,6 +49,12 @@ impl Config {
                     .short('o')
                     .long("clipboard-output")
                     .help("Write output to clipboard instead of stdout")
+                    .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("clipboard-output-with-preview")
+                    .short('O')
+                    .help("Write output to clipboard AND open browser preview")
                     .action(clap::ArgAction::SetTrue),
             )
             .arg(
@@ -86,11 +99,19 @@ impl Config {
 
         let resume_conversation = matches.get_one::<String>("resume").cloned();
 
+        let output_mode = if matches.get_flag("clipboard-output-with-preview") {
+            OutputMode::ClipboardWithPreview
+        } else if matches.get_flag("clipboard-output") {
+            OutputMode::Clipboard
+        } else {
+            OutputMode::Stdout
+        };
+
         Self {
             prompt: prompt_parts.join(" "),
             use_clipboard_input: matches.get_flag("clipboard-input"),
             use_stdin_input: matches.get_flag("stdin"),
-            use_clipboard_output: matches.get_flag("clipboard-output"),
+            output_mode,
             resume_conversation,
             resume_last: matches.get_flag("resume-last"),
             list_conversations: matches.get_flag("list-conversations"),
