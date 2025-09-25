@@ -5,6 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
+use crate::constants::CONVERSATION_TRUNCATION_KEEP_MESSAGES;
 use crate::logging::{log_debug, log_info, log_warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,16 +86,25 @@ impl Conversation {
         ));
 
         // Keep removing oldest messages until we're under the limit
-        while self.estimate_token_length() > max_length && self.messages.len() > 2 {
+        while self.estimate_token_length() > max_length
+            && self.messages.len() > CONVERSATION_TRUNCATION_KEEP_MESSAGES
+        {
             self.messages.remove(0);
             log_debug("Removed oldest message to fit context window");
         }
 
         // If still too long and we have messages, keep only the most recent pair
-        if self.estimate_token_length() > max_length && self.messages.len() > 2 {
-            let last_messages = self.messages.split_off(self.messages.len() - 2);
+        if self.estimate_token_length() > max_length
+            && self.messages.len() > CONVERSATION_TRUNCATION_KEEP_MESSAGES
+        {
+            let last_messages = self
+                .messages
+                .split_off(self.messages.len() - CONVERSATION_TRUNCATION_KEEP_MESSAGES);
             self.messages = last_messages;
-            log_warn("Had to truncate conversation to only the last 2 messages");
+            log_warn(&format!(
+                "Had to truncate conversation to only the last {} messages",
+                CONVERSATION_TRUNCATION_KEEP_MESSAGES
+            ));
         }
     }
 

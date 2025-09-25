@@ -1,3 +1,5 @@
+use crate::api_key::validate_api_key_format;
+use crate::constants::GEMINI_API_KEY_URL;
 use crate::logging::{log_debug, log_error, log_info, log_warn};
 use crate::provider::AiProvider;
 use anyhow::{Context, Result};
@@ -6,8 +8,6 @@ use genai::chat::{ChatMessage, ChatRequest};
 use genai::Client;
 use rand::prelude::*;
 use std::env;
-
-const GEMINI_API_KEY_URL: &str = "https://makersuite.google.com/app/apikey";
 
 #[derive(Debug)]
 pub struct GeminiClient {
@@ -225,62 +225,9 @@ impl AiProvider for GeminiClient {
     }
 }
 
-pub fn validate_api_key_format(api_key: &str) -> bool {
-    // Basic validation for Google API keys
-    // They typically start with "AIza" and are 39 characters long
-    if api_key.len() != 39 {
-        log_warn("API key length is not 39 characters (expected for Google API keys)");
-        return false;
-    }
-
-    if !api_key.starts_with("AIza") {
-        log_warn("API key does not start with 'AIza' (expected for Google API keys)");
-        return false;
-    }
-
-    // Check if it contains only valid characters (alphanumeric, dash, underscore)
-    if !api_key
-        .chars()
-        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
-    {
-        log_warn("API key contains invalid characters");
-        return false;
-    }
-
-    log_info("API key format validation passed");
-    true
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_valid_api_key_format() {
-        let valid_key = "AIzaSyDummyKeyForTesting123456789012345";
-        assert_eq!(valid_key.len(), 39);
-        assert!(validate_api_key_format(valid_key));
-    }
-
-    #[test]
-    fn test_invalid_api_key_length() {
-        let short_key = "AIzaShort";
-        assert!(!validate_api_key_format(short_key));
-    }
-
-    #[test]
-    fn test_invalid_api_key_prefix() {
-        let wrong_prefix = "WRONG_DummyKeyForTesting123456789012345";
-        assert_eq!(wrong_prefix.len(), 39);
-        assert!(!validate_api_key_format(wrong_prefix));
-    }
-
-    #[test]
-    fn test_invalid_characters() {
-        let invalid_chars = "AIzaSyDummy@Key#ForTesting1234567890123";
-        assert_eq!(invalid_chars.len(), 39);
-        assert!(!validate_api_key_format(invalid_chars));
-    }
 
     #[tokio::test]
     async fn test_gemini_client_creation() {

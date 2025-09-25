@@ -1,10 +1,7 @@
-use crate::logging::{log_debug, log_error, log_info, log_warn};
+use crate::constants::{API_KEY_LENGTH, API_KEY_PREFIX, GEMINI_API_KEY_URL, GEMINI_DOCS_URL};
+use crate::logging::{log_info, log_warn};
 use anyhow::Result;
-use rand::seq::SliceRandom;
 use std::env;
-
-const GEMINI_API_KEY_URL: &str = "https://makersuite.google.com/app/apikey";
-const GEMINI_DOCS_URL: &str = "https://ai.google.dev/gemini-api/docs/api-key";
 
 pub fn get_api_keys() -> Result<Vec<String>> {
     // First try environment variable - now supports pipe-separated keys
@@ -29,72 +26,6 @@ pub fn get_api_keys() -> Result<Vec<String>> {
 
     // If we reach here, no valid keys were found
     handle_api_key_error()
-}
-
-#[allow(dead_code)]
-pub fn get_random_api_key() -> Result<String> {
-    let keys = get_api_keys()?;
-    let mut rng = rand::thread_rng();
-
-    keys.choose(&mut rng)
-        .cloned()
-        .ok_or_else(|| anyhow::anyhow!("No API keys available"))
-}
-
-#[allow(dead_code)]
-pub fn get_next_api_key(current_key: &str) -> Result<String> {
-    let keys = get_api_keys()?;
-
-    log_debug(&format!(
-        "get_next_api_key: Total keys available: {}",
-        keys.len()
-    ));
-    log_debug(&format!("get_next_api_key: Current key: '{}'", current_key));
-
-    if keys.len() <= 1 {
-        log_warn(&format!(
-            "get_next_api_key: Only {} keys available, need at least 2",
-            keys.len()
-        ));
-        return Err(anyhow::anyhow!("No alternative API keys available"));
-    }
-
-    // Filter out the current key and get a random one from the remaining
-    let alternative_keys: Vec<_> = keys
-        .iter()
-        .filter(|&k| {
-            let matches = k.trim() == current_key.trim();
-            log_debug(&format!(
-                "get_next_api_key: Comparing '{}' with current '{}': {}",
-                k.trim(),
-                current_key.trim(),
-                !matches
-            ));
-            !matches
-        })
-        .collect();
-
-    log_debug(&format!(
-        "get_next_api_key: Alternative keys found: {}",
-        alternative_keys.len()
-    ));
-
-    if alternative_keys.is_empty() {
-        log_error("get_next_api_key: No alternative keys found after filtering");
-        return Err(anyhow::anyhow!("No alternative API keys available"));
-    }
-
-    let mut rng = rand::thread_rng();
-    let selected_key = alternative_keys
-        .choose(&mut rng)
-        .map(|&k| k.clone())
-        .ok_or_else(|| anyhow::anyhow!("Failed to select alternative API key"))?;
-
-    log_info(&format!(
-        "get_next_api_key: Selected alternative key: '{}'",
-        selected_key
-    ));
-    Ok(selected_key)
 }
 
 fn handle_api_key_error() -> Result<Vec<String>> {
@@ -162,17 +93,22 @@ fn open_browser(url: &str) {
     }
 }
 
-#[allow(dead_code)]
 pub fn validate_api_key_format(api_key: &str) -> bool {
     // Basic validation for Google API keys
     // They typically start with "AIza" and are 39 characters long
-    if api_key.len() != 39 {
-        log_warn("API key length is not 39 characters (expected for Google API keys)");
+    if api_key.len() != API_KEY_LENGTH {
+        log_warn(&format!(
+            "API key length is not {} characters (expected for Google API keys)",
+            API_KEY_LENGTH
+        ));
         return false;
     }
 
-    if !api_key.starts_with("AIza") {
-        log_warn("API key does not start with 'AIza' (expected for Google API keys)");
+    if !api_key.starts_with(API_KEY_PREFIX) {
+        log_warn(&format!(
+            "API key does not start with '{}' (expected for Google API keys)",
+            API_KEY_PREFIX
+        ));
         return false;
     }
 
@@ -285,46 +221,6 @@ mod tests {
         let keys = result.unwrap();
         assert_eq!(keys.len(), 1);
         assert_eq!(keys[0], single_key);
-
-        env::remove_var("GEMINI_API_KEY");
-    }
-
-    #[test]
-    #[serial]
-    fn test_get_next_api_key() {
-        // Clean up any existing environment variable first
-        env::remove_var("GEMINI_API_KEY");
-
-        let test_keys = "AIzaSyKey1ForTesting123456789012345|AIzaSyKey2ForTesting123456789012345|AIzaSyKey3ForTesting123456789012345";
-        env::set_var("GEMINI_API_KEY", test_keys);
-
-        let current_key = "AIzaSyKey1ForTesting123456789012345";
-        let result = get_next_api_key(current_key);
-        assert!(result.is_ok());
-
-        let next_key = result.unwrap();
-        // Should get a different key
-        assert_ne!(next_key, current_key);
-        // Should be one of the other keys
-        assert!(
-            next_key == "AIzaSyKey2ForTesting123456789012345"
-                || next_key == "AIzaSyKey3ForTesting123456789012345"
-        );
-
-        env::remove_var("GEMINI_API_KEY");
-    }
-
-    #[test]
-    #[serial]
-    fn test_get_next_api_key_single_key_fails() {
-        // Clean up any existing environment variable first
-        env::remove_var("GEMINI_API_KEY");
-
-        let single_key = "AIzaSySingleKeyTesting123456789012345";
-        env::set_var("GEMINI_API_KEY", single_key);
-
-        let result = get_next_api_key(single_key);
-        assert!(result.is_err());
 
         env::remove_var("GEMINI_API_KEY");
     }
