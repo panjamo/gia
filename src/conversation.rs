@@ -150,63 +150,18 @@ impl ConversationManager {
     }
 
     pub fn load_conversation(&self, id: &str) -> Result<Conversation> {
-        // First try exact match
         let filename = format!("{}.json", id);
         let file_path = self.conversations_dir.join(filename);
 
-        if file_path.exists() {
-            let content =
-                fs::read_to_string(&file_path).context("Failed to read conversation file")?;
-            let conversation: Conversation =
-                serde_json::from_str(&content).context("Failed to deserialize conversation")?;
-            log_debug(&format!("Loaded conversation from: {:?}", file_path));
-            return Ok(conversation);
+        if !file_path.exists() {
+            return Err(anyhow::anyhow!("Conversation with ID '{}' not found", id));
         }
 
-        // If exact match fails, try partial match (prefix)
-        let entries = fs::read_dir(&self.conversations_dir)
-            .context("Failed to read conversations directory")?;
-
-        let mut matching_files = Vec::new();
-
-        for entry in entries {
-            let entry = entry.context("Failed to read directory entry")?;
-            let path = entry.path();
-
-            if let Some(stem) = path.file_stem() {
-                if let Some(stem_str) = stem.to_str() {
-                    if stem_str.starts_with(id) {
-                        matching_files.push(path);
-                    }
-                }
-            }
-        }
-
-        match matching_files.len() {
-            0 => Err(anyhow::anyhow!("Conversation with ID '{}' not found", id)),
-            1 => {
-                let file_path = &matching_files[0];
-                let content =
-                    fs::read_to_string(file_path).context("Failed to read conversation file")?;
-
-                let conversation: Conversation =
-                    serde_json::from_str(&content).context("Failed to deserialize conversation")?;
-
-                log_debug(&format!("Loaded conversation from: {:?}", file_path));
-                Ok(conversation)
-            }
-            _ => {
-                let matches: Vec<String> = matching_files
-                    .iter()
-                    .filter_map(|p| p.file_stem()?.to_str().map(|s| s.to_string()))
-                    .collect();
-                Err(anyhow::anyhow!(
-                    "Ambiguous conversation ID '{}'. Multiple matches found: {}. Use a more specific ID.",
-                    id,
-                    matches.join(", ")
-                ))
-            }
-        }
+        let content = fs::read_to_string(&file_path).context("Failed to read conversation file")?;
+        let conversation: Conversation =
+            serde_json::from_str(&content).context("Failed to deserialize conversation")?;
+        log_debug(&format!("Loaded conversation from: {:?}", file_path));
+        Ok(conversation)
     }
 
     pub fn get_latest_conversation(&self) -> Result<Option<Conversation>> {
@@ -332,7 +287,7 @@ impl ConversationSummary {
 
         format!(
             "{} | {} messages | {} | {}",
-            &self.id[..8], // Show first 8 chars of ID
+            self.id, // Show full ID
             self.message_count,
             age_str,
             preview

@@ -104,8 +104,8 @@ gia "Translate to Spanish" -c -o
 gia --resume "continue our discussion"
 gia -R "continue our discussion"  # Short option
 
-# Resume specific conversation by ID:
-gia --resume abc12345 "follow up question"
+# Resume specific conversation by full ID:
+gia --resume a1b2c3d4-e5f6-7890-abcd-ef1234567890 "follow up question"
 
 # List all saved conversations:
 gia --list-conversations

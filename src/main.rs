@@ -21,7 +21,7 @@ struct Config {
     use_stdin_input: bool,
     use_clipboard_output: bool,
     resume_conversation: Option<String>, // None = new, Some("") = latest, Some(id) = specific
-    resume_last: bool, // true = resume latest conversation
+    resume_last: bool,                   // true = resume latest conversation
     list_conversations: bool,
     model: String,
 }
@@ -223,34 +223,13 @@ async fn main() -> Result<()> {
                 (conv, config.prompt.clone())
             }
             Some(id) => {
-                // Try to resume specific conversation, if not found treat id as prompt
+                // Resume specific conversation - must be exact match
                 log_info(&format!("Attempting to resume conversation: {}", id));
-                match conversation_manager.load_conversation(id) {
-                    Ok(conv) => {
-                        log_info(&format!("Resumed conversation: {}", conv.id));
-                        (conv, config.prompt.clone())
-                    }
-                    Err(_) => {
-                        log_info(&format!("Conversation '{}' not found, treating as prompt and resuming latest conversation", id));
-                        let conv = match conversation_manager.get_latest_conversation()? {
-                            Some(conv) => {
-                                log_info(&format!("Resumed latest conversation: {}", conv.id));
-                                conv
-                            }
-                            None => {
-                                log_info("No previous conversations found, starting new conversation");
-                                Conversation::new()
-                            }
-                        };
-                        // Combine the "failed ID" with the regular prompt
-                        let combined_prompt = if config.prompt.is_empty() {
-                            id.clone()
-                        } else {
-                            format!("{} {}", id, config.prompt)
-                        };
-                        (conv, combined_prompt)
-                    }
-                }
+                let conv = conversation_manager
+                    .load_conversation(id)
+                    .with_context(|| format!("Conversation with ID '{}' not found", id))?;
+                log_info(&format!("Resumed conversation: {}", conv.id));
+                (conv, config.prompt.clone())
             }
         }
     };
