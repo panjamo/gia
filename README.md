@@ -102,6 +102,7 @@ gia "Translate to Spanish" -c -o
 ```bash
 # Resume latest conversation:
 gia --resume "continue our discussion"
+gia -R "continue our discussion"  # Short option
 
 # Resume specific conversation by ID:
 gia --resume abc12345 "follow up question"
@@ -117,6 +118,7 @@ gia --list-conversations
 - `-s, --stdin` - Add stdin content to prompt  
 - `-o, --clipboard-output` - Write response to clipboard instead of stdout
 - `-r, --resume [ID]` - Resume last conversation or specify conversation ID
+- `-R` - Resume the very last conversation
 - `-l, --list-conversations` - List all saved conversations
 - `-m, --model <MODEL>` - Specify Gemini model (default: gemini-2.5-flash-lite) see https://ai.google.dev/gemini-api/docs/models
 
