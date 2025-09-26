@@ -6,6 +6,7 @@ mod clipboard;
 mod constants;
 mod conversation;
 mod gemini;
+mod image;
 mod input;
 mod logging;
 mod output;

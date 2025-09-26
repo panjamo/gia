@@ -3,6 +3,7 @@ use std::io::{self, Read};
 
 use crate::cli::Config;
 use crate::clipboard::read_clipboard;
+use crate::image::validate_image_file;
 use crate::logging::{log_debug, log_info};
 
 pub fn read_stdin() -> Result<String> {
@@ -47,4 +48,20 @@ pub fn get_input_text(config: &Config, prompt_override: Option<&str>) -> Result<
     }
 
     Ok(input_text)
+}
+
+pub fn validate_image_files(config: &Config) -> Result<()> {
+    if config.image_paths.is_empty() {
+        return Ok(());
+    }
+
+    log_info(&format!("Validating {} image file(s)", config.image_paths.len()));
+    
+    for image_path in &config.image_paths {
+        validate_image_file(image_path)
+            .with_context(|| format!("Failed to validate image: {}", image_path))?;
+    }
+    
+    log_info("All image files validated successfully");
+    Ok(())
 }

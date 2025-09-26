@@ -12,6 +12,7 @@ pub struct Config {
     pub prompt: String,
     pub use_clipboard_input: bool,
     pub use_stdin_input: bool,
+    pub image_paths: Vec<String>,
     pub output_mode: OutputMode,
     pub resume_conversation: Option<String>, // None = new, Some("") = latest, Some(id) = specific
     pub resume_last: bool,                   // true = resume latest conversation
@@ -44,6 +45,14 @@ impl Config {
                     .long("stdin")
                     .help("Add stdin content to prompt")
                     .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("image")
+                    .short('i')
+                    .long("image")
+                    .help("Add image file to prompt (can be used multiple times)")
+                    .value_name("FILE")
+                    .action(clap::ArgAction::Append),
             )
             .arg(
                 Arg::new("clipboard-output")
@@ -121,10 +130,17 @@ impl Config {
             OutputMode::Stdout
         };
 
+        let image_paths: Vec<String> = matches
+            .get_many::<String>("image")
+            .unwrap_or_default()
+            .cloned()
+            .collect();
+
         Self {
             prompt: prompt_parts.join(" "),
             use_clipboard_input: matches.get_flag("clipboard-input"),
             use_stdin_input: matches.get_flag("stdin"),
+            image_paths,
             output_mode,
             resume_conversation,
             resume_last: matches.get_flag("resume-last"),

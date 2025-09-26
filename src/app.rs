@@ -6,7 +6,7 @@ use crate::browser_preview::open_markdown_preview;
 use crate::cli::Config;
 use crate::constants::get_context_window_limit;
 use crate::conversation::{Conversation, ConversationManager, MessageRole};
-use crate::input::get_input_text;
+use crate::input::{get_input_text, validate_image_files};
 use crate::logging::{log_error, log_info};
 use crate::output::output_text;
 use crate::provider::{ProviderConfig, ProviderFactory};
@@ -25,6 +25,9 @@ pub async fn run_app(config: Config) -> Result<()> {
     if let Some(conversation_id) = &config.show_conversation {
         return handle_show_conversation(&conversation_manager, conversation_id);
     }
+
+    // Validate image files if any are provided
+    validate_image_files(&config).context("Failed to validate image files")?;
 
     // Determine conversation mode and adjust prompt if needed
     let (mut conversation, final_prompt) = resolve_conversation(&config, &conversation_manager)?;
@@ -63,13 +66,23 @@ pub async fn run_app(config: Config) -> Result<()> {
         .context("Failed to initialize AI provider")?;
 
     // Generate content
-    log_info(&format!(
-        "Sending request to {} API using model: {}",
-        provider.provider_name(),
-        provider.model_name()
-    ));
+    if config.image_paths.is_empty() {
+        log_info(&format!(
+            "Sending text request to {} API using model: {}",
+            provider.provider_name(),
+            provider.model_name()
+        ));
+    } else {
+        log_info(&format!(
+            "Sending multimodal request to {} API using model: {} with {} image(s)",
+            provider.provider_name(),
+            provider.model_name(),
+            config.image_paths.len()
+        ));
+    }
+
     let response = provider
-        .generate_content(&context_prompt)
+        .generate_content_with_images(&context_prompt, &config.image_paths)
         .await
         .context("Failed to generate content")?;
 

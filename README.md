@@ -5,6 +5,7 @@ A command-line tool that sends text prompts to Google's Gemini API and returns A
 ## Features
 
 - Uses command line arguments as the main prompt
+- **Image support** - Include images in your prompts (JPEG, PNG, WebP, HEIC, PDF)
 - Optional additional input from clipboard or stdin
 - Output responses to stdout (default) or clipboard
 - Persistent conversation history with resume capability
@@ -91,6 +92,21 @@ echo "machine learning data" | gia "Analyze this" -s
 echo "extra context" | gia "Main question about this topic" -c -s
 ```
 
+### Image analysis
+```bash
+# Analyze a single image:
+gia "What do you see in this image?" -i photo.jpg
+
+# Compare multiple images:
+gia "What are the differences between these images?" -i image1.jpg -i image2.png
+
+# Combine image with clipboard text:
+gia "Explain this diagram" -i diagram.png -c
+
+# Image with stdin input:
+echo "Focus on the technical aspects" | gia "Analyze this screenshot" -i screenshot.png -s
+```
+
 ### Output options
 ```bash
 # Default stdout output:
@@ -131,6 +147,7 @@ gia -v a1b2c3d4-e5f6-7890-abcd   # Show specific conversation
 - `[PROMPT_TEXT]` - Prompt text for the AI (main input)
 - `-c, --clipboard-input` - Add clipboard content to prompt
 - `-s, --stdin` - Add stdin content to prompt
+- `-i, --image <FILE>` - Add image file to prompt (can be used multiple times; supports JPEG, PNG, WebP, HEIC, PDF)
 - `-o, --clipboard-output` - Write response to clipboard instead of stdout
 - `-O` - Write output to file (~/.gia/outputs/, path copied to clipboard) AND open browser preview
 - `-r, --resume [ID]` - Resume last conversation or specify conversation ID

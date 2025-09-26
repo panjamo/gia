@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-GIA (Google Intelligence Assistant) is a command-line tool that sends prompts to Google's Gemini API and returns AI responses. It supports multiple input sources (command line, clipboard, stdin) and output destinations (stdout, clipboard).
+GIA (Google Intelligence Assistant) is a command-line tool that sends prompts to Google's Gemini API and returns AI responses. It supports multiple input sources (command line, clipboard, stdin, images) and output destinations (stdout, clipboard). The tool now supports multimodal interactions with images (JPEG, PNG, WebP, HEIC, PDF).
 
 ## Development Commands
 
@@ -36,6 +36,10 @@ cargo run -- "your prompt here"
 cargo run -- --resume "continue previous conversation"
 cargo run -- --resume abc123 "continue specific conversation"
 cargo run -- --list-conversations  # List all saved conversations
+
+# Image analysis
+cargo run -- "What do you see in this image?" -i photo.jpg
+cargo run -- "Compare these images" -i img1.jpg -i img2.png
 ```
 
 ### Environment Setup
