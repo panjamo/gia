@@ -1,10 +1,11 @@
 name: Build Windows
 
-on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+# Automatic builds disabled - use manual-release.yml instead
+# on:
+#   push:
+#     branches: [ master ]
+#   pull_request:
+#     branches: [ master ]
 
 jobs:
   build-windows:
