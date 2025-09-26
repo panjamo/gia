@@ -56,6 +56,13 @@ jobs:
         if ("${{ steps.changelog.outputs.changelog }}".Trim() -ne "") {
           $NOTES = $NOTES + "`n`n## Changelog`n${{ steps.changelog.outputs.changelog }}"
         }
+        
+        # Add Full Changelog link
+        $PREV_TAG = gh release list --limit 1 --json tagName --jq '.[0].tagName' 2>$null
+        if ($PREV_TAG) {
+          $NOTES = $NOTES + "`n`n**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREV_TAG...${{ github.event.inputs.version }}"
+        }
+        
         gh release create "${{ github.event.inputs.version }}" `
           --title "Release ${{ github.event.inputs.version }}" `
           --notes $NOTES `
