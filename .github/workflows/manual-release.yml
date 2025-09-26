@@ -13,6 +13,9 @@ on:
         type: string
         default: 'Manual release'
 
+permissions:
+  contents: write
+
 jobs:
   create-release:
     runs-on: windows-latest
@@ -29,24 +32,11 @@ jobs:
     - name: Build Windows Release
       run: cargo build --release --target x86_64-pc-windows-msvc
     
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
+    - name: Create Release and Upload Asset
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.event.inputs.version }}
-        release_name: Release ${{ github.event.inputs.version }}
-        body: ${{ github.event.inputs.release_notes }}
-        draft: false
-        prerelease: false
-    
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: target/x86_64-pc-windows-msvc/release/gia.exe
-        asset_name: gia.exe
-        asset_content_type: application/octet-stream
+      run: |
+        gh release create "${{ github.event.inputs.version }}" `
+          --title "Release ${{ github.event.inputs.version }}" `
+          --notes "${{ github.event.inputs.release_notes }}" `
+          target/x86_64-pc-windows-msvc/release/gia.exe
