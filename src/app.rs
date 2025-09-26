@@ -1,5 +1,8 @@
 use anyhow::{Context, Result};
+use chrono::prelude::*;
+use std::fs;
 
+use crate::browser_preview::open_markdown_preview;
 use crate::cli::Config;
 use crate::constants::get_context_window_limit;
 use crate::conversation::{Conversation, ConversationManager, MessageRole};
@@ -16,6 +19,11 @@ pub async fn run_app(config: Config) -> Result<()> {
     // Handle list conversations command
     if config.list_conversations {
         return handle_list_conversations(&conversation_manager);
+    }
+
+    // Handle show conversation command
+    if let Some(conversation_id) = &config.show_conversation {
+        return handle_show_conversation(&conversation_manager, conversation_id);
     }
 
     // Determine conversation mode and adjust prompt if needed
@@ -151,4 +159,70 @@ fn handle_list_conversations(conversation_manager: &ConversationManager) -> Resu
         }
     }
     Ok(())
+}
+
+fn handle_show_conversation(
+    conversation_manager: &ConversationManager,
+    conversation_id: &str,
+) -> Result<()> {
+    let conversation = if conversation_id.is_empty() {
+        // Load the latest conversation
+        log_info("Loading latest conversation");
+        match conversation_manager.get_latest_conversation()? {
+            Some(conv) => {
+                log_info(&format!("Found latest conversation: {}", conv.id));
+                conv
+            }
+            None => {
+                println!("No conversations found.");
+                return Ok(());
+            }
+        }
+    } else {
+        // Load specific conversation
+        log_info(&format!("Loading conversation: {}", conversation_id));
+        conversation_manager
+            .load_conversation(conversation_id)
+            .with_context(|| format!("Conversation with ID '{}' not found", conversation_id))?
+    };
+
+    // Get outputs directory and create it if it doesn't exist
+    let outputs_dir = get_outputs_dir()?;
+    if !outputs_dir.exists() {
+        fs::create_dir_all(&outputs_dir).context("Failed to create outputs directory")?;
+        log_info(&format!("Created outputs directory: {:?}", outputs_dir));
+    }
+
+    // Generate markdown content
+    let markdown_content = conversation.format_as_chat_markdown();
+
+    // Create filename based on conversation ID and timestamp
+    let timestamp = Local::now().format("%Y%m%d_%H%M%S");
+    let filename = format!("conversation_{}_{}.md", conversation.id, timestamp);
+    let md_file_path = outputs_dir.join(filename);
+
+    // Write markdown file
+    fs::write(&md_file_path, &markdown_content)
+        .context("Failed to write conversation markdown file")?;
+
+    log_info(&format!("Created markdown file: {:?}", md_file_path));
+
+    // Open browser preview (which will also create HTML file)
+    if let Err(e) = open_markdown_preview(&markdown_content, &md_file_path) {
+        log_error(&format!("Failed to open browser preview: {}", e));
+    } else {
+        log_info("Opened browser preview");
+    }
+
+    println!("Conversation displayed in browser and saved to:");
+    println!("Markdown: {}", md_file_path.display());
+    println!("HTML: {}", md_file_path.with_extension("html").display());
+
+    Ok(())
+}
+
+fn get_outputs_dir() -> Result<std::path::PathBuf> {
+    let home_dir =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
+    Ok(home_dir.join(".gia").join("outputs"))
 }

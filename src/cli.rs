@@ -16,6 +16,7 @@ pub struct Config {
     pub resume_conversation: Option<String>, // None = new, Some("") = latest, Some(id) = specific
     pub resume_last: bool,                   // true = resume latest conversation
     pub list_conversations: bool,
+    pub show_conversation: Option<String>, // Some(id) = show specific conversation
     pub model: String,
 }
 
@@ -81,6 +82,16 @@ impl Config {
                     .action(clap::ArgAction::SetTrue),
             )
             .arg(
+                Arg::new("show-conversation")
+                    .short('v')
+                    .long("show-conversation")
+                    .help("Show a specific conversation in chat mode as HTML and Markdown files (or latest if no ID provided)")
+                    .value_name("ID")
+                    .num_args(0..=1)
+                    .default_missing_value("")
+                    .action(clap::ArgAction::Set),
+            )
+            .arg(
                 Arg::new("model")
                     .short('m')
                     .long("model")
@@ -115,6 +126,7 @@ impl Config {
             resume_conversation,
             resume_last: matches.get_flag("resume-last"),
             list_conversations: matches.get_flag("list-conversations"),
+            show_conversation: matches.get_one::<String>("show-conversation").cloned(),
             model: matches.get_one::<String>("model").unwrap().clone(),
         }
     }

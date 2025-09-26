@@ -117,6 +117,48 @@ impl Conversation {
             .sum();
         content_length
     }
+
+    pub fn format_as_chat_markdown(&self) -> String {
+        let username = whoami::username();
+        let mut markdown = String::new();
+
+        // Add conversation header
+        markdown.push_str(&format!("### Conversation {}\n\n", self.id));
+        markdown.push_str(&format!(
+            "**Created:** {}\n",
+            self.created_at.format("%Y-%m-%d %H:%M:%S UTC")
+        ));
+        markdown.push_str(&format!(
+            "**Updated:** {}\n",
+            self.updated_at.format("%Y-%m-%d %H:%M:%S UTC")
+        ));
+        markdown.push_str(&format!("**Messages:** {}\n\n", self.messages.len()));
+        markdown.push_str("---\n\n");
+
+        // Add messages
+        for (i, message) in self.messages.iter().enumerate() {
+            if i > 0 {
+                markdown.push_str("\n---\n\n");
+            }
+
+            match message.role {
+                MessageRole::User => {
+                    markdown.push_str(&format!("**{}:** ", username));
+                }
+                MessageRole::Assistant => {
+                    markdown.push_str("**Assistant:** ");
+                }
+            }
+
+            markdown.push_str(&message.content);
+            markdown.push_str(&format!(
+                "\n\n*{}*\n",
+                message.timestamp.format("%Y-%m-%d %H:%M:%S UTC")
+            ));
+        }
+
+        markdown
+    }
 }
 
 pub struct ConversationManager {

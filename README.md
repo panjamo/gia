@@ -118,6 +118,10 @@ gia --resume a1b2c3d4-e5f6-7890-abcd-ef1234567890 "follow up question"
 
 # List all saved conversations:
 gia --list-conversations
+
+# Display conversation in browser (chat format):
+gia -v                            # Show latest conversation
+gia -v a1b2c3d4-e5f6-7890-abcd   # Show specific conversation
 ```
 
 ### Command line options
@@ -130,6 +134,7 @@ gia --list-conversations
 - `-r, --resume [ID]` - Resume last conversation or specify conversation ID
 - `-R` - Resume the very last conversation
 - `-l, --list-conversations` - List all saved conversations
+- `-v, --show-conversation [ID]` - Show conversation in chat mode as HTML/Markdown (latest if no ID)
 - `-m, --model <MODEL>` - Specify Gemini model (default: gemini-2.5-flash-lite) see https://ai.google.dev/gemini-api/docs/models
 
 ## Logging
