@@ -9,7 +9,11 @@ pub trait AiProvider: Debug + Send + Sync {
     async fn generate_content(&mut self, prompt: &str) -> Result<String>;
 
     /// Generate content from a text prompt with optional images
-    async fn generate_content_with_images(&mut self, prompt: &str, image_paths: &[String]) -> Result<String>;
+    async fn generate_content_with_images(
+        &mut self,
+        prompt: &str,
+        image_paths: &[String],
+    ) -> Result<String>;
 
     /// Get the model name being used
     fn model_name(&self) -> &str;

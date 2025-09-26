@@ -55,13 +55,16 @@ pub fn validate_image_files(config: &Config) -> Result<()> {
         return Ok(());
     }
 
-    log_info(&format!("Validating {} image file(s)", config.image_paths.len()));
-    
+    log_info(&format!(
+        "Validating {} image file(s)",
+        config.image_paths.len()
+    ));
+
     for image_path in &config.image_paths {
         validate_image_file(image_path)
             .with_context(|| format!("Failed to validate image: {}", image_path))?;
     }
-    
+
     log_info("All image files validated successfully");
     Ok(())
 }

@@ -98,7 +98,12 @@ impl GeminiClient {
         Ok(generated_text.to_string())
     }
 
-    async fn try_generate_content_with_images(&self, prompt: &str, image_paths: &[String], api_key: &str) -> Result<String> {
+    async fn try_generate_content_with_images(
+        &self,
+        prompt: &str,
+        image_paths: &[String],
+        api_key: &str,
+    ) -> Result<String> {
         log_debug(&format!(
             "Sending multimodal request to Gemini API with prompt length: {} and {} image(s)",
             prompt.len(),
@@ -114,16 +119,16 @@ impl GeminiClient {
         // Add image parts
         for image_path in image_paths {
             log_debug(&format!("Adding image to request: {}", image_path));
-            
+
             // Get MIME type for the image
             let path = std::path::Path::new(image_path);
             let mime_type = crate::image::get_mime_type(path)
                 .with_context(|| format!("Failed to get MIME type for image: {}", image_path))?;
-            
+
             // Read image as base64
             let base64_data = crate::image::read_image_as_base64(image_path)
                 .with_context(|| format!("Failed to read image as base64: {}", image_path))?;
-            
+
             // Use from_image_base64 instead of from_image_url
             content_parts.push(ContentPart::from_image_base64(mime_type, base64_data));
         }
@@ -277,7 +282,11 @@ impl AiProvider for GeminiClient {
         }
     }
 
-    async fn generate_content_with_images(&mut self, prompt: &str, image_paths: &[String]) -> Result<String> {
+    async fn generate_content_with_images(
+        &mut self,
+        prompt: &str,
+        image_paths: &[String],
+    ) -> Result<String> {
         if image_paths.is_empty() {
             // No images, use regular text-only method
             return self.generate_content(prompt).await;
@@ -286,7 +295,10 @@ impl AiProvider for GeminiClient {
         let current_key = self.api_keys[self.current_key_index].clone();
 
         // Try with current API key first
-        match self.try_generate_content_with_images(prompt, image_paths, &current_key).await {
+        match self
+            .try_generate_content_with_images(prompt, image_paths, &current_key)
+            .await
+        {
             Ok(result) => Ok(result),
             Err(e) => {
                 let error_string = e.to_string();
@@ -299,13 +311,18 @@ impl AiProvider for GeminiClient {
                         Ok(next_key) => {
                             log_info("Found alternative API key, retrying multimodal request");
 
-                            match self.try_generate_content_with_images(prompt, image_paths, &next_key).await {
+                            match self
+                                .try_generate_content_with_images(prompt, image_paths, &next_key)
+                                .await
+                            {
                                 Ok(result) => {
                                     log_info("Successfully used alternative API key for multimodal request");
                                     Ok(result)
                                 }
                                 Err(fallback_error) => {
-                                    log_error("Alternative API key also failed for multimodal request");
+                                    log_error(
+                                        "Alternative API key also failed for multimodal request",
+                                    );
                                     let fallback_error_string = fallback_error.to_string();
                                     if fallback_error_string.contains("429")
                                         || fallback_error_string.contains("Too Many Requests")
