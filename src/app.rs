@@ -17,8 +17,8 @@ pub async fn run_app(config: Config) -> Result<()> {
         ConversationManager::new().context("Failed to initialize conversation manager")?;
 
     // Handle list conversations command
-    if config.list_conversations {
-        return handle_list_conversations(&conversation_manager);
+    if let Some(limit) = config.list_conversations {
+        return handle_list_conversations(&conversation_manager, limit);
     }
 
     // Handle show conversation command
@@ -142,15 +142,24 @@ fn resolve_conversation(
     }
 }
 
-fn handle_list_conversations(conversation_manager: &ConversationManager) -> Result<()> {
+fn handle_list_conversations(
+    conversation_manager: &ConversationManager,
+    limit: usize,
+) -> Result<()> {
     match conversation_manager.list_conversations()? {
         conversations if conversations.is_empty() => {
             println!("No saved conversations found.");
         }
         conversations => {
+            let limited_conversations = if limit == 0 {
+                conversations
+            } else {
+                conversations.into_iter().take(limit).collect()
+            };
+
             println!("Saved Conversations:");
             println!("===================");
-            for summary in conversations {
+            for summary in limited_conversations {
                 println!("{}", summary.format_for_display());
             }
             println!();

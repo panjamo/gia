@@ -15,7 +15,7 @@ pub struct Config {
     pub output_mode: OutputMode,
     pub resume_conversation: Option<String>, // None = new, Some("") = latest, Some(id) = specific
     pub resume_last: bool,                   // true = resume latest conversation
-    pub list_conversations: bool,
+    pub list_conversations: Option<usize>, // None = don't list, Some(n) = list top n, Some(0) = list all
     pub show_conversation: Option<String>, // Some(id) = show specific conversation
     pub model: String,
 }
@@ -78,8 +78,11 @@ impl Config {
                 Arg::new("list-conversations")
                     .short('l')
                     .long("list-conversations")
-                    .help("List all saved conversations")
-                    .action(clap::ArgAction::SetTrue),
+                    .help("List saved conversations (optionally specify number to limit, empty for all)")
+                    .value_name("NUMBER")
+                    .num_args(0..=1)
+                    .default_missing_value("0")
+                    .action(clap::ArgAction::Set),
             )
             .arg(
                 Arg::new("show-conversation")
@@ -125,7 +128,9 @@ impl Config {
             output_mode,
             resume_conversation,
             resume_last: matches.get_flag("resume-last"),
-            list_conversations: matches.get_flag("list-conversations"),
+            list_conversations: matches
+                .get_one::<String>("list-conversations")
+                .map(|s| s.parse::<usize>().unwrap_or(0)),
             show_conversation: matches.get_one::<String>("show-conversation").cloned(),
             model: matches.get_one::<String>("model").unwrap().clone(),
         }
