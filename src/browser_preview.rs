@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use base64::{Engine as _, engine::general_purpose};
+use base64::{engine::general_purpose, Engine as _};
 
 const GITHUB_CSS: &str = r#"
 body {
@@ -90,10 +90,9 @@ pub fn open_markdown_preview(markdown_content: &str) -> Result<()> {
     let html_content = create_markdown_html(markdown_content);
     let base64_html = general_purpose::STANDARD.encode(&html_content);
     let data_url = format!("data:text/html;base64,{}", base64_html);
-    
-    webbrowser::open(&data_url)
-        .map_err(|e| anyhow!("Failed to open browser: {}", e))?;
-    
+
+    webbrowser::open(&data_url).map_err(|e| anyhow!("Failed to open browser: {}", e))?;
+
     Ok(())
 }
 
@@ -104,7 +103,7 @@ fn create_markdown_html(markdown_content: &str) -> String {
     options.extension.autolink = true;
     options.extension.tasklist = true;
     options.extension.footnotes = true;
-    
+
     let html_body = comrak::markdown_to_html(markdown_content, &options);
 
     format!(

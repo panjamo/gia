@@ -93,7 +93,7 @@ gia "What is machine learning?"
 # Output to clipboard instead:
 gia "Write a poem about coding" -o
 
-# Output to clipboard AND open browser preview:
+# Output to temp file (path to clipboard) AND open browser preview:
 gia "Generate markdown documentation" -O
 
 # With additional input and clipboard output:
@@ -120,7 +120,7 @@ gia --list-conversations
 - `-c, --clipboard-input` - Add clipboard content to prompt
 - `-s, --stdin` - Add stdin content to prompt
 - `-o, --clipboard-output` - Write response to clipboard instead of stdout
-- `-O` - Write output to clipboard AND open browser preview
+- `-O` - Write output to temp file (path copied to clipboard) AND open browser preview
 - `-r, --resume [ID]` - Resume last conversation or specify conversation ID
 - `-R` - Resume the very last conversation
 - `-l, --list-conversations` - List all saved conversations

@@ -4,7 +4,7 @@ use clap::{Arg, Command};
 pub enum OutputMode {
     Stdout,
     Clipboard,
-    ClipboardWithPreview,
+    TempFileWithPreview,
 }
 
 #[derive(Debug)]
@@ -52,9 +52,9 @@ impl Config {
                     .action(clap::ArgAction::SetTrue),
             )
             .arg(
-                Arg::new("clipboard-output-with-preview")
+                Arg::new("temp-file-with-preview")
                     .short('O')
-                    .help("Write output to clipboard AND open browser preview")
+                    .help("Write output to temp file, copy file path to clipboard, and open browser preview")
                     .action(clap::ArgAction::SetTrue),
             )
             .arg(
@@ -99,8 +99,8 @@ impl Config {
 
         let resume_conversation = matches.get_one::<String>("resume").cloned();
 
-        let output_mode = if matches.get_flag("clipboard-output-with-preview") {
-            OutputMode::ClipboardWithPreview
+        let output_mode = if matches.get_flag("temp-file-with-preview") {
+            OutputMode::TempFileWithPreview
         } else if matches.get_flag("clipboard-output") {
             OutputMode::Clipboard
         } else {
