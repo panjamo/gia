@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
-use base64::{engine::general_purpose, Engine as _};
+use std::fs;
+use std::path::Path;
 
 const GITHUB_CSS: &str = r#"
 body {
@@ -86,12 +87,18 @@ hr {
 }
 "#;
 
-pub fn open_markdown_preview(markdown_content: &str) -> Result<()> {
+pub fn open_markdown_preview(markdown_content: &str, md_file_path: &Path) -> Result<()> {
     let html_content = create_markdown_html(markdown_content);
-    let base64_html = general_purpose::STANDARD.encode(&html_content);
-    let data_url = format!("data:text/html;base64,{}", base64_html);
 
-    webbrowser::open(&data_url).map_err(|e| anyhow!("Failed to open browser: {}", e))?;
+    // Create HTML file with same name as MD file but with .html extension
+    let html_file_path = md_file_path.with_extension("html");
+
+    // Write HTML content to file
+    fs::write(&html_file_path, html_content)?;
+
+    // Open the HTML file in browser
+    webbrowser::open(html_file_path.to_str().unwrap())
+        .map_err(|e| anyhow!("Failed to open browser: {}", e))?;
 
     Ok(())
 }

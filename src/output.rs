@@ -1,11 +1,18 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::prelude::*;
 use std::fs;
+use std::path::PathBuf;
 
 use crate::browser_preview::open_markdown_preview;
 use crate::cli::{Config, OutputMode};
 use crate::clipboard::write_clipboard;
 use crate::logging::{log_error, log_info};
+
+fn get_outputs_dir() -> Result<PathBuf> {
+    let home_dir =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
+    Ok(home_dir.join(".gia").join("outputs"))
+}
 
 fn generate_filename_from_prompt(prompt: &str) -> String {
     // Get current timestamp
@@ -64,28 +71,34 @@ fn generate_filename_from_prompt(prompt: &str) -> String {
 pub fn output_text(text: &str, config: &Config) -> Result<()> {
     match config.output_mode {
         OutputMode::TempFileWithPreview => {
-            log_info("Writing response to temp file, copying file path to clipboard, and opening browser preview");
+            log_info("Writing response to output file, copying file path to clipboard, and opening browser preview");
 
-            // Create temp file with prompt-based name
-            let mut temp_path = std::env::temp_dir();
+            // Get outputs directory and create it if it doesn't exist
+            let outputs_dir = get_outputs_dir()?;
+            if !outputs_dir.exists() {
+                fs::create_dir_all(&outputs_dir).context("Failed to create outputs directory")?;
+                log_info(&format!("Created outputs directory: {:?}", outputs_dir));
+            }
+
+            // Create output file with prompt-based name
             let filename = generate_filename_from_prompt(&config.prompt);
-            temp_path.push(filename);
+            let output_path = outputs_dir.join(filename);
 
-            // Write content to temp file
-            fs::write(&temp_path, text)?;
+            // Write content to output file
+            fs::write(&output_path, text)?;
 
             // Copy file path to clipboard
-            let file_path_str = temp_path.to_string_lossy();
+            let file_path_str = output_path.to_string_lossy();
             write_clipboard(&file_path_str)?;
 
             // Open browser preview
-            if let Err(e) = open_markdown_preview(text) {
+            if let Err(e) = open_markdown_preview(text, &output_path) {
                 log_error(&format!("Failed to open browser preview: {}", e));
             } else {
                 log_info("Opened browser preview");
             }
 
-            log_info(&format!("Temp file created at: {}", file_path_str));
+            log_info(&format!("Output file created at: {}", file_path_str));
 
             Ok(())
         }
