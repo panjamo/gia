@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 
 use crate::cli::Config;
-use crate::constants::DEFAULT_CONTEXT_WINDOW_LIMIT;
+use crate::constants::get_context_window_limit;
 use crate::conversation::{Conversation, ConversationManager, MessageRole};
 use crate::input::get_input_text;
 use crate::logging::{log_error, log_info};
@@ -40,7 +40,7 @@ pub async fn run_app(config: Config) -> Result<()> {
     let context_prompt = conversation.build_context_prompt(&input_text);
 
     // Truncate conversation if it's getting too long
-    conversation.truncate_if_needed(DEFAULT_CONTEXT_WINDOW_LIMIT);
+    conversation.truncate_if_needed(get_context_window_limit());
 
     // Get API keys
     let api_keys = crate::api_key::get_api_keys().context("Failed to get API keys")?;

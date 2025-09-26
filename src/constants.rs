@@ -4,6 +4,14 @@ pub const API_KEY_PREFIX: &str = "AIza";
 
 /// Conversation management constants
 pub const DEFAULT_CONTEXT_WINDOW_LIMIT: usize = 8000;
+
+/// Get context window limit from environment variable or default
+pub fn get_context_window_limit() -> usize {
+    std::env::var("CONTEXT_WINDOW_LIMIT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(DEFAULT_CONTEXT_WINDOW_LIMIT)
+}
 pub const CONVERSATION_TRUNCATION_KEEP_MESSAGES: usize = 2;
 
 /// URLs for user guidance

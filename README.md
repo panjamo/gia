@@ -45,6 +45,12 @@ On Windows:
 set GEMINI_API_KEY=key1|key2|key3
 ```
 
+Optionally configure the context window limit (default: 8000):
+
+```bash
+export CONTEXT_WINDOW_LIMIT=10000
+```
+
 GIA will randomly select an API key for each request and automatically fallback to other keys if it encounters a "429 Too Many Requests" error.
 
 To get a Gemini API key, visit: https://makersuite.google.com/app/apikey
