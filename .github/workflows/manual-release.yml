@@ -37,12 +37,23 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # Get the previous release tag
-        $PREV_TAG = gh release list --limit 1 --json tagName --jq '.[0].tagName' 2>$null
+        # Get the previous release tag (excluding the current one being created)
+        $PREV_TAG = ""
+        try {
+          $PREV_TAG = gh release list --limit 10 --json tagName --jq '.[].tagName' | Where-Object { $_ -ne "${{ github.event.inputs.version }}" } | Select-Object -First 1
+        } catch {
+          Write-Host "No previous releases found"
+        }
+        
+        # Store previous tag for later use
+        echo "prev_tag=$PREV_TAG" >> $env:GITHUB_OUTPUT
+        
         if ($PREV_TAG) {
+          Write-Host "Generating changelog from $PREV_TAG to HEAD"
           $CHANGELOG = gh api repos/:owner/:repo/compare/$PREV_TAG...HEAD --jq '.commits[] | "- " + .commit.message' | Out-String
         } else {
-          $CHANGELOG = git log --oneline --pretty=format:"- %s" | Out-String
+          Write-Host "No previous tag found, using all recent commits"
+          $CHANGELOG = git log --oneline --pretty=format:"- %s" -10 | Out-String
         }
         echo "changelog<<EOF" >> $env:GITHUB_OUTPUT
         echo $CHANGELOG >> $env:GITHUB_OUTPUT
@@ -53,15 +64,20 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         $NOTES = "${{ github.event.inputs.release_notes }}"
+        
+        # Add changelog if available
         if ("${{ steps.changelog.outputs.changelog }}".Trim() -ne "") {
           $NOTES = $NOTES + "`n`n## Changelog`n${{ steps.changelog.outputs.changelog }}"
         }
         
-        # Add Full Changelog link
-        $PREV_TAG = gh release list --limit 1 --json tagName --jq '.[0].tagName' 2>$null
-        if ($PREV_TAG) {
+        # Add Full Changelog link if we have a previous release
+        $PREV_TAG = "${{ steps.changelog.outputs.prev_tag }}"
+        if ($PREV_TAG -and $PREV_TAG.Trim() -ne "") {
           $NOTES = $NOTES + "`n`n**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREV_TAG...${{ github.event.inputs.version }}"
         }
+        
+        Write-Host "Final release notes:"
+        Write-Host $NOTES
         
         gh release create "${{ github.event.inputs.version }}" `
           --title "Release ${{ github.event.inputs.version }}" `
