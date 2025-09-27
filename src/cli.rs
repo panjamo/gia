@@ -19,6 +19,7 @@ pub struct Config {
     pub prompt: String,
     pub use_clipboard_input: bool,
     pub image_sources: Vec<ImageSource>,
+    pub text_files: Vec<String>,
     pub output_mode: OutputMode,
     pub resume_conversation: Option<String>, // None = new, Some("") = latest, Some(id) = specific
     pub resume_last: bool,                   // true = resume latest conversation
@@ -51,6 +52,14 @@ impl Config {
                     .short('i')
                     .long("image")
                     .help("Add image file to prompt (can be used multiple times)")
+                    .value_name("FILE")
+                    .action(clap::ArgAction::Append),
+            )
+            .arg(
+                Arg::new("file")
+                    .short('f')
+                    .long("file")
+                    .help("Add text file content to prompt (can be used multiple times)")
                     .value_name("FILE")
                     .action(clap::ArgAction::Append),
             )
@@ -142,10 +151,17 @@ impl Config {
             .map(|path| ImageSource::File(path.clone()))
             .collect();
 
+        let text_files: Vec<String> = matches
+            .get_many::<String>("file")
+            .unwrap_or_default()
+            .cloned()
+            .collect();
+
         Self {
             prompt: prompt_parts.join(" "),
             use_clipboard_input: matches.get_flag("clipboard-input"),
             image_sources,
+            text_files,
             output_mode,
             resume_conversation,
             resume_last: matches.get_flag("resume-last"),
@@ -183,6 +199,7 @@ mod tests {
             prompt: "test".to_string(),
             use_clipboard_input: false,
             image_sources: vec![],
+            text_files: vec![],
             output_mode: OutputMode::Stdout,
             resume_conversation: None,
             resume_last: false,

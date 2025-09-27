@@ -41,6 +41,13 @@ cargo run -- --list-conversations  # List all saved conversations
 cargo run -- "What do you see in this image?" -i photo.jpg
 cargo run -- "Compare these images" -i img1.jpg -i img2.png
 
+# Text file input
+cargo run -- "Summarize these documents" -f document1.txt -f document2.txt
+cargo run -- "What are the differences between these files?" -f old.txt -f new.txt
+
+# Combining multiple input sources
+cargo run -- "Analyze this code and documentation" -f README.md -f main.rs -i diagram.png
+
 # Clipboard image analysis (copy an image to clipboard first)
 cargo run -- "What do you see in this image?" -c
 ```
@@ -82,10 +89,11 @@ RUST_LOG=error cargo run -- "test"  # Error logging only
 
 **Multi-API Key Support**: The application supports pipe-separated API keys (`key1|key2|key3`) and automatically falls back to alternative keys when encountering 429 rate limit errors. This is handled in `gemini.rs` with cooperation from `api_key.rs`.
 
-**Input Sources**: Three input sources can be combined:
+**Input Sources**: Four input sources can be combined:
 1. Command line arguments (primary prompt)
 2. Clipboard content (with `-c` flag) - supports both text and images
-3. Stdin content (with `-s` flag)
+3. Stdin content (automatically detected when available)
+4. Text file content (with `-f` flag) - can be used multiple times
 
 **Output Destinations**: Two output options:
 1. Stdout (default)

@@ -6,6 +6,7 @@ A command-line tool that sends text prompts to Google's Gemini API and returns A
 
 - Uses command line arguments as the main prompt
 - **Image support** - Include images from files (JPEG, PNG, WebP, HEIC, PDF) or clipboard
+- **Text file support** - Include text file content with `-f` flag (can be used multiple times)
 - Optional additional input from clipboard or stdin (auto-detects text vs images)
 - Output responses to stdout (default) or clipboard
 - Persistent conversation history with resume capability
@@ -62,6 +63,7 @@ GIA automatically combines input from multiple sources:
 - **Command line**: Main prompt (required)
 - **Stdin**: Automatically detected when piped
 - **Clipboard**: With `-c` flag only
+- **Text files**: With `-f` flag (can be used multiple times)
 - **Output**: Response written to stdout (default)
 
 ## Usage
@@ -89,6 +91,12 @@ echo "machine learning data" | gia "Analyze this"
 
 # Combine stdin and clipboard:
 echo "extra context" | gia "Main question about this topic" -c
+
+# Include text files:
+gia "Summarize these documents" -f doc1.txt -f doc2.txt
+
+# Combine multiple input sources:
+gia "Analyze code and docs" -f README.md -f main.rs -i diagram.png
 ```
 
 ### Image analysis
@@ -152,6 +160,7 @@ gia -v a1b2c3d4-e5f6-7890-abcd   # Show specific conversation
 - `[PROMPT_TEXT]` - Prompt text for the AI (main input)
 - `-c, --clipboard-input` - Add clipboard content to prompt (auto-detects images vs text)
 - `-i, --image <FILE>` - Add image file to prompt (can be used multiple times; supports JPEG, PNG, WebP, HEIC, PDF)
+- `-f, --file <FILE>` - Add text file content to prompt (can be used multiple times)
 - `-o, --clipboard-output` - Write response to clipboard instead of stdout
 - `-O` - Write output to file (~/.gia/outputs/, path copied to clipboard) AND open browser preview
 - `-r, --resume [ID]` - Resume last conversation or specify conversation ID
