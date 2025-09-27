@@ -18,7 +18,6 @@ pub enum ImageSource {
 pub struct Config {
     pub prompt: String,
     pub use_clipboard_input: bool,
-    pub use_stdin_input: bool,
     pub image_sources: Vec<ImageSource>,
     pub output_mode: OutputMode,
     pub resume_conversation: Option<String>, // None = new, Some("") = latest, Some(id) = specific
@@ -46,13 +45,7 @@ impl Config {
                     .help("Add clipboard content to prompt")
                     .action(clap::ArgAction::SetTrue),
             )
-            .arg(
-                Arg::new("stdin")
-                    .short('s')
-                    .long("stdin")
-                    .help("Add stdin content to prompt")
-                    .action(clap::ArgAction::SetTrue),
-            )
+
             .arg(
                 Arg::new("image")
                     .short('i')
@@ -152,7 +145,6 @@ impl Config {
         Self {
             prompt: prompt_parts.join(" "),
             use_clipboard_input: matches.get_flag("clipboard-input"),
-            use_stdin_input: matches.get_flag("stdin"),
             image_sources,
             output_mode,
             resume_conversation,
@@ -190,7 +182,6 @@ mod tests {
         let mut config = Config {
             prompt: "test".to_string(),
             use_clipboard_input: false,
-            use_stdin_input: false,
             image_sources: vec![],
             output_mode: OutputMode::Stdout,
             resume_conversation: None,

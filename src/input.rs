@@ -4,7 +4,7 @@ use std::io::{self, Read};
 use crate::cli::{Config, ImageSource};
 use crate::clipboard::{has_clipboard_image, read_clipboard};
 use crate::image::validate_image_file;
-use crate::logging::{log_debug, log_error, log_info};
+use crate::logging::{log_debug, log_info};
 
 pub fn read_stdin() -> Result<String> {
     log_debug("Reading from stdin");
@@ -28,7 +28,7 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
         input_text.push_str(prompt_to_use);
     }
 
-    // Add additional input if requested
+    // Add clipboard input only if requested with -c flag
     if config.use_clipboard_input {
         log_info("Checking clipboard content");
 
@@ -48,13 +48,13 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
                         input_text.push_str(&clipboard_input);
                     }
                     Err(e) => {
-                        log_error(&format!("Failed to read clipboard text: {}", e));
+                        log_debug(&format!("Failed to read clipboard text: {}", e));
                         // Continue without clipboard input
                     }
                 }
             }
             Err(e) => {
-                log_error(&format!("Failed to check clipboard for image: {}", e));
+                log_debug(&format!("Failed to check clipboard for image: {}", e));
                 // Fallback to trying text
                 match read_clipboard() {
                     Ok(clipboard_input) => {
@@ -64,20 +64,25 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
                         input_text.push_str(&clipboard_input);
                     }
                     Err(e) => {
-                        log_error(&format!("Failed to read clipboard text: {}", e));
+                        log_debug(&format!("Failed to read clipboard text: {}", e));
                     }
                 }
             }
         }
     }
 
-    if config.use_stdin_input {
-        log_info("Adding stdin input");
+    // Always check stdin if available (regardless of flag)
+    if atty::isnt(atty::Stream::Stdin) {
+        log_info("Stdin data available - adding to input");
         let stdin_input = read_stdin()?;
-        if !input_text.is_empty() {
-            input_text.push_str("\n\n");
+        if !stdin_input.trim().is_empty() {
+            if !input_text.is_empty() {
+                input_text.push_str("\n\n");
+            }
+            input_text.push_str(&stdin_input);
         }
-        input_text.push_str(&stdin_input);
+    } else {
+        log_debug("No stdin data available (terminal input)");
     }
 
     Ok(input_text)

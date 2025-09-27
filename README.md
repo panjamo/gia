@@ -58,12 +58,11 @@ To get a Gemini API key, visit: https://makersuite.google.com/app/apikey
 
 ## Default Behavior
 
-GIA uses command line arguments as the main prompt:
-- **Input**: Prompt from command line arguments (required)
-- **Additional Input**: Optional clipboard (-c) or stdin (-s) content
+GIA automatically combines input from multiple sources:
+- **Command line**: Main prompt (required)
+- **Stdin**: Automatically detected when piped
+- **Clipboard**: With `-c` flag only
 - **Output**: Response written to stdout (default)
-
-Use flags to add additional input or redirect output.
 
 ## Usage
 
@@ -73,11 +72,11 @@ Use flags to add additional input or redirect output.
 gia "What is artificial intelligence?"
 gia "Explain quantum computing"
 
-# With additional clipboard input:
+# With clipboard input:
 gia "Summarize this text" -c
 
-# With additional stdin input:
-echo "data to process" | gia "Analyze this data" -s
+# With stdin input (automatic):
+echo "data to process" | gia "Analyze this data"
 ```
 
 ### Adding input sources
@@ -85,11 +84,11 @@ echo "data to process" | gia "Analyze this data" -s
 # Add clipboard content to prompt:
 gia "Explain this code" -c
 
-# Add stdin content to prompt:
-echo "machine learning data" | gia "Analyze this" -s
+# Stdin is automatically detected:
+echo "machine learning data" | gia "Analyze this"
 
-# Combine both:
-echo "extra context" | gia "Main question about this topic" -c -s
+# Combine stdin and clipboard:
+echo "extra context" | gia "Main question about this topic" -c
 ```
 
 ### Image analysis
@@ -110,7 +109,7 @@ gia "Explain this diagram" -i diagram.png -c
 gia "Describe the technical aspects of this screenshot" -c
 
 # Image with stdin input:
-echo "Focus on the technical aspects" | gia "Analyze this screenshot" -i screenshot.png -s
+echo "Focus on the technical aspects" | gia "Analyze this screenshot" -i screenshot.png
 ```
 
 ### Output options
@@ -152,7 +151,6 @@ gia -v a1b2c3d4-e5f6-7890-abcd   # Show specific conversation
 
 - `[PROMPT_TEXT]` - Prompt text for the AI (main input)
 - `-c, --clipboard-input` - Add clipboard content to prompt (auto-detects images vs text)
-- `-s, --stdin` - Add stdin content to prompt
 - `-i, --image <FILE>` - Add image file to prompt (can be used multiple times; supports JPEG, PNG, WebP, HEIC, PDF)
 - `-o, --clipboard-output` - Write response to clipboard instead of stdout
 - `-O` - Write output to file (~/.gia/outputs/, path copied to clipboard) AND open browser preview
@@ -190,7 +188,7 @@ gia "Write a haiku about programming"
 gia "Explain this Rust code" -c
 
 # Or pipe code via stdin:
-echo "fn main() { println!('Hello'); }" | gia "Explain this Rust code" -s
+echo "fn main() { println!('Hello'); }" | gia "Explain this Rust code"
 ```
 
 ### Working with clipboard
