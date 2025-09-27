@@ -7,16 +7,8 @@ use crate::cli::ImageSource;
 /// Generic AI provider trait for abstraction across different AI services
 #[async_trait]
 pub trait AiProvider: Debug + Send + Sync {
-    /// Generate content from a text prompt
-    async fn generate_content(&mut self, prompt: &str) -> Result<String>;
-
-    /// Generate content from a text prompt with optional images
-    #[allow(dead_code)]
-    async fn generate_content_with_images(
-        &mut self,
-        prompt: &str,
-        image_paths: &[String],
-    ) -> Result<String>;
+    // /// Generate content from a text prompt
+    // async fn generate_content(&mut self, prompt: &str) -> Result<String>;
 
     /// Generate content from a text prompt with mixed image sources
     async fn generate_content_with_image_sources(
