@@ -11,6 +11,7 @@ mod input;
 mod logging;
 mod output;
 mod provider;
+mod tools;
 
 use anyhow::Result;
 

@@ -4,11 +4,15 @@ use crate::clipboard::{convert_image_data_to_base64, read_clipboard_image};
 use crate::constants::GEMINI_API_KEY_URL;
 use crate::logging::{log_debug, log_error, log_info, log_warn};
 use crate::provider::AiProvider;
+use crate::tools::{FunctionCall, WebTools};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use genai::chat::{ChatMessage, ChatRequest, ContentPart};
 use genai::Client;
 use rand::prelude::*;
+use reqwest;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::env;
 
 #[derive(Debug)]
@@ -17,6 +21,45 @@ pub struct GeminiClient {
     api_keys: Vec<String>,
     current_key_index: usize,
     model: String,
+    web_tools: WebTools,
+    http_client: reqwest::Client,
+}
+
+// Structures for direct Gemini API function calling
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GeminiRequest {
+    contents: Vec<GeminiContent>,
+    tools: Option<Vec<crate::tools::Tool>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GeminiContent {
+    role: String,
+    parts: Vec<GeminiPart>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+enum GeminiPart {
+    Text { text: String },
+    FunctionCall { 
+        #[serde(rename = "functionCall")]
+        function_call: FunctionCall 
+    },
+    FunctionResponse { 
+        #[serde(rename = "functionResponse")]
+        function_response: crate::tools::FunctionResponse 
+    },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct GeminiResponse {
+    candidates: Vec<GeminiCandidate>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct GeminiCandidate {
+    content: GeminiContent,
 }
 
 impl GeminiClient {
@@ -57,6 +100,8 @@ impl GeminiClient {
             api_keys,
             current_key_index,
             model,
+            web_tools: WebTools::new(),
+            http_client: reqwest::Client::new(),
         })
     }
 
@@ -256,6 +301,176 @@ impl GeminiClient {
         Ok(generated_text.to_string())
     }
 
+    async fn generate_content_with_tools(&mut self, prompt: &str) -> Result<String> {
+        log_info("Using function calling mode with web tools");
+        
+        let api_key = &self.api_keys[self.current_key_index];
+        
+        // Check if the prompt might benefit from web tools
+        let needs_web_access = self.should_use_web_tools(prompt);
+        
+        if !needs_web_access {
+            log_debug("Prompt doesn't seem to need web access, using standard mode");
+            return self.try_generate_content(prompt, api_key).await;
+        }
+        
+        log_info("Prompt may benefit from web access, enabling tools");
+        
+        let tools = WebTools::create_tools();
+        let mut conversation_history = vec![GeminiContent {
+            role: "user".to_string(),
+            parts: vec![GeminiPart::Text { text: prompt.to_string() }],
+        }];
+        
+        // Function calling conversation loop
+        for round in 0..3 { // Max 3 rounds to prevent infinite loops
+            log_debug(&format!("Function calling round {}", round + 1));
+            
+            let request = GeminiRequest {
+                contents: conversation_history.clone(),
+                tools: Some(tools.clone()),
+            };
+            
+            let response = self.call_gemini_api_with_tools(&request, api_key).await?;
+            
+            if let Some(candidate) = response.candidates.first() {
+                let mut has_function_calls = false;
+                let mut text_response = String::new();
+                
+                // Process the response parts
+                for part in &candidate.content.parts {
+                    match part {
+                        GeminiPart::Text { text } => {
+                            if !text.trim().is_empty() {
+                                text_response.push_str(text);
+                            }
+                        }
+                        GeminiPart::FunctionCall { function_call } => {
+                            has_function_calls = true;
+                            log_info(&format!("AI wants to call function: {}", function_call.name));
+                            
+                            // Execute the function call
+                            match self.web_tools.execute_function_call(function_call).await {
+                                Ok(function_response) => {
+                                    log_info(&format!("Function {} executed successfully", function_call.name));
+                                    
+                                    // Add the function call to conversation history
+                                    conversation_history.push(GeminiContent {
+                                        role: "model".to_string(),
+                                        parts: vec![GeminiPart::FunctionCall { function_call: function_call.clone() }],
+                                    });
+                                    
+                                    // Add the function response to conversation history
+                                    conversation_history.push(GeminiContent {
+                                        role: "user".to_string(),
+                                        parts: vec![GeminiPart::FunctionResponse { function_response }],
+                                    });
+                                }
+                                Err(e) => {
+                                    log_error(&format!("Function call failed: {}", e));
+                                    // Add error response
+                                    conversation_history.push(GeminiContent {
+                                        role: "user".to_string(),
+                                        parts: vec![GeminiPart::FunctionResponse { 
+                                            function_response: crate::tools::FunctionResponse {
+                                                name: function_call.name.clone(),
+                                                response: json!({
+                                                    "error": format!("Function call failed: {}", e)
+                                                }),
+                                            }
+                                        }],
+                                    });
+                                }
+                            }
+                        }
+                        GeminiPart::FunctionResponse { .. } => {
+                            // This shouldn't happen in the response, but ignore it
+                        }
+                    }
+                }
+                
+                // If no function calls, we have the final response
+                if !has_function_calls {
+                    if text_response.trim().is_empty() {
+                        return Err(anyhow::anyhow!("Empty response from Gemini API"));
+                    }
+                    log_info(&format!("Function calling completed successfully, response length: {}", text_response.len()));
+                    return Ok(text_response);
+                }
+                
+                // If we have function calls but also text, add the text to conversation
+                if !text_response.trim().is_empty() {
+                    conversation_history.push(GeminiContent {
+                        role: "model".to_string(),
+                        parts: vec![GeminiPart::Text { text: text_response }],
+                    });
+                }
+            } else {
+                return Err(anyhow::anyhow!("No candidates in Gemini API response"));
+            }
+        }
+        
+        Err(anyhow::anyhow!("Function calling loop exceeded maximum rounds"))
+    }
+    
+    async fn call_gemini_api_with_tools(&self, request: &GeminiRequest, api_key: &str) -> Result<GeminiResponse> {
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+            self.model, api_key
+        );
+        
+        log_debug(&format!("Sending function calling request to: {}", url));
+        
+        let response = self
+            .http_client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .json(request)
+            .send()
+            .await
+            .context("Failed to send request to Gemini API")?;
+            
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(anyhow::anyhow!("Gemini API error {}: {}", status, error_text));
+        }
+        
+        let response_text = response
+            .text()
+            .await
+            .context("Failed to get response text from Gemini API")?;
+            
+        log_debug(&format!("Raw Gemini API response: {}", response_text));
+        
+        let gemini_response: GeminiResponse = serde_json::from_str(&response_text)
+            .context("Failed to parse Gemini API response JSON")?;
+            
+        Ok(gemini_response)
+    }
+    
+    fn should_use_web_tools(&self, prompt: &str) -> bool {
+        let prompt_lower = prompt.to_lowercase();
+        
+        // Keywords that suggest web search might be useful
+        let search_indicators = [
+            "latest", "recent", "current", "today", "news", "update", 
+            "what's new", "find", "search", "look up", "information about",
+            "tell me about", "2024", "2025", "this year", "happening now",
+            "price", "cost", "stock", "weather", "events", "schedule"
+        ];
+        
+        // Keywords that suggest URL reading might be useful
+        let url_indicators = [
+            "http://", "https://", "www.", ".com", ".org", ".net", ".io",
+            "read this", "summarize", "content of", "page", "website",
+            "article", "documentation", "docs"
+        ];
+        
+        search_indicators.iter().any(|&indicator| prompt_lower.contains(indicator)) ||
+        url_indicators.iter().any(|&indicator| prompt_lower.contains(indicator))
+    }
+
     fn try_next_api_key(&mut self) -> Result<String> {
         if self.api_keys.len() <= 1 {
             return Err(anyhow::anyhow!("No alternative API keys available"));
@@ -316,6 +531,18 @@ impl GeminiClient {
 #[async_trait]
 impl AiProvider for GeminiClient {
     async fn generate_content(&mut self, prompt: &str) -> Result<String> {
+        // Try function calling first if it might be beneficial
+        if self.should_use_web_tools(prompt) {
+            log_info("Attempting to use function calling with web tools");
+            match self.generate_content_with_tools(prompt).await {
+                Ok(result) => return Ok(result),
+                Err(e) => {
+                    log_warn(&format!("Function calling failed, falling back to standard mode: {}", e));
+                }
+            }
+        }
+
+        // Fallback to standard genai implementation
         let current_key = self.api_keys[self.current_key_index].clone();
 
         // Try with current API key first
