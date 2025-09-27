@@ -100,6 +100,7 @@ impl GeminiClient {
         Ok(generated_text.to_string())
     }
 
+    #[allow(dead_code)]
     async fn try_generate_content_with_images(
         &self,
         prompt: &str,
@@ -373,6 +374,7 @@ impl AiProvider for GeminiClient {
         }
     }
 
+    #[allow(dead_code)]
     async fn generate_content_with_images(
         &mut self,
         prompt: &str,
