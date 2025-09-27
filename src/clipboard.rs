@@ -2,6 +2,8 @@ use crate::logging::{log_debug, log_info};
 use anyhow::{Context, Result};
 use arboard::{Clipboard, ImageData};
 use base64::Engine;
+use image::{ImageBuffer, ImageFormat, Rgba};
+use std::io::Cursor;
 
 pub struct ClipboardManager {
     clipboard: Clipboard,
@@ -99,9 +101,7 @@ pub fn convert_image_data_to_base64(image_data: &ImageData) -> Result<String> {
         ));
     }
 
-    // Create an ImageBuffer from the raw RGBA bytes
-    use image::{ImageBuffer, ImageFormat, Rgba};
-    use std::io::Cursor;
+
 
     // Helper function to create RGBA data with proper dimensions
     let prepare_rgba_data = |input_bytes: Vec<u8>| -> Vec<u8> {
@@ -125,8 +125,8 @@ pub fn convert_image_data_to_base64(image_data: &ImageData) -> Result<String> {
 
     // Try direct conversion first, fallback to manual conversion
     let rgba_data = if let Some(img_buffer) = ImageBuffer::<Rgba<u8>, _>::from_raw(
-        image_data.width as u32,
-        image_data.height as u32,
+        u32::try_from(image_data.width).unwrap_or(0),
+        u32::try_from(image_data.height).unwrap_or(0),
         image_data.bytes.to_vec(),
     ) {
         img_buffer.into_raw()
@@ -136,8 +136,8 @@ pub fn convert_image_data_to_base64(image_data: &ImageData) -> Result<String> {
     };
 
     let img_buffer = ImageBuffer::<Rgba<u8>, _>::from_raw(
-        image_data.width as u32,
-        image_data.height as u32,
+        u32::try_from(image_data.width).unwrap_or(0),
+        u32::try_from(image_data.height).unwrap_or(0),
         rgba_data,
     )
     .context("Failed to create final image buffer")?;

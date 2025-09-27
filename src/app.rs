@@ -109,15 +109,12 @@ fn resolve_conversation(
     if config.resume_last {
         // Resume latest conversation with -R flag
         log_info("Attempting to resume latest conversation (-R flag)");
-        let conv = match conversation_manager.get_latest_conversation()? {
-            Some(conv) => {
-                log_info(&format!("Resumed conversation: {}", conv.id));
-                conv
-            }
-            None => {
-                log_info("No previous conversations found, starting new conversation");
-                Conversation::new()
-            }
+        let conv = if let Some(conv) = conversation_manager.get_latest_conversation()? {
+            log_info(&format!("Resumed conversation: {}", conv.id));
+            conv
+        } else {
+            log_info("No previous conversations found, starting new conversation");
+            Conversation::new()
         };
         return Ok((conv, config.prompt.clone()));
     }
@@ -131,24 +128,21 @@ fn resolve_conversation(
         Some(id) if id.is_empty() => {
             // Resume latest conversation
             log_info("Attempting to resume latest conversation");
-            let conv = match conversation_manager.get_latest_conversation()? {
-                Some(conv) => {
-                    log_info(&format!("Resumed conversation: {}", conv.id));
-                    conv
-                }
-                None => {
-                    log_info("No previous conversations found, starting new conversation");
-                    Conversation::new()
-                }
+            let conv = if let Some(conv) = conversation_manager.get_latest_conversation()? {
+                log_info(&format!("Resumed conversation: {}", conv.id));
+                conv
+            } else {
+                log_info("No previous conversations found, starting new conversation");
+                Conversation::new()
             };
             Ok((conv, config.prompt.clone()))
         }
         Some(id) => {
             // Resume specific conversation - must be exact match
-            log_info(&format!("Attempting to resume conversation: {}", id));
+            log_info(&format!("Attempting to resume conversation: {id}"));
             let conv = conversation_manager
                 .load_conversation(id)
-                .with_context(|| format!("Conversation with ID '{}' not found", id))?;
+                .with_context(|| format!("Conversation with ID '{id}' not found"))?;
             log_info(&format!("Resumed conversation: {}", conv.id));
             Ok((conv, config.prompt.clone()))
         }
@@ -190,29 +184,26 @@ fn handle_show_conversation(
     let conversation = if conversation_id.is_empty() {
         // Load the latest conversation
         log_info("Loading latest conversation");
-        match conversation_manager.get_latest_conversation()? {
-            Some(conv) => {
-                log_info(&format!("Found latest conversation: {}", conv.id));
-                conv
-            }
-            None => {
-                println!("No conversations found.");
-                return Ok(());
-            }
+        if let Some(conv) = conversation_manager.get_latest_conversation()? {
+            log_info(&format!("Found latest conversation: {}", conv.id));
+            conv
+        } else {
+            println!("No conversations found.");
+            return Ok(());
         }
     } else {
         // Load specific conversation
-        log_info(&format!("Loading conversation: {}", conversation_id));
+        log_info(&format!("Loading conversation: {conversation_id}"));
         conversation_manager
             .load_conversation(conversation_id)
-            .with_context(|| format!("Conversation with ID '{}' not found", conversation_id))?
+            .with_context(|| format!("Conversation with ID '{conversation_id}' not found"))?
     };
 
     // Get outputs directory and create it if it doesn't exist
     let outputs_dir = get_outputs_dir()?;
     if !outputs_dir.exists() {
         fs::create_dir_all(&outputs_dir).context("Failed to create outputs directory")?;
-        log_info(&format!("Created outputs directory: {:?}", outputs_dir));
+        log_info(&format!("Created outputs directory: {outputs_dir:?}"));
     }
 
     // Generate markdown content
@@ -227,11 +218,11 @@ fn handle_show_conversation(
     fs::write(&md_file_path, &markdown_content)
         .context("Failed to write conversation markdown file")?;
 
-    log_info(&format!("Created markdown file: {:?}", md_file_path));
+    log_info(&format!("Created markdown file: {md_file_path:?}"));
 
     // Open browser preview (which will also create HTML file)
     if let Err(e) = open_markdown_preview(&markdown_content, &md_file_path) {
-        log_error(&format!("Failed to open browser preview: {}", e));
+        log_error(&format!("Failed to open browser preview: {e}"));
     } else {
         log_info("Opened browser preview");
     }

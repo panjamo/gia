@@ -36,7 +36,7 @@ fn handle_api_key_error() -> Result<Vec<String>> {
     eprintln!("No Google Gemini API keys found.");
     eprintln!();
     eprintln!("To get your free API keys:");
-    eprintln!("1. Visit: {}", GEMINI_API_KEY_URL);
+    eprintln!("1. Visit: {GEMINI_API_KEY_URL}");
     eprintln!("2. Sign in with your Google account");
     eprintln!("3. Click 'Create API Key'");
     eprintln!("4. Copy the generated key");
@@ -57,7 +57,7 @@ fn handle_api_key_error() -> Result<Vec<String>> {
     eprintln!("Windows (PowerShell):");
     eprintln!("  $env:GEMINI_API_KEY=\"key1|key2|key3\"");
     eprintln!();
-    eprintln!("📚 Documentation: {}", GEMINI_DOCS_URL);
+    eprintln!("📚 Documentation: {GEMINI_DOCS_URL}");
     eprintln!();
 
     // Ask user if they want to open the API key page
@@ -72,23 +72,22 @@ fn handle_api_key_error() -> Result<Vec<String>> {
     }
 
     Err(anyhow::anyhow!(
-        "API keys are required. Visit {} to get your API keys.",
-        GEMINI_API_KEY_URL
+        "API keys are required. Visit {GEMINI_API_KEY_URL} to get your API keys."
     ))
 }
 
 fn open_browser(url: &str) {
-    log_info(&format!("Attempting to open browser to: {}", url));
+    log_info(&format!("Attempting to open browser to: {url}"));
 
     match webbrowser::open(url) {
-        Ok(_) => {
+        Ok(()) => {
             log_info("Successfully opened browser");
-            eprintln!("✅ Opened {} in your default browser", url);
+            eprintln!("✅ Opened {url} in your default browser");
         }
         Err(e) => {
-            log_warn(&format!("Failed to open browser: {}", e));
+            log_warn(&format!("Failed to open browser: {e}"));
             eprintln!("❌ Could not open browser automatically.");
-            eprintln!("Please manually visit: {}", url);
+            eprintln!("Please manually visit: {url}");
         }
     }
 }
@@ -98,16 +97,14 @@ pub fn validate_api_key_format(api_key: &str) -> bool {
     // They typically start with "AIza" and are 39 characters long
     if api_key.len() != API_KEY_LENGTH {
         log_warn(&format!(
-            "API key length is not {} characters (expected for Google API keys)",
-            API_KEY_LENGTH
+            "API key length is not {API_KEY_LENGTH} characters (expected for Google API keys)"
         ));
         return false;
     }
 
     if !api_key.starts_with(API_KEY_PREFIX) {
         log_warn(&format!(
-            "API key does not start with '{}' (expected for Google API keys)",
-            API_KEY_PREFIX
+            "API key does not start with '{API_KEY_PREFIX}' (expected for Google API keys)"
         ));
         return false;
     }

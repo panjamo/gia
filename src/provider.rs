@@ -36,7 +36,7 @@ pub struct ProviderFactory;
 
 impl ProviderFactory {
     /// Create a provider based on the model string
-    /// Model format: "provider::model" or just "model" (defaults to Gemini)
+    /// Model format: "`provider::model`" or just "model" (defaults to Gemini)
     pub fn create_provider(config: ProviderConfig) -> Result<Box<dyn AiProvider>> {
         let (provider_name, model_name) = if config.model.contains("::") {
             let parts: Vec<&str> = config.model.splitn(2, "::").collect();
@@ -56,8 +56,7 @@ impl ProviderFactory {
             // "openai" => Ok(Box::new(OpenAiClient::new(model_name.to_string(), config.api_keys)?)),
             // "anthropic" => Ok(Box::new(AnthropicClient::new(model_name.to_string(), config.api_keys)?)),
             _ => Err(anyhow::anyhow!(
-                "Unsupported provider: {}. Supported providers: gemini",
-                provider_name
+                "Unsupported provider: {provider_name}. Supported providers: gemini"
             )),
         }
     }

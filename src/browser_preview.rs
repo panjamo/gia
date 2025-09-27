@@ -98,7 +98,7 @@ pub fn open_markdown_preview(markdown_content: &str, md_file_path: &Path) -> Res
 
     // Open the HTML file in browser
     webbrowser::open(html_file_path.to_str().unwrap())
-        .map_err(|e| anyhow!("Failed to open browser: {}", e))?;
+        .map_err(|e| anyhow!("Failed to open browser: {e}"))?;
 
     Ok(())
 }
@@ -119,12 +119,11 @@ fn create_markdown_html(markdown_content: &str) -> String {
 <head>
     <meta charset="UTF-8">
     <title>Markdown Preview</title>
-    <style>{}</style>
+    <style>{GITHUB_CSS}</style>
 </head>
 <body>
-    {}
+    {html_body}
 </body>
-</html>"#,
-        GITHUB_CSS, html_body
+</html>"#
     )
 }

@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use std::fmt::Write;
 use std::fs;
 use std::io::{self, Read};
 
@@ -20,10 +21,10 @@ pub fn read_stdin() -> Result<String> {
 }
 
 pub fn read_text_file(file_path: &str) -> Result<String> {
-    log_debug(&format!("Reading text file: {}", file_path));
+    log_debug(&format!("Reading text file: {file_path}"));
 
     let content = fs::read_to_string(file_path)
-        .with_context(|| format!("Failed to read file: {}", file_path))?;
+        .with_context(|| format!("Failed to read file: {file_path}"))?;
 
     log_info(&format!(
         "Read {} characters from file: {}",
@@ -63,13 +64,13 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
                         input_text.push_str(&clipboard_input);
                     }
                     Err(e) => {
-                        log_debug(&format!("Failed to read clipboard text: {}", e));
+                        log_debug(&format!("Failed to read clipboard text: {e}"));
                         // Continue without clipboard input
                     }
                 }
             }
             Err(e) => {
-                log_debug(&format!("Failed to check clipboard for image: {}", e));
+                log_debug(&format!("Failed to check clipboard for image: {e}"));
                 // Fallback to trying text
                 match read_clipboard() {
                     Ok(clipboard_input) => {
@@ -79,7 +80,7 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
                         input_text.push_str(&clipboard_input);
                     }
                     Err(e) => {
-                        log_debug(&format!("Failed to read clipboard text: {}", e));
+                        log_debug(&format!("Failed to read clipboard text: {e}"));
                     }
                 }
             }
@@ -114,7 +115,7 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
                         if !input_text.is_empty() {
                             input_text.push_str("\n\n");
                         }
-                        input_text.push_str(&format!("=== Content from: {} ===\n", file_path));
+                        writeln!(input_text, "=== Content from: {file_path} ===").unwrap();
                         input_text.push_str(&file_content);
                         if !file_content.ends_with('\n') {
                             input_text.push('\n');
@@ -122,8 +123,8 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
                     }
                 }
                 Err(e) => {
-                    log_debug(&format!("Failed to read file {}: {}", file_path, e));
-                    eprintln!("Warning: Failed to read file '{}': {}", file_path, e);
+                    log_debug(&format!("Failed to read file {file_path}: {e}"));
+                    eprintln!("Warning: Failed to read file '{file_path}': {e}");
                     // Continue processing other files
                 }
             }
@@ -147,7 +148,7 @@ pub fn validate_image_sources(config: &Config) -> Result<()> {
         match image_source {
             ImageSource::File(image_path) => {
                 validate_image_file(image_path)
-                    .with_context(|| format!("Failed to validate image file: {}", image_path))?;
+                    .with_context(|| format!("Failed to validate image file: {image_path}"))?;
             }
             ImageSource::Clipboard => {
                 log_debug("Clipboard image source - validation will occur at request time");

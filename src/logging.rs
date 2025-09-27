@@ -18,23 +18,23 @@ pub fn init_logging() {
 }
 
 pub fn log_error(msg: &str) {
-    error!("{}", msg);
+    error!("{msg}");
 }
 
 #[allow(dead_code)]
 pub fn log_warn(msg: &str) {
-    warn!("{}", msg);
+    warn!("{msg}");
 }
 
 pub fn log_info(msg: &str) {
-    info!("{}", msg);
+    info!("{msg}");
 }
 
 pub fn log_debug(msg: &str) {
-    debug!("{}", msg);
+    debug!("{msg}");
 }
 
 #[allow(dead_code)]
 pub fn log_trace(msg: &str) {
-    trace!("{}", msg);
+    trace!("{msg}");
 }

@@ -13,7 +13,7 @@ pub fn get_mime_type(file_path: &Path) -> Result<String> {
     let extension = file_path
         .extension()
         .and_then(|ext| ext.to_str())
-        .map(|ext| ext.to_lowercase())
+        .map(str::to_lowercase)
         .context("File has no extension")?;
 
     let mime_type = match extension.as_str() {
@@ -39,26 +39,26 @@ pub fn validate_image_file(file_path: &str) -> Result<()> {
     let path = Path::new(file_path);
 
     if !path.exists() {
-        return Err(anyhow::anyhow!("Image file not found: {}", file_path));
+        return Err(anyhow::anyhow!("Image file not found: {file_path}"));
     }
 
     if !path.is_file() {
-        return Err(anyhow::anyhow!("Path is not a file: {}", file_path));
+        return Err(anyhow::anyhow!("Path is not a file: {file_path}"));
     }
 
     // Check file extension
     get_mime_type(path)?;
 
-    log_debug(&format!("Validated image file: {}", file_path));
+    log_debug(&format!("Validated image file: {file_path}"));
     Ok(())
 }
 
 /// Read image file and encode as base64
 pub fn read_image_as_base64(file_path: &str) -> Result<String> {
-    log_info(&format!("Reading image file: {}", file_path));
+    log_info(&format!("Reading image file: {file_path}"));
 
     let image_data =
-        fs::read(file_path).with_context(|| format!("Failed to read image file: {}", file_path))?;
+        fs::read(file_path).with_context(|| format!("Failed to read image file: {file_path}"))?;
 
     let base64_data = base64::engine::general_purpose::STANDARD.encode(&image_data);
 

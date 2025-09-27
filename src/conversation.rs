@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
@@ -81,8 +82,7 @@ impl Conversation {
         }
 
         log_info(&format!(
-            "Conversation too long ({} chars), truncating to fit context window",
-            current_length
+            "Conversation too long ({current_length} chars), truncating to fit context window"
         ));
 
         // Keep removing oldest messages until we're under the limit
@@ -102,8 +102,7 @@ impl Conversation {
                 .split_off(self.messages.len() - CONVERSATION_TRUNCATION_KEEP_MESSAGES);
             self.messages = last_messages;
             log_warn(&format!(
-                "Had to truncate conversation to only the last {} messages",
-                CONVERSATION_TRUNCATION_KEEP_MESSAGES
+                "Had to truncate conversation to only the last {CONVERSATION_TRUNCATION_KEEP_MESSAGES} messages"
             ));
         }
     }
@@ -123,16 +122,18 @@ impl Conversation {
         let mut markdown = String::new();
 
         // Add conversation header
-        markdown.push_str(&format!("### Conversation {}\n\n", self.id));
-        markdown.push_str(&format!(
-            "**Created:** {}\n",
+        write!(markdown, "### Conversation {}\n\n", self.id).unwrap();
+        writeln!(
+            markdown,
+            "**Created:** {}",
             self.created_at.format("%Y-%m-%d %H:%M:%S UTC")
-        ));
-        markdown.push_str(&format!(
-            "**Updated:** {}\n",
+        ).unwrap();
+        writeln!(
+            markdown,
+            "**Updated:** {}",
             self.updated_at.format("%Y-%m-%d %H:%M:%S UTC")
-        ));
-        markdown.push_str(&format!("**Messages:** {}\n\n", self.messages.len()));
+        ).unwrap();
+        write!(markdown, "**Messages:** {}\n\n", self.messages.len()).unwrap();
         markdown.push_str("---\n\n");
 
         // Add messages
@@ -143,7 +144,7 @@ impl Conversation {
 
             match message.role {
                 MessageRole::User => {
-                    markdown.push_str(&format!("**{}:** ", username));
+                    write!(markdown, "**{username}:** ").unwrap();
                 }
                 MessageRole::Assistant => {
                     markdown.push_str("**Assistant:** ");
@@ -151,10 +152,11 @@ impl Conversation {
             }
 
             markdown.push_str(&message.content);
-            markdown.push_str(&format!(
+            write!(
+                markdown,
                 "\n\n*{}*\n",
                 message.timestamp.format("%Y-%m-%d %H:%M:%S UTC")
-            ));
+            ).unwrap();
         }
 
         markdown
@@ -174,8 +176,7 @@ impl ConversationManager {
             fs::create_dir_all(&conversations_dir)
                 .context("Failed to create conversations directory")?;
             log_info(&format!(
-                "Created conversations directory: {:?}",
-                conversations_dir
+                "Created conversations directory: {conversations_dir:?}"
             ));
         }
 
@@ -197,22 +198,22 @@ impl ConversationManager {
 
         fs::write(&file_path, json_content).context("Failed to write conversation file")?;
 
-        log_debug(&format!("Saved conversation to: {:?}", file_path));
+        log_debug(&format!("Saved conversation to: {file_path:?}"));
         Ok(())
     }
 
     pub fn load_conversation(&self, id: &str) -> Result<Conversation> {
-        let filename = format!("{}.json", id);
+        let filename = format!("{id}.json");
         let file_path = self.conversations_dir.join(filename);
 
         if !file_path.exists() {
-            return Err(anyhow::anyhow!("Conversation with ID '{}' not found", id));
+            return Err(anyhow::anyhow!("Conversation with ID '{id}' not found"));
         }
 
         let content = fs::read_to_string(&file_path).context("Failed to read conversation file")?;
         let conversation: Conversation =
             serde_json::from_str(&content).context("Failed to deserialize conversation")?;
-        log_debug(&format!("Loaded conversation from: {:?}", file_path));
+        log_debug(&format!("Loaded conversation from: {file_path:?}"));
         Ok(conversation)
     }
 
@@ -229,7 +230,7 @@ impl ConversationManager {
             let path = entry.path();
 
             if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                match self.load_conversation_from_path(&path) {
+                match Self::load_conversation_from_path(&path) {
                     Ok(conversation) => {
                         if conversation.updated_at > latest_time {
                             latest_time = conversation.updated_at;
@@ -238,8 +239,7 @@ impl ConversationManager {
                     }
                     Err(e) => {
                         log_warn(&format!(
-                            "Failed to load conversation from {:?}: {}",
-                            path, e
+                            "Failed to load conversation from {path:?}: {e}"
                         ));
                     }
                 }
@@ -260,15 +260,14 @@ impl ConversationManager {
             let path = entry.path();
 
             if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                match self.load_conversation_from_path(&path) {
+                match Self::load_conversation_from_path(&path) {
                     Ok(conversation) => {
                         let summary = ConversationSummary::from_conversation(&conversation);
                         summaries.push(summary);
                     }
                     Err(e) => {
                         log_warn(&format!(
-                            "Failed to load conversation from {:?}: {}",
-                            path, e
+                            "Failed to load conversation from {path:?}: {e}"
                         ));
                     }
                 }
@@ -280,7 +279,7 @@ impl ConversationManager {
         Ok(summaries)
     }
 
-    fn load_conversation_from_path(&self, path: &Path) -> Result<Conversation> {
+    fn load_conversation_from_path(path: &Path) -> Result<Conversation> {
         let content = fs::read_to_string(path).context("Failed to read conversation file")?;
 
         let conversation: Conversation =

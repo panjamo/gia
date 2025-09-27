@@ -29,8 +29,7 @@ impl GeminiClient {
         for key in &api_keys {
             if !validate_api_key_format(key) {
                 log_warn(&format!(
-                    "API key format validation failed for key: {}",
-                    key
+                    "API key format validation failed for key: {key}"
                 ));
                 eprintln!("⚠️  Warning: API key format seems incorrect.");
                 eprintln!("   Expected format: AIzaSy... (39 characters)");
@@ -82,18 +81,18 @@ impl GeminiClient {
         for image_source in image_sources {
             match image_source {
                 ImageSource::File(image_path) => {
-                    log_debug(&format!("Adding file image to request: {}", image_path));
+                    log_debug(&format!("Adding file image to request: {image_path}"));
 
                     // Get MIME type for the image
                     let path = std::path::Path::new(image_path);
                     let mime_type = crate::image::get_mime_type(path).with_context(|| {
-                        format!("Failed to get MIME type for image: {}", image_path)
+                        format!("Failed to get MIME type for image: {image_path}")
                     })?;
 
                     // Read image as base64
                     let base64_data =
                         crate::image::read_image_as_base64(image_path).with_context(|| {
-                            format!("Failed to read image as base64: {}", image_path)
+                            format!("Failed to read image as base64: {image_path}")
                         })?;
 
                     content_parts.push(ContentPart::from_image_base64(mime_type, base64_data));
@@ -119,17 +118,17 @@ impl GeminiClient {
         }
 
         // Create the chat request with content parts
-        let chat_req = ChatRequest::new(vec![ChatMessage::user(content_parts)]);
+        let chat_request = ChatRequest::new(vec![ChatMessage::user(content_parts)]);
 
         // Send the request using genai
-        let chat_res = self
+        let chat_response = self
             .client
-            .exec_chat(&self.model, chat_req, None)
+            .exec_chat(&self.model, chat_request, None)
             .await
             .context("Failed to send multimodal request to Gemini API")?;
 
         // Extract the response text
-        let generated_text = chat_res
+        let generated_text = chat_response
             .content_text_as_str()
             .context("Failed to extract text from Gemini response")?;
 
@@ -159,7 +158,7 @@ impl GeminiClient {
         Ok(self.api_keys[self.current_key_index].clone())
     }
 
-    fn handle_auth_error(&self, error_text: &str) -> Result<String> {
+    fn handle_auth_error(error_text: &str) -> Result<String> {
         eprintln!();
         eprintln!("🔐 Authentication Error");
         eprintln!("========================");
@@ -172,10 +171,10 @@ impl GeminiClient {
         eprintln!("• API key is disabled or suspended");
         eprintln!("• Billing not enabled on your Google Cloud project");
         eprintln!();
-        eprintln!("Error details: {}", error_text);
+        eprintln!("Error details: {error_text}");
         eprintln!();
         eprintln!("To fix this:");
-        eprintln!("1. Verify your API key at: {}", GEMINI_API_KEY_URL);
+        eprintln!("1. Verify your API key at: {GEMINI_API_KEY_URL}");
         eprintln!("2. Check billing is enabled: https://console.cloud.google.com/billing");
         eprintln!(
             "3. Ensure the Generative AI API is enabled: https://console.cloud.google.com/apis/"
@@ -189,10 +188,9 @@ impl GeminiClient {
             let response = input.trim().to_lowercase();
             if response == "y" || response == "yes" {
                 if let Err(e) = webbrowser::open(GEMINI_API_KEY_URL) {
-                    log_error(&format!("Failed to open browser: {}", e));
+                    log_error(&format!("Failed to open browser: {e}"));
                     eprintln!(
-                        "Could not open browser. Please visit: {}",
-                        GEMINI_API_KEY_URL
+                        "Could not open browser. Please visit: {GEMINI_API_KEY_URL}"
                     );
                 } else {
                     log_info("Opened API key page in browser");
@@ -228,45 +226,42 @@ impl AiProvider for GeminiClient {
                 if error_string.contains("429") || error_string.contains("Too Many Requests") {
                     log_info("Rate limit hit, trying to fallback to another API key");
 
-                    match self.try_next_api_key() {
-                        Ok(next_key) => {
-                            log_info("Found alternative API key, retrying multimodal request with image sources");
+                    if let Ok(next_key) = self.try_next_api_key() {
+                        log_info("Found alternative API key, retrying multimodal request with image sources");
 
-                            match self
-                                .try_generate_content_with_image_sources(
-                                    prompt,
-                                    image_sources,
-                                    &next_key,
-                                )
-                                .await
-                            {
-                                Ok(result) => {
-                                    log_info("Successfully used alternative API key for multimodal request with image sources");
-                                    Ok(result)
-                                }
-                                Err(fallback_error) => {
-                                    log_error(
-                                        "Alternative API key also failed for multimodal request with image sources",
+                        match self
+                            .try_generate_content_with_image_sources(
+                                prompt,
+                                image_sources,
+                                &next_key,
+                            )
+                            .await
+                        {
+                            Ok(result) => {
+                                log_info("Successfully used alternative API key for multimodal request with image sources");
+                                Ok(result)
+                            }
+                            Err(fallback_error) => {
+                                log_error(
+                                    "Alternative API key also failed for multimodal request with image sources",
+                                );
+                                let fallback_error_string = fallback_error.to_string();
+                                if fallback_error_string.contains("429")
+                                    || fallback_error_string.contains("Too Many Requests")
+                                {
+                                    eprintln!(
+                                        "⚠️  Rate limit exceeded on all available API keys."
                                     );
-                                    let fallback_error_string = fallback_error.to_string();
-                                    if fallback_error_string.contains("429")
-                                        || fallback_error_string.contains("Too Many Requests")
-                                    {
-                                        eprintln!(
-                                            "⚠️  Rate limit exceeded on all available API keys."
-                                        );
-                                    }
-                                    Err(fallback_error)
                                 }
+                                Err(fallback_error)
                             }
                         }
-                        Err(_) => {
-                            log_warn("No alternative API keys available for fallback");
-                            eprintln!(
-                                "⚠️  Rate limit exceeded and no alternative API keys available."
-                            );
-                            Err(e)
-                        }
+                    } else {
+                        log_warn("No alternative API keys available for fallback");
+                        eprintln!(
+                            "⚠️  Rate limit exceeded and no alternative API keys available."
+                        );
+                        Err(e)
                     }
                 } else {
                     // Check if it's an authentication error
@@ -275,7 +270,7 @@ impl AiProvider for GeminiClient {
                         || error_string.contains("authentication")
                         || error_string.contains("permission")
                     {
-                        return self.handle_auth_error(&error_string);
+                        return Self::handle_auth_error(&error_string);
                     }
                     Err(e)
                 }
@@ -287,7 +282,7 @@ impl AiProvider for GeminiClient {
         &self.model
     }
 
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "Gemini"
     }
 }

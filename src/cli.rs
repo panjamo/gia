@@ -189,8 +189,8 @@ mod tests {
         let clipboard_source = ImageSource::Clipboard;
 
         // Test that Debug is implemented
-        let _file_debug = format!("{:?}", file_source);
-        let _clipboard_debug = format!("{:?}", clipboard_source);
+        let _file_debug = format!("{file_source:?}");
+        let _clipboard_debug = format!("{clipboard_source:?}");
     }
 
     #[test]

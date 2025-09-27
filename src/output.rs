@@ -20,7 +20,7 @@ fn generate_filename_from_prompt(prompt: &str) -> String {
 
     // Handle empty prompt
     if prompt.trim().is_empty() {
-        return format!("gia_output_{}.md", timestamp);
+        return format!("gia_output_{timestamp}.md");
     }
 
     // Extract first few words and sanitize
@@ -30,7 +30,7 @@ fn generate_filename_from_prompt(prompt: &str) -> String {
         .collect();
 
     if words.is_empty() {
-        return format!("gia_output_{}.md", timestamp);
+        return format!("gia_output_{timestamp}.md");
     }
 
     // Join words and sanitize
@@ -62,10 +62,10 @@ fn generate_filename_from_prompt(prompt: &str) -> String {
 
     // Final check - if we ended up with empty string, use fallback
     if sanitized.is_empty() {
-        return format!("gia_output_{}.md", timestamp);
+        return format!("gia_output_{timestamp}.md");
     }
 
-    format!("{}_{}.md", sanitized, timestamp)
+    format!("{sanitized}_{timestamp}.md")
 }
 
 pub fn output_text(text: &str, config: &Config) -> Result<()> {
@@ -77,7 +77,7 @@ pub fn output_text(text: &str, config: &Config) -> Result<()> {
             let outputs_dir = get_outputs_dir()?;
             if !outputs_dir.exists() {
                 fs::create_dir_all(&outputs_dir).context("Failed to create outputs directory")?;
-                log_info(&format!("Created outputs directory: {:?}", outputs_dir));
+                log_info(&format!("Created outputs directory: {outputs_dir:?}"));
             }
 
             // Create output file with prompt-based name
@@ -93,12 +93,12 @@ pub fn output_text(text: &str, config: &Config) -> Result<()> {
 
             // Open browser preview
             if let Err(e) = open_markdown_preview(text, &output_path) {
-                log_error(&format!("Failed to open browser preview: {}", e));
+                log_error(&format!("Failed to open browser preview: {e}"));
             } else {
                 log_info("Opened browser preview");
             }
 
-            log_info(&format!("Output file created at: {}", file_path_str));
+            log_info(&format!("Output file created at: {file_path_str}"));
 
             Ok(())
         }
@@ -109,7 +109,7 @@ pub fn output_text(text: &str, config: &Config) -> Result<()> {
         }
         OutputMode::Stdout => {
             log_info("Writing response to stdout");
-            print!("{}", text);
+            print!("{text}");
             Ok(())
         }
     }
