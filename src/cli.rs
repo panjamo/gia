@@ -1,3 +1,4 @@
+use crate::logging::log_info;
 use clap::{Arg, Command};
 
 #[derive(Debug)]
@@ -8,11 +9,17 @@ pub enum OutputMode {
 }
 
 #[derive(Debug)]
+pub enum ImageSource {
+    File(String),
+    Clipboard,
+}
+
+#[derive(Debug)]
 pub struct Config {
     pub prompt: String,
     pub use_clipboard_input: bool,
     pub use_stdin_input: bool,
-    pub image_paths: Vec<String>,
+    pub image_sources: Vec<ImageSource>,
     pub output_mode: OutputMode,
     pub resume_conversation: Option<String>, // None = new, Some("") = latest, Some(id) = specific
     pub resume_last: bool,                   // true = resume latest conversation
@@ -136,11 +143,17 @@ impl Config {
             .cloned()
             .collect();
 
+        // Convert image paths to image sources
+        let image_sources: Vec<ImageSource> = image_paths
+            .iter()
+            .map(|path| ImageSource::File(path.clone()))
+            .collect();
+
         Self {
             prompt: prompt_parts.join(" "),
             use_clipboard_input: matches.get_flag("clipboard-input"),
             use_stdin_input: matches.get_flag("stdin"),
-            image_paths,
+            image_sources,
             output_mode,
             resume_conversation,
             resume_last: matches.get_flag("resume-last"),
@@ -149,6 +162,52 @@ impl Config {
                 .map(|s| s.parse::<usize>().unwrap_or(0)),
             show_conversation: matches.get_one::<String>("show-conversation").cloned(),
             model: matches.get_one::<String>("model").unwrap().clone(),
+        }
+    }
+
+    pub fn add_clipboard_image(&mut self) {
+        log_info("Adding clipboard image to image sources");
+        self.image_sources.push(ImageSource::Clipboard);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_image_source_debug() {
+        let file_source = ImageSource::File("test.jpg".to_string());
+        let clipboard_source = ImageSource::Clipboard;
+
+        // Test that Debug is implemented
+        let _file_debug = format!("{:?}", file_source);
+        let _clipboard_debug = format!("{:?}", clipboard_source);
+    }
+
+    #[test]
+    fn test_config_add_clipboard_image() {
+        let mut config = Config {
+            prompt: "test".to_string(),
+            use_clipboard_input: false,
+            use_stdin_input: false,
+            image_sources: vec![],
+            output_mode: OutputMode::Stdout,
+            resume_conversation: None,
+            resume_last: false,
+            list_conversations: None,
+            show_conversation: None,
+            model: "test-model".to_string(),
+        };
+
+        assert_eq!(config.image_sources.len(), 0);
+
+        config.add_clipboard_image();
+
+        assert_eq!(config.image_sources.len(), 1);
+        match &config.image_sources[0] {
+            ImageSource::Clipboard => (),
+            _ => panic!("Expected clipboard image source"),
         }
     }
 }

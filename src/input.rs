@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
 use std::io::{self, Read};
 
-use crate::cli::Config;
-use crate::clipboard::read_clipboard;
+use crate::cli::{Config, ImageSource};
+use crate::clipboard::{has_clipboard_image, read_clipboard};
 use crate::image::validate_image_file;
-use crate::logging::{log_debug, log_info};
+use crate::logging::{log_debug, log_error, log_info};
 
 pub fn read_stdin() -> Result<String> {
     log_debug("Reading from stdin");
@@ -18,7 +18,7 @@ pub fn read_stdin() -> Result<String> {
     Ok(text)
 }
 
-pub fn get_input_text(config: &Config, prompt_override: Option<&str>) -> Result<String> {
+pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Result<String> {
     let mut input_text = String::new();
 
     // Start with command line prompt (or override)
@@ -30,12 +30,45 @@ pub fn get_input_text(config: &Config, prompt_override: Option<&str>) -> Result<
 
     // Add additional input if requested
     if config.use_clipboard_input {
-        log_info("Adding clipboard input");
-        let clipboard_input = read_clipboard()?;
-        if !input_text.is_empty() {
-            input_text.push_str("\n\n");
+        log_info("Checking clipboard content");
+
+        // First check if there's an image in clipboard
+        match has_clipboard_image() {
+            Ok(true) => {
+                log_info("Found image in clipboard - adding to image sources");
+                config.add_clipboard_image();
+            }
+            Ok(false) => {
+                log_info("No image in clipboard, reading text");
+                match read_clipboard() {
+                    Ok(clipboard_input) => {
+                        if !input_text.is_empty() {
+                            input_text.push_str("\n\n");
+                        }
+                        input_text.push_str(&clipboard_input);
+                    }
+                    Err(e) => {
+                        log_error(&format!("Failed to read clipboard text: {}", e));
+                        // Continue without clipboard input
+                    }
+                }
+            }
+            Err(e) => {
+                log_error(&format!("Failed to check clipboard for image: {}", e));
+                // Fallback to trying text
+                match read_clipboard() {
+                    Ok(clipboard_input) => {
+                        if !input_text.is_empty() {
+                            input_text.push_str("\n\n");
+                        }
+                        input_text.push_str(&clipboard_input);
+                    }
+                    Err(e) => {
+                        log_error(&format!("Failed to read clipboard text: {}", e));
+                    }
+                }
+            }
         }
-        input_text.push_str(&clipboard_input);
     }
 
     if config.use_stdin_input {
@@ -50,21 +83,30 @@ pub fn get_input_text(config: &Config, prompt_override: Option<&str>) -> Result<
     Ok(input_text)
 }
 
-pub fn validate_image_files(config: &Config) -> Result<()> {
-    if config.image_paths.is_empty() {
+pub fn validate_image_sources(config: &Config) -> Result<()> {
+    if config.image_sources.is_empty() {
         return Ok(());
     }
 
     log_info(&format!(
-        "Validating {} image file(s)",
-        config.image_paths.len()
+        "Validating {} image source(s)",
+        config.image_sources.len()
     ));
 
-    for image_path in &config.image_paths {
-        validate_image_file(image_path)
-            .with_context(|| format!("Failed to validate image: {}", image_path))?;
+    for image_source in &config.image_sources {
+        match image_source {
+            ImageSource::File(image_path) => {
+                validate_image_file(image_path)
+                    .with_context(|| format!("Failed to validate image file: {}", image_path))?;
+            }
+            ImageSource::Clipboard => {
+                log_debug("Clipboard image source - validation will occur at request time");
+                // Note: We can't validate clipboard images ahead of time since clipboard content
+                // might change between validation and actual use
+            }
+        }
     }
 
-    log_info("All image files validated successfully");
+    log_info("All image sources validated successfully");
     Ok(())
 }

@@ -5,8 +5,8 @@ A command-line tool that sends text prompts to Google's Gemini API and returns A
 ## Features
 
 - Uses command line arguments as the main prompt
-- **Image support** - Include images in your prompts (JPEG, PNG, WebP, HEIC, PDF)
-- Optional additional input from clipboard or stdin
+- **Image support** - Include images from files (JPEG, PNG, WebP, HEIC, PDF) or clipboard
+- Optional additional input from clipboard or stdin (auto-detects text vs images)
 - Output responses to stdout (default) or clipboard
 - Persistent conversation history with resume capability
 - Multi-API key support with automatic fallback
@@ -100,8 +100,14 @@ gia "What do you see in this image?" -i photo.jpg
 # Compare multiple images:
 gia "What are the differences between these images?" -i image1.jpg -i image2.png
 
-# Combine image with clipboard text:
+# Analyze image from clipboard (copy image first):
+gia "What do you see in this image?" -c
+
+# Combine file image with clipboard text:
 gia "Explain this diagram" -i diagram.png -c
+
+# Mix clipboard image with additional text prompt:
+gia "Describe the technical aspects of this screenshot" -c
 
 # Image with stdin input:
 echo "Focus on the technical aspects" | gia "Analyze this screenshot" -i screenshot.png -s
@@ -145,7 +151,7 @@ gia -v a1b2c3d4-e5f6-7890-abcd   # Show specific conversation
 ### Command line options
 
 - `[PROMPT_TEXT]` - Prompt text for the AI (main input)
-- `-c, --clipboard-input` - Add clipboard content to prompt
+- `-c, --clipboard-input` - Add clipboard content to prompt (auto-detects images vs text)
 - `-s, --stdin` - Add stdin content to prompt
 - `-i, --image <FILE>` - Add image file to prompt (can be used multiple times; supports JPEG, PNG, WebP, HEIC, PDF)
 - `-o, --clipboard-output` - Write response to clipboard instead of stdout
@@ -206,7 +212,8 @@ gia "Rewrite this professionally" -c -o
 - `clap` - Command line parsing
 - `anyhow` - Error handling
 - `log` + `env_logger` - Logging
-- `arboard` - Clipboard operations
+- `arboard` - Clipboard operations (text and images)
+- `image` - Image processing and PNG conversion
 - `webbrowser` - Browser opening
 - `comrak` - Markdown to HTML rendering
 - `base64` - Base64 encoding for data URLs

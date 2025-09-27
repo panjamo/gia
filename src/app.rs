@@ -6,12 +6,12 @@ use crate::browser_preview::open_markdown_preview;
 use crate::cli::Config;
 use crate::constants::get_context_window_limit;
 use crate::conversation::{Conversation, ConversationManager, MessageRole};
-use crate::input::{get_input_text, validate_image_files};
+use crate::input::{get_input_text, validate_image_sources};
 use crate::logging::{log_error, log_info};
 use crate::output::output_text;
 use crate::provider::{ProviderConfig, ProviderFactory};
 
-pub async fn run_app(config: Config) -> Result<()> {
+pub async fn run_app(mut config: Config) -> Result<()> {
     // Initialize conversation manager
     let conversation_manager =
         ConversationManager::new().context("Failed to initialize conversation manager")?;
@@ -26,15 +26,15 @@ pub async fn run_app(config: Config) -> Result<()> {
         return handle_show_conversation(&conversation_manager, conversation_id);
     }
 
-    // Validate image files if any are provided
-    validate_image_files(&config).context("Failed to validate image files")?;
+    // Validate image sources if any are provided
+    validate_image_sources(&config).context("Failed to validate image sources")?;
 
     // Determine conversation mode and adjust prompt if needed
     let (mut conversation, final_prompt) = resolve_conversation(&config, &conversation_manager)?;
 
-    // Get input text
+    // Get input text (this may modify config to add clipboard images)
     let input_text =
-        get_input_text(&config, Some(&final_prompt)).context("Failed to get input text")?;
+        get_input_text(&mut config, Some(&final_prompt)).context("Failed to get input text")?;
 
     if input_text.trim().is_empty() {
         log_error("No input text provided");
@@ -66,7 +66,7 @@ pub async fn run_app(config: Config) -> Result<()> {
         .context("Failed to initialize AI provider")?;
 
     // Generate content
-    if config.image_paths.is_empty() {
+    if config.image_sources.is_empty() {
         log_info(&format!(
             "Sending text request to {} API using model: {}",
             provider.provider_name(),
@@ -74,15 +74,15 @@ pub async fn run_app(config: Config) -> Result<()> {
         ));
     } else {
         log_info(&format!(
-            "Sending multimodal request to {} API using model: {} with {} image(s)",
+            "Sending multimodal request to {} API using model: {} with {} image source(s)",
             provider.provider_name(),
             provider.model_name(),
-            config.image_paths.len()
+            config.image_sources.len()
         ));
     }
 
     let response = provider
-        .generate_content_with_images(&context_prompt, &config.image_paths)
+        .generate_content_with_image_sources(&context_prompt, &config.image_sources)
         .await
         .context("Failed to generate content")?;
 

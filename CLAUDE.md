@@ -40,6 +40,9 @@ cargo run -- --list-conversations  # List all saved conversations
 # Image analysis
 cargo run -- "What do you see in this image?" -i photo.jpg
 cargo run -- "Compare these images" -i img1.jpg -i img2.png
+
+# Clipboard image analysis (copy an image to clipboard first)
+cargo run -- "What do you see in this image?" -c
 ```
 
 ### Environment Setup
@@ -81,7 +84,7 @@ RUST_LOG=error cargo run -- "test"  # Error logging only
 
 **Input Sources**: Three input sources can be combined:
 1. Command line arguments (primary prompt)
-2. Clipboard content (with `-c` flag)
+2. Clipboard content (with `-c` flag) - supports both text and images
 3. Stdin content (with `-s` flag)
 
 **Output Destinations**: Two output options:
@@ -126,3 +129,5 @@ Tests use the `serial_test` crate to prevent environment variable conflicts when
 - The tool validates API key format but continues with warnings if invalid
 - Rate limit handling automatically tries alternative keys if available
 - Windows-specific registry support was removed in favor of environment variables only
+- Clipboard input automatically detects and handles both text and images
+- When using `-c` flag, if an image is in the clipboard, it will be treated as an image input rather than text
