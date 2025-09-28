@@ -101,8 +101,6 @@ pub fn convert_image_data_to_base64(image_data: &ImageData) -> Result<String> {
         ));
     }
 
-
-
     // Helper function to create RGBA data with proper dimensions
     let prepare_rgba_data = |input_bytes: Vec<u8>| -> Vec<u8> {
         let expected_len = image_data.width * image_data.height * 4;

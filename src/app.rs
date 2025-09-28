@@ -209,5 +209,3 @@ fn handle_show_conversation(
 
     Ok(())
 }
-
-

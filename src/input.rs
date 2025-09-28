@@ -214,6 +214,7 @@ mod tests {
             list_conversations: None,
             show_conversation: None,
             model: "test-model".to_string(),
+            verbose_help: false,
         };
 
         let result = get_input_text(&mut config, None).unwrap();
@@ -237,6 +238,7 @@ mod tests {
             list_conversations: None,
             show_conversation: None,
             model: "test-model".to_string(),
+            verbose_help: false,
         };
 
         let result = get_input_text(&mut config, None).unwrap();

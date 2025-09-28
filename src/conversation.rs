@@ -127,12 +127,14 @@ impl Conversation {
             markdown,
             "**Created:** {}",
             self.created_at.format("%Y-%m-%d %H:%M:%S UTC")
-        ).unwrap();
+        )
+        .unwrap();
         writeln!(
             markdown,
             "**Updated:** {}",
             self.updated_at.format("%Y-%m-%d %H:%M:%S UTC")
-        ).unwrap();
+        )
+        .unwrap();
         write!(markdown, "**Messages:** {}\n\n", self.messages.len()).unwrap();
         markdown.push_str("---\n\n");
 
@@ -156,7 +158,8 @@ impl Conversation {
                 markdown,
                 "\n\n*{}*\n",
                 message.timestamp.format("%Y-%m-%d %H:%M:%S UTC")
-            ).unwrap();
+            )
+            .unwrap();
         }
 
         markdown
@@ -238,9 +241,7 @@ impl ConversationManager {
                         }
                     }
                     Err(e) => {
-                        log_warn(&format!(
-                            "Failed to load conversation from {path:?}: {e}"
-                        ));
+                        log_warn(&format!("Failed to load conversation from {path:?}: {e}"));
                     }
                 }
             }
@@ -266,9 +267,7 @@ impl ConversationManager {
                         summaries.push(summary);
                     }
                     Err(e) => {
-                        log_warn(&format!(
-                            "Failed to load conversation from {path:?}: {e}"
-                        ));
+                        log_warn(&format!("Failed to load conversation from {path:?}: {e}"));
                     }
                 }
             }

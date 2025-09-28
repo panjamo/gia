@@ -26,11 +26,18 @@ pub struct Config {
     pub list_conversations: Option<usize>, // None = don't list, Some(n) = list top n, Some(0) = list all
     pub show_conversation: Option<String>, // Some(id) = show specific conversation
     pub model: String,
+    pub verbose_help: bool, // true = open browser with GitHub README
 }
 
 impl Config {
     pub fn from_args() -> Self {
         let matches = Self::build_cli().get_matches();
+
+        // Handle verbose help immediately
+        if matches.get_flag("verbose-help") {
+            Self::handle_verbose_help();
+            std::process::exit(0);
+        }
 
         let prompt_parts: Vec<String> = matches
             .get_many::<String>("prompt")
@@ -79,6 +86,7 @@ impl Config {
                 .map(|s| s.parse::<usize>().unwrap_or(0)),
             show_conversation: matches.get_one::<String>("show-conversation").cloned(),
             model: matches.get_one::<String>("model").unwrap().clone(),
+            verbose_help: false, // This will never be true since we exit earlier
         }
     }
 
@@ -174,11 +182,30 @@ impl Config {
                     .default_value("gemini-2.5-flash-lite")
                     .action(clap::ArgAction::Set),
             )
+            .arg(
+                Arg::new("verbose-help")
+                    .long("verbose-help")
+                    .help("Open browser with detailed documentation on GitHub")
+                    .action(clap::ArgAction::SetTrue),
+            )
     }
 
     pub fn add_clipboard_image(&mut self) {
         log_info("Adding clipboard image to image sources");
         self.image_sources.push(ImageSource::Clipboard);
+    }
+
+    fn handle_verbose_help() {
+        const GITHUB_README_URL: &str = "https://github.com/panjamo/gia/blob/master/README.md";
+
+        println!("Opening detailed documentation in your browser...");
+
+        if let Err(e) = webbrowser::open(GITHUB_README_URL) {
+            eprintln!("Failed to open browser: {e}");
+            eprintln!("Please visit: {GITHUB_README_URL}");
+        } else {
+            println!("Documentation URL: {GITHUB_README_URL}");
+        }
     }
 }
 
@@ -209,6 +236,7 @@ mod tests {
             list_conversations: None,
             show_conversation: None,
             model: "test-model".to_string(),
+            verbose_help: false,
         };
 
         assert_eq!(config.image_sources.len(), 0);

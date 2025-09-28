@@ -28,9 +28,7 @@ impl GeminiClient {
         // Validate API key formats
         for key in &api_keys {
             if !validate_api_key_format(key) {
-                log_warn(&format!(
-                    "API key format validation failed for key: {key}"
-                ));
+                log_warn(&format!("API key format validation failed for key: {key}"));
                 eprintln!("⚠️  Warning: API key format seems incorrect.");
                 eprintln!("   Expected format: AIzaSy... (39 characters)");
             }
@@ -90,10 +88,8 @@ impl GeminiClient {
                     })?;
 
                     // Read image as base64
-                    let base64_data =
-                        crate::image::read_image_as_base64(image_path).with_context(|| {
-                            format!("Failed to read image as base64: {image_path}")
-                        })?;
+                    let base64_data = crate::image::read_image_as_base64(image_path)
+                        .with_context(|| format!("Failed to read image as base64: {image_path}"))?;
 
                     content_parts.push(ContentPart::from_image_base64(mime_type, base64_data));
                 }
@@ -189,9 +185,7 @@ impl GeminiClient {
             if response == "y" || response == "yes" {
                 if let Err(e) = webbrowser::open(GEMINI_API_KEY_URL) {
                     log_error(&format!("Failed to open browser: {e}"));
-                    eprintln!(
-                        "Could not open browser. Please visit: {GEMINI_API_KEY_URL}"
-                    );
+                    eprintln!("Could not open browser. Please visit: {GEMINI_API_KEY_URL}");
                 } else {
                     log_info("Opened API key page in browser");
                 }
@@ -249,18 +243,14 @@ impl AiProvider for GeminiClient {
                                 if fallback_error_string.contains("429")
                                     || fallback_error_string.contains("Too Many Requests")
                                 {
-                                    eprintln!(
-                                        "⚠️  Rate limit exceeded on all available API keys."
-                                    );
+                                    eprintln!("⚠️  Rate limit exceeded on all available API keys.");
                                 }
                                 Err(fallback_error)
                             }
                         }
                     } else {
                         log_warn("No alternative API keys available for fallback");
-                        eprintln!(
-                            "⚠️  Rate limit exceeded and no alternative API keys available."
-                        );
+                        eprintln!("⚠️  Rate limit exceeded and no alternative API keys available.");
                         Err(e)
                     }
                 } else {
