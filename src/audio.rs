@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::thread;
 use uuid::Uuid;
 
 use crate::logging::{log_debug, log_info};
@@ -27,10 +28,9 @@ pub fn record_audio() -> Result<String> {
     log_info(&format!("Using audio device: {audio_device}"));
 
     println!("🎙️  Recording audio... Press Enter to stop recording");
-    println!("📝  ffmpeg output will be shown below:");
     io::stdout().flush().unwrap();
 
-    // Start ffmpeg recording with stdout/stderr redirected to main process
+    // Start ffmpeg recording with captured stdout/stderr for logging
     let mut ffmpeg_process = Command::new("ffmpeg")
         .args([
             "-f",
@@ -45,10 +45,32 @@ pub fn record_audio() -> Result<String> {
             &audio_path,
         ])
         .stdin(Stdio::piped())
-        .stdout(Stdio::inherit()) // Redirect ffmpeg stdout to main process stdout
-        .stderr(Stdio::inherit()) // Redirect ffmpeg stderr to main process stderr
+        .stdout(Stdio::piped()) // Capture stdout for logging
+        .stderr(Stdio::piped()) // Capture stderr for logging
         .spawn()
         .context("Failed to start ffmpeg recording")?;
+
+    // Spawn threads to handle stdout and stderr logging
+    let stdout = ffmpeg_process.stdout.take().unwrap();
+    let stderr = ffmpeg_process.stderr.take().unwrap();
+
+    let _stdout_handle = thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            if let Ok(line) = line {
+                log_info(&format!("ffmpeg: {line}"));
+            }
+        }
+    });
+
+    let _stderr_handle = thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            if let Ok(line) = line {
+                log_debug(&format!("ffmpeg: {line}"));
+            }
+        }
+    });
 
     // Wait for user to stop recording
     // Check if stdin is a terminal (TTY) or has piped data
