@@ -44,10 +44,10 @@ jobs:
         } catch {
           Write-Host "No previous releases found"
         }
-        
+
         # Store previous tag for later use
         echo "prev_tag=$PREV_TAG" >> $env:GITHUB_OUTPUT
-        
+
         if ($PREV_TAG) {
           Write-Host "Generating changelog from $PREV_TAG to HEAD"
           $CHANGELOG = gh api repos/:owner/:repo/compare/$PREV_TAG...HEAD --jq '.commits[] | "- " + .commit.message' | Out-String
@@ -55,6 +55,10 @@ jobs:
           Write-Host "No previous tag found, using all recent commits"
           $CHANGELOG = git log --oneline --pretty=format:"- %s" -10 | Out-String
         }
+
+        # Escape quotes and special characters for PowerShell
+        $CHANGELOG = $CHANGELOG -replace '"', '\"' -replace '`', '``'
+
         echo "changelog<<EOF" >> $env:GITHUB_OUTPUT
         echo $CHANGELOG >> $env:GITHUB_OUTPUT
         echo "EOF" >> $env:GITHUB_OUTPUT
@@ -63,23 +67,30 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
+        # Create release notes in a file to avoid PowerShell escaping issues
         $NOTES = "${{ github.event.inputs.release_notes }}"
-        
+
         # Add changelog if available
-        if ("${{ steps.changelog.outputs.changelog }}".Trim() -ne "") {
-          $NOTES = $NOTES + "`n`n## Changelog`n${{ steps.changelog.outputs.changelog }}"
+        $CHANGELOG = @"
+${{ steps.changelog.outputs.changelog }}
+"@
+        if ($CHANGELOG.Trim() -ne "") {
+          $NOTES = $NOTES + "`n`n## Changelog`n" + $CHANGELOG
         }
-        
+
         # Add Full Changelog link if we have a previous release
         $PREV_TAG = "${{ steps.changelog.outputs.prev_tag }}"
         if ($PREV_TAG -and $PREV_TAG.Trim() -ne "") {
           $NOTES = $NOTES + "`n`n**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREV_TAG...${{ github.event.inputs.version }}"
         }
-        
+
+        # Write notes to file
+        $NOTES | Out-File -FilePath "release_notes.txt" -Encoding UTF8
+
         Write-Host "Final release notes:"
         Write-Host $NOTES
-        
+
         gh release create "${{ github.event.inputs.version }}" `
           --title "Release ${{ github.event.inputs.version }}" `
-          --notes $NOTES `
+          --notes-file "release_notes.txt" `
           target/x86_64-pc-windows-msvc/release/gia.exe
