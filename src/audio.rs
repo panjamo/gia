@@ -247,12 +247,14 @@ fn get_default_audio_device() -> Result<String> {
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     // Parse the ffmpeg output to find audio devices
-    // Look for lines like: [dshow @ ...] "Microphone (Realtek Audio)" (audio)
+    // Look for lines like: [dshow @ ...] "Device Name" (audio)
     for line in stderr.lines() {
-        if line.contains("(audio)") && line.contains('"') {
-            if let Some(device_start) = line.find('"') {
-                if let Some(device_end) = line[device_start + 1..].find('"') {
-                    let device_name = &line[device_start + 1..device_start + 1 + device_end];
+        if line.contains("(audio)") {
+            // Look for quoted device name in the line
+            if let Some(start_quote) = line.find('"') {
+                // Find the closing quote
+                if let Some(end_quote) = line[start_quote + 1..].find('"') {
+                    let device_name = &line[start_quote + 1..start_quote + 1 + end_quote];
                     log_debug(&format!("Found audio device: {device_name}"));
                     return Ok(device_name.to_string());
                 }
@@ -260,8 +262,8 @@ fn get_default_audio_device() -> Result<String> {
         }
     }
 
-    // Fallback to common device names
-    log_debug("No specific device found, using fallback");
+    // Fallback to common device names if no devices found
+    log_debug("No audio devices found, using fallback");
     Ok("Microphone".to_string())
 }
 
