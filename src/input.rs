@@ -73,7 +73,7 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
         input_text.push_str(prompt_to_use);
     } else if config.record_audio && audio_filename.is_some() {
         // If audio recording is enabled and no text prompt provided, use audio as default prompt
-        let default_audio_prompt = format!("prompt: '{}'", audio_filename.unwrap());
+        let default_audio_prompt = "do audio prompt"; // The task instructions are in the accompanying audio recording. Please listen to the audio and follow the directions precisely.
         log_info(&format!(
             "Using default audio prompt: {default_audio_prompt}"
         ));
