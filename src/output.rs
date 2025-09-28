@@ -109,7 +109,8 @@ pub fn output_text(text: &str, config: &Config) -> Result<()> {
         }
         OutputMode::Stdout => {
             log_info("Writing response to stdout");
-            print!("{text}");
+            let plain_text = markdown_to_text::convert(text);
+            print!("{plain_text}");
             Ok(())
         }
     }
