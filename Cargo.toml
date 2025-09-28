@@ -26,6 +26,7 @@ comrak = "0.28"
 whoami = "1.4"
 image = "0.25"
 atty = "0.2"
+crossterm = "0.27"
 markdown_to_text = "1.0"
 
 [profile.release]

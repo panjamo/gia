@@ -1,9 +1,11 @@
 use anyhow::{Context, Result};
+use crossterm::event::{poll, read, Event, KeyCode, KeyEventKind};
 use std::fs;
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::thread;
+use std::time::Duration;
 use uuid::Uuid;
 
 use crate::logging::{log_debug, log_info};
@@ -72,46 +74,58 @@ pub fn record_audio() -> Result<String> {
         }
     });
 
-    // Wait for user to stop recording
-    // Check if stdin is a terminal (TTY) or has piped data
-    if atty::isnt(atty::Stream::Stdin) {
-        // stdin has piped data, use a different approach
-        println!(
-            "Stdin has piped data. Recording for 10 seconds or until process is interrupted..."
-        );
-        println!("Press Ctrl+C to stop recording early.");
-
-        // Record for a maximum of 10 seconds, checking every 100ms if we should stop
-        let max_recording_time = std::time::Duration::from_secs(10);
-        let check_interval = std::time::Duration::from_millis(100);
-        let start_time = std::time::Instant::now();
-
-        while start_time.elapsed() < max_recording_time {
-            // Check if the ffmpeg process is still running
-            match ffmpeg_process.try_wait() {
-                Ok(Some(_)) => {
-                    // Process has exited (likely due to error)
-                    break;
+    // Wait for user to stop recording using crossterm for keyboard detection
+    println!("Press Enter to stop recording...");
+    
+    // Use crossterm to detect keyboard input regardless of stdin state
+    loop {
+        // Check for keyboard input with a short timeout
+        match poll(Duration::from_millis(100)) {
+            Ok(true) => {
+                // Event is available, read it
+                match read() {
+                    Ok(Event::Key(key_event)) => {
+                        // Only handle key press events (not release)
+                        if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Enter {
+                            log_debug("Enter key pressed, stopping recording");
+                            break;
+                        }
+                        // Ignore other key events
+                        log_debug(&format!("Ignoring key event: {:?}", key_event));
+                    }
+                    Ok(_) => {
+                        // Non-key event (mouse, resize, etc.), ignore
+                        log_debug("Ignoring non-key event");
+                    }
+                    Err(e) => {
+                        log_debug(&format!("Error reading event: {}", e));
+                    }
                 }
-                Ok(None) => {
-                    // Process is still running, continue
-                    std::thread::sleep(check_interval);
-                }
-                Err(_) => {
-                    // Error checking status, break
-                    break;
-                }
+            }
+            Ok(false) => {
+                // No event available, continue
+            }
+            Err(e) => {
+                log_debug(&format!("Error polling for events: {}", e));
             }
         }
 
-        println!("Recording time limit reached or process stopped.");
-    } else {
-        // stdin is a terminal, we can safely read from it
-        println!("Press Enter to stop recording...");
-        let mut input = String::new();
-        io::stdin()
-            .read_line(&mut input)
-            .context("Failed to read user input")?;
+        // Check if the ffmpeg process is still running
+        match ffmpeg_process.try_wait() {
+            Ok(Some(_)) => {
+                // Process has exited (likely due to error)
+                log_debug("ffmpeg process exited unexpectedly");
+                break;
+            }
+            Ok(None) => {
+                // Process is still running, continue
+            }
+            Err(_) => {
+                // Error checking status, break
+                log_debug("Error checking ffmpeg status");
+                break;
+            }
+        }
     }
 
     // Stop recording by terminating ffmpeg
