@@ -49,39 +49,34 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
         log_info("Checking clipboard content");
 
         // First check if there's an image in clipboard
-        match has_clipboard_image() {
+        let should_read_text = match has_clipboard_image() {
             Ok(true) => {
                 log_info("Found image in clipboard - adding to image sources");
                 config.add_clipboard_image();
+                false // Don't read text if we found an image
             }
             Ok(false) => {
                 log_info("No image in clipboard, reading text");
-                match read_clipboard() {
-                    Ok(clipboard_input) => {
-                        if !input_text.is_empty() {
-                            input_text.push_str("\n\n");
-                        }
-                        input_text.push_str(&clipboard_input);
-                    }
-                    Err(e) => {
-                        log_debug(&format!("Failed to read clipboard text: {e}"));
-                        // Continue without clipboard input
-                    }
-                }
+                true
             }
             Err(e) => {
                 log_debug(&format!("Failed to check clipboard for image: {e}"));
-                // Fallback to trying text
-                match read_clipboard() {
-                    Ok(clipboard_input) => {
-                        if !input_text.is_empty() {
-                            input_text.push_str("\n\n");
-                        }
-                        input_text.push_str(&clipboard_input);
+                log_debug("Fallback to trying text");
+                true
+            }
+        };
+
+        if should_read_text {
+            match read_clipboard() {
+                Ok(clipboard_input) => {
+                    if !input_text.is_empty() {
+                        input_text.push_str("\n\n");
                     }
-                    Err(e) => {
-                        log_debug(&format!("Failed to read clipboard text: {e}"));
-                    }
+                    writeln!(input_text, "=== Content from: clipboard ===").unwrap();
+                    input_text.push_str(&clipboard_input);
+                }
+                Err(e) => {
+                    log_debug(&format!("Failed to read clipboard text: {e}"));
                 }
             }
         }
@@ -214,7 +209,6 @@ mod tests {
             list_conversations: None,
             show_conversation: None,
             model: "test-model".to_string(),
-            verbose_help: false,
         };
 
         let result = get_input_text(&mut config, None).unwrap();
@@ -238,7 +232,6 @@ mod tests {
             list_conversations: None,
             show_conversation: None,
             model: "test-model".to_string(),
-            verbose_help: false,
         };
 
         let result = get_input_text(&mut config, None).unwrap();

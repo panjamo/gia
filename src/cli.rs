@@ -234,7 +234,6 @@ mod tests {
             list_conversations: None,
             show_conversation: None,
             model: "test-model".to_string(),
-            verbose_help: false,
         };
 
         assert_eq!(config.image_sources.len(), 0);
