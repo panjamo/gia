@@ -35,7 +35,7 @@ pub async fn run_app(mut config: Config) -> Result<()> {
 
     if input_text.trim().is_empty() {
         log_error("No input text provided");
-        eprintln!("Error: No input text provided. Provide prompt as command line arguments or use -c/-s for additional input.");
+        eprintln!("Error: No input text provided. Provide prompt as command line arguments or use -c/-f/-i for additional input.");
         std::process::exit(1);
     }
 
