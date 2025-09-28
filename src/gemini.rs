@@ -88,7 +88,7 @@ impl GeminiClient {
                     })?;
 
                     // Read image as base64
-                    let base64_data = crate::image::read_image_as_base64(image_path)
+                    let base64_data = crate::image::read_media_as_base64(image_path)
                         .with_context(|| format!("Failed to read image as base64: {image_path}"))?;
 
                     content_parts.push(ContentPart::from_image_base64(mime_type, base64_data));

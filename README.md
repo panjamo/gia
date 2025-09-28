@@ -5,7 +5,8 @@ A command-line tool that sends text prompts to Google's Gemini API and returns A
 ## Features
 
 - Uses command line arguments as the main prompt
-- **Image support** - Include images from files (JPEG, PNG, WebP, HEIC, PDF) or clipboard
+- **Audio recording** - Record audio prompts using ffmpeg with `-a` flag
+- **Media file support** - Include images (JPEG, PNG, WebP, HEIC, PDF) and audio/video files (OGG, MP3, MP4)
 - **Text file support** - Include text file content with `-f` flag (can be used multiple times)
 - Optional additional input from clipboard or stdin (auto-detects text vs images)
 - Output responses to stdout (default) or clipboard
@@ -18,7 +19,11 @@ A command-line tool that sends text prompts to Google's Gemini API and returns A
 
 1. Clone this repository
 2. Install Rust if you haven't already
-3. Build the project:
+3. For audio recording support, install ffmpeg:
+   - **Windows**: Download from https://ffmpeg.org/download.html and add to PATH
+   - **macOS**: `brew install ffmpeg`
+   - **Linux**: `sudo apt install ffmpeg` (Ubuntu/Debian) or equivalent for your distribution
+4. Build the project:
    ```
    cargo build --release
    ```
@@ -53,6 +58,17 @@ Optionally configure the context window limit (default: 8000):
 export CONTEXT_WINDOW_LIMIT=10000
 ```
 
+For audio recording, optionally set your preferred audio device:
+
+```bash
+export GIA_AUDIO_DEVICE="Headset (WH-1000XM2)"
+```
+
+On Windows:
+```cmd
+set GIA_AUDIO_DEVICE=Headset (WH-1000XM2)
+```
+
 GIA will randomly select an API key for each request and automatically fallback to other keys if it encounters a "429 Too Many Requests" error.
 
 To get a Gemini API key, visit: https://makersuite.google.com/app/apikey
@@ -60,10 +76,12 @@ To get a Gemini API key, visit: https://makersuite.google.com/app/apikey
 ## Default Behavior
 
 GIA automatically combines input from multiple sources:
-- **Command line**: Main prompt (required)
+- **Command line**: Main prompt (required, except when using `-a` alone)
+- **Audio recording**: With `-a` flag (requires ffmpeg)
 - **Stdin**: Automatically detected when piped
 - **Clipboard**: With `-c` flag only
 - **Text files**: With `-f` flag (can be used multiple times)
+- **Media files**: Images and audio/video files with `-i` and `-f` flags
 - **Output**: Response written to stdout (default)
 
 ## Usage
@@ -73,6 +91,13 @@ GIA automatically combines input from multiple sources:
 # Direct AI questions:
 gia "What is artificial intelligence?"
 gia "Explain quantum computing"
+
+# Audio recording (auto-generates prompt):
+gia --record-audio
+gia -a  # Short option
+
+# Audio recording with custom prompt:
+gia --record-audio "Transcribe and summarize this audio"
 
 # With clipboard input:
 gia "Summarize this text" -c
@@ -95,8 +120,13 @@ echo "extra context" | gia "Main question about this topic" -c
 # Include text files:
 gia "Summarize these documents" -f doc1.txt -f doc2.txt
 
+# Include audio/video files:
+gia "Transcribe this recording" -f meeting.mp3
+gia "What is discussed in this video?" -f presentation.mp4
+
 # Combine multiple input sources:
 gia "Analyze code and docs" -f README.md -f main.rs -i diagram.png
+gia "Analyze audio and images" -f recording.mp3 -i screenshot.png
 ```
 
 ### Image analysis
@@ -160,9 +190,10 @@ gia -s -b                         # Show latest conversation (file + browser)
 ### Command line options
 
 - `[PROMPT_TEXT]` - Prompt text for the AI (main input)
+- `-a, --record-audio` - Record audio input using ffmpeg (auto-generates prompt if no text provided)
 - `-c, --clipboard-input` - Add clipboard content to prompt (auto-detects images vs text)
 - `-i, --image <FILE>` - Add image file to prompt (can be used multiple times; supports JPEG, PNG, WebP, HEIC, PDF)
-- `-f, --file <FILE>` - Add text file content to prompt (can be used multiple times)
+- `-f, --file <FILE>` - Add text/media file content to prompt (supports text files and audio/video: OGG, MP3, MP4)
 - `-o, --clipboard-output` - Write response to clipboard instead of stdout
 - `-b, --browser-output` - Write output to file (~/.gia/outputs/, path copied to clipboard) AND open browser preview
 - `-r, --resume [ID]` - Resume last conversation or specify conversation ID

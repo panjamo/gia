@@ -26,6 +26,7 @@ pub struct Config {
     pub list_conversations: Option<usize>, // None = don't list, Some(n) = list top n, Some(0) = list all
     pub show_conversation: Option<String>, // Some(id) = show specific conversation
     pub model: String,
+    pub record_audio: bool, // true = record audio input
 }
 
 impl Config {
@@ -85,6 +86,7 @@ impl Config {
                 .map(|s| s.parse::<usize>().unwrap_or(0)),
             show_conversation: matches.get_one::<String>("show-conversation").cloned(),
             model: matches.get_one::<String>("model").unwrap().clone(),
+            record_audio: matches.get_flag("record-audio"),
         }
     }
 
@@ -186,6 +188,13 @@ impl Config {
                     .help("Open browser with detailed documentation on GitHub")
                     .action(clap::ArgAction::SetTrue),
             )
+            .arg(
+                Arg::new("record-audio")
+                    .short('a')
+                    .long("record-audio")
+                    .help("Record audio input using ffmpeg (requires ffmpeg to be installed)")
+                    .action(clap::ArgAction::SetTrue),
+            )
     }
 
     pub fn add_clipboard_image(&mut self) {
@@ -234,6 +243,7 @@ mod tests {
             list_conversations: None,
             show_conversation: None,
             model: "test-model".to_string(),
+            record_audio: false,
         };
 
         assert_eq!(config.image_sources.len(), 0);

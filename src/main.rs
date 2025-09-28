@@ -1,5 +1,6 @@
 mod api_key;
 mod app;
+mod audio;
 mod browser_preview;
 mod cli;
 mod clipboard;

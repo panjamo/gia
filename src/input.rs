@@ -3,9 +3,10 @@ use std::fmt::Write;
 use std::fs;
 use std::io::{self, Read};
 
+use crate::audio::record_audio;
 use crate::cli::{Config, ImageSource};
 use crate::clipboard::{has_clipboard_image, read_clipboard};
-use crate::image::validate_image_file;
+use crate::image::validate_media_file;
 use crate::logging::{log_debug, log_info};
 
 pub fn read_stdin() -> Result<String> {
@@ -36,12 +37,47 @@ pub fn read_text_file(file_path: &str) -> Result<String> {
 
 pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Result<String> {
     let mut input_text = String::new();
+    let mut audio_filename: Option<String> = None;
+
+    // Handle audio recording first if requested
+    if config.record_audio {
+        log_info("Audio recording requested");
+        match record_audio() {
+            Ok(audio_path) => {
+                log_info(&format!("Audio recorded to: {audio_path}"));
+                // Add the audio file to the image sources (for media processing)
+                config
+                    .image_sources
+                    .push(ImageSource::File(audio_path.clone()));
+
+                // Extract filename for default prompt
+                if let Some(filename) = std::path::Path::new(&audio_path).file_name() {
+                    audio_filename = Some(filename.to_string_lossy().to_string());
+                }
+
+                // Schedule cleanup (we'll clean up after processing)
+                // For now, we keep the file for the API call
+            }
+            Err(e) => {
+                log_debug(&format!("Audio recording failed: {e}"));
+                eprintln!("Warning: Audio recording failed: {e}");
+                // Continue without audio
+            }
+        }
+    }
 
     // Start with command line prompt (or override)
     let prompt_to_use = prompt_override.unwrap_or(&config.prompt);
     if !prompt_to_use.is_empty() {
         log_info("Using command line prompt");
         input_text.push_str(prompt_to_use);
+    } else if config.record_audio && audio_filename.is_some() {
+        // If audio recording is enabled and no text prompt provided, use audio as default prompt
+        let default_audio_prompt = format!("prompt: '{}'", audio_filename.unwrap());
+        log_info(&format!(
+            "Using default audio prompt: {default_audio_prompt}"
+        ));
+        input_text.push_str(&default_audio_prompt);
     }
 
     // Add clipboard input only if requested with -c flag
@@ -143,7 +179,7 @@ pub fn validate_image_sources(config: &Config) -> Result<()> {
     for image_source in &config.image_sources {
         match image_source {
             ImageSource::File(image_path) => {
-                validate_image_file(image_path)
+                validate_media_file(image_path)
                     .with_context(|| format!("Failed to validate image file: {image_path}"))?;
             }
             ImageSource::Clipboard => {
@@ -210,6 +246,7 @@ mod tests {
             list_conversations: None,
             show_conversation: None,
             model: "test-model".to_string(),
+            record_audio: false,
         };
 
         let result = get_input_text(&mut config, None).unwrap();
@@ -233,6 +270,7 @@ mod tests {
             list_conversations: None,
             show_conversation: None,
             model: "test-model".to_string(),
+            record_audio: false,
         };
 
         let result = get_input_text(&mut config, None).unwrap();

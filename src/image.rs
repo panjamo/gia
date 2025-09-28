@@ -5,8 +5,10 @@ use std::path::Path;
 
 use crate::logging::{log_debug, log_info};
 
-/// Supported image formats for Gemini API
-const SUPPORTED_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "webp", "heic", "pdf"];
+/// Supported file formats for Gemini API
+const SUPPORTED_EXTENSIONS: &[&str] = &[
+    "jpg", "jpeg", "png", "webp", "heic", "pdf", "ogg", "mp3", "mp4",
+];
 
 /// Get MIME type from file extension
 pub fn get_mime_type(file_path: &Path) -> Result<String> {
@@ -22,6 +24,9 @@ pub fn get_mime_type(file_path: &Path) -> Result<String> {
         "webp" => "image/webp",
         "heic" => "image/heic",
         "pdf" => "application/pdf",
+        "ogg" => "audio/ogg",
+        "mp3" => "audio/mpeg",
+        "mp4" => "video/mp4",
         _ => {
             return Err(anyhow::anyhow!(
                 "Unsupported file format: {}. Supported formats: {}",
@@ -35,11 +40,11 @@ pub fn get_mime_type(file_path: &Path) -> Result<String> {
 }
 
 /// Validate that the file exists and has a supported format
-pub fn validate_image_file(file_path: &str) -> Result<()> {
+pub fn validate_media_file(file_path: &str) -> Result<()> {
     let path = Path::new(file_path);
 
     if !path.exists() {
-        return Err(anyhow::anyhow!("Image file not found: {file_path}"));
+        return Err(anyhow::anyhow!("Media file not found: {file_path}"));
     }
 
     if !path.is_file() {
@@ -49,22 +54,22 @@ pub fn validate_image_file(file_path: &str) -> Result<()> {
     // Check file extension
     get_mime_type(path)?;
 
-    log_debug(&format!("Validated image file: {file_path}"));
+    log_debug(&format!("Validated media file: {file_path}"));
     Ok(())
 }
 
-/// Read image file and encode as base64
-pub fn read_image_as_base64(file_path: &str) -> Result<String> {
-    log_info(&format!("Reading image file: {file_path}"));
+/// Read media file and encode as base64
+pub fn read_media_as_base64(file_path: &str) -> Result<String> {
+    log_info(&format!("Reading media file: {file_path}"));
 
-    let image_data =
-        fs::read(file_path).with_context(|| format!("Failed to read image file: {file_path}"))?;
+    let media_data =
+        fs::read(file_path).with_context(|| format!("Failed to read media file: {file_path}"))?;
 
-    let base64_data = base64::engine::general_purpose::STANDARD.encode(&image_data);
+    let base64_data = base64::engine::general_purpose::STANDARD.encode(&media_data);
 
     log_info(&format!(
-        "Successfully encoded image: {} bytes -> {} base64 chars",
-        image_data.len(),
+        "Successfully encoded media: {} bytes -> {} base64 chars",
+        media_data.len(),
         base64_data.len()
     ));
 
@@ -88,26 +93,29 @@ mod tests {
             get_mime_type(Path::new("test.pdf")).unwrap(),
             "application/pdf"
         );
+        assert_eq!(get_mime_type(Path::new("test.ogg")).unwrap(), "audio/ogg");
+        assert_eq!(get_mime_type(Path::new("test.mp3")).unwrap(), "audio/mpeg");
+        assert_eq!(get_mime_type(Path::new("test.mp4")).unwrap(), "video/mp4");
 
         assert!(get_mime_type(Path::new("test.txt")).is_err());
         assert!(get_mime_type(Path::new("test")).is_err());
     }
 
     #[test]
-    fn test_validate_image_file() {
+    fn test_validate_media_file() {
         // Test with non-existent file
-        assert!(validate_image_file("nonexistent.jpg").is_err());
+        assert!(validate_media_file("nonexistent.jpg").is_err());
     }
 
     #[test]
-    fn test_read_image_as_base64() -> Result<()> {
-        // Create a temporary image file
+    fn test_read_media_as_base64() -> Result<()> {
+        // Create a temporary media file
         let temp_file = NamedTempFile::new()?;
-        let test_data = b"fake image data";
+        let test_data = b"fake media data";
         fs::write(temp_file.path(), test_data)?;
 
         // Read as base64
-        let base64_result = read_image_as_base64(temp_file.path().to_str().unwrap())?;
+        let base64_result = read_media_as_base64(temp_file.path().to_str().unwrap())?;
 
         // Verify the result
         let expected = base64::engine::general_purpose::STANDARD.encode(test_data);
