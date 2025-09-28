@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use crossterm::event::{poll, read, Event, KeyCode, KeyEventKind};
+use regex::Regex;
 use std::fs;
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::Path;
@@ -17,7 +18,7 @@ pub fn record_audio() -> Result<String> {
     // Generate unique filename for the recording
     let recording_id = Uuid::new_v4();
     let temp_dir = std::env::temp_dir();
-    let audio_file = temp_dir.join(format!("gia_audio_{recording_id}.mp3"));
+    let audio_file = temp_dir.join(format!("gia_audio_{recording_id}.m4a"));
     let audio_path = audio_file.to_string_lossy().to_string();
 
     log_debug(&format!("Recording to: {audio_path}"));
@@ -40,9 +41,9 @@ pub fn record_audio() -> Result<String> {
             "-i",
             &format!("audio={audio_device}"),
             "-acodec",
-            "libmp3lame",
-            "-ab",
-            "192k",
+            "aac",
+            "-b:a",
+            "64k",
             "-y", // Overwrite output file
             &audio_path,
         ])
@@ -58,25 +59,21 @@ pub fn record_audio() -> Result<String> {
 
     let _stdout_handle = thread::spawn(move || {
         let reader = BufReader::new(stdout);
-        for line in reader.lines() {
-            if let Ok(line) = line {
-                log_info(&format!("ffmpeg: {line}"));
-            }
+        for line in reader.lines().map_while(Result::ok) {
+            log_info(&format!("ffmpeg: {line}"));
         }
     });
 
     let _stderr_handle = thread::spawn(move || {
         let reader = BufReader::new(stderr);
-        for line in reader.lines() {
-            if let Ok(line) = line {
-                log_debug(&format!("ffmpeg: {line}"));
-            }
+        for line in reader.lines().map_while(Result::ok) {
+            log_debug(&format!("ffmpeg: {line}"));
         }
     });
 
     // Wait for user to stop recording using crossterm for keyboard detection
     println!("Press Enter to stop recording...");
-    
+
     // Use crossterm to detect keyboard input regardless of stdin state
     loop {
         // Check for keyboard input with a short timeout
@@ -86,7 +83,8 @@ pub fn record_audio() -> Result<String> {
                 match read() {
                     Ok(Event::Key(key_event)) => {
                         // Only handle key press events (not release)
-                        if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Enter {
+                        if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Enter
+                        {
                             log_debug("Enter key pressed, stopping recording");
                             break;
                         }
@@ -247,17 +245,17 @@ fn get_default_audio_device() -> Result<String> {
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     // Parse the ffmpeg output to find audio devices
-    // Look for lines like: [dshow @ ...] "Device Name" (audio)
+    // Look for lines like: [dshow @ 000001fa49e956c0] "Device Name" (audio)
+    let device_regex = Regex::new(r#"\[dshow +@ +[^\]]+\] +[# "]([^"']+)["'] +\(audio\)"#)
+        .context("Failed to compile audio device regex")?;
+
     for line in stderr.lines() {
-        if line.contains("(audio)") {
-            // Look for quoted device name in the line
-            if let Some(start_quote) = line.find('"') {
-                // Find the closing quote
-                if let Some(end_quote) = line[start_quote + 1..].find('"') {
-                    let device_name = &line[start_quote + 1..start_quote + 1 + end_quote];
-                    log_debug(&format!("Found audio device: {device_name}"));
-                    return Ok(device_name.to_string());
-                }
+        log_info(line);
+        if let Some(captures) = device_regex.captures(line) {
+            if let Some(device_name) = captures.get(1) {
+                let device_name = device_name.as_str();
+                log_debug(&format!("Found audio device: {device_name}"));
+                return Ok(device_name.to_string());
             }
         }
     }

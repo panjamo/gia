@@ -77,7 +77,7 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
         log_info(&format!(
             "Using default audio prompt: {default_audio_prompt}"
         ));
-        input_text.push_str(&default_audio_prompt);
+        input_text.push_str(default_audio_prompt);
     }
 
     // Add clipboard input only if requested with -c flag

@@ -1093,6 +1093,7 @@ dependencies = [
  "log",
  "markdown_to_text",
  "rand 0.8.5",
+ "regex",
  "serde",
  "serde_json",
  "serial_test",

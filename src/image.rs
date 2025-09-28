@@ -7,7 +7,7 @@ use crate::logging::{log_debug, log_info};
 
 /// Supported file formats for Gemini API
 const SUPPORTED_EXTENSIONS: &[&str] = &[
-    "jpg", "jpeg", "png", "webp", "heic", "pdf", "ogg", "mp3", "mp4",
+    "jpg", "jpeg", "png", "webp", "heic", "pdf", "ogg", "mp3", "m4a", "mp4",
 ];
 
 /// Get MIME type from file extension
@@ -26,6 +26,7 @@ pub fn get_mime_type(file_path: &Path) -> Result<String> {
         "pdf" => "application/pdf",
         "ogg" => "audio/ogg",
         "mp3" => "audio/mpeg",
+        "m4a" => "audio/mp4",
         "mp4" => "video/mp4",
         _ => {
             return Err(anyhow::anyhow!(
@@ -95,6 +96,7 @@ mod tests {
         );
         assert_eq!(get_mime_type(Path::new("test.ogg")).unwrap(), "audio/ogg");
         assert_eq!(get_mime_type(Path::new("test.mp3")).unwrap(), "audio/mpeg");
+        assert_eq!(get_mime_type(Path::new("test.m4a")).unwrap(), "audio/mp4");
         assert_eq!(get_mime_type(Path::new("test.mp4")).unwrap(), "video/mp4");
 
         assert!(get_mime_type(Path::new("test.txt")).is_err());
