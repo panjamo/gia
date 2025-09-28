@@ -90,6 +90,7 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
             if !input_text.is_empty() {
                 input_text.push_str("\n\n");
             }
+            writeln!(input_text, "=== Content from: stdin ===").unwrap();
             input_text.push_str(&stdin_input);
         }
     } else {
