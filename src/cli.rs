@@ -26,7 +26,6 @@ pub struct Config {
     pub list_conversations: Option<usize>, // None = don't list, Some(n) = list top n, Some(0) = list all
     pub show_conversation: Option<String>, // Some(id) = show specific conversation
     pub model: String,
-    pub verbose_help: bool, // true = open browser with GitHub README
 }
 
 impl Config {
@@ -86,7 +85,6 @@ impl Config {
                 .map(|s| s.parse::<usize>().unwrap_or(0)),
             show_conversation: matches.get_one::<String>("show-conversation").cloned(),
             model: matches.get_one::<String>("model").unwrap().clone(),
-            verbose_help: false, // This will never be true since we exit earlier
         }
     }
 
