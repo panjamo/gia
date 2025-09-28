@@ -19,19 +19,19 @@ permissions:
 jobs:
   create-release:
     runs-on: windows-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Rust
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         toolchain: stable
         target: x86_64-pc-windows-msvc
-    
+
     - name: Build Windows Release
       run: cargo build --release --target x86_64-pc-windows-msvc
-    
+
     - name: Generate Changelog
       id: changelog
       env:
@@ -62,7 +62,7 @@ jobs:
         echo "changelog<<EOF" >> $env:GITHUB_OUTPUT
         echo $CHANGELOG >> $env:GITHUB_OUTPUT
         echo "EOF" >> $env:GITHUB_OUTPUT
-    
+
     - name: Create Release and Upload Asset
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
