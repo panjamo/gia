@@ -129,7 +129,7 @@ gia "What is machine learning?"
 gia "Write a poem about coding" -o
 
 # Output to file (~/.gia/outputs/) AND open browser preview:
-gia "Generate markdown documentation" -O
+gia "Generate markdown documentation" -b
 
 # With additional input and clipboard output:
 gia "Translate to Spanish" -c -o
@@ -150,9 +150,11 @@ gia --list-conversations
 gia -l 5                          # List top 5 conversations
 gia -l                            # List all conversations
 
-# Display conversation in browser (chat format):
-gia -v                            # Show latest conversation
-gia -v a1b2c3d4-e5f6-7890-abcd   # Show specific conversation
+# Display conversation (follows normal output options):
+gia -s                            # Show latest conversation (stdout)
+gia -s a1b2c3d4-e5f6-7890-abcd   # Show specific conversation (stdout)
+gia -s -o                         # Show latest conversation (clipboard)
+gia -s -b                         # Show latest conversation (file + browser)
 ```
 
 ### Command line options
@@ -162,11 +164,11 @@ gia -v a1b2c3d4-e5f6-7890-abcd   # Show specific conversation
 - `-i, --image <FILE>` - Add image file to prompt (can be used multiple times; supports JPEG, PNG, WebP, HEIC, PDF)
 - `-f, --file <FILE>` - Add text file content to prompt (can be used multiple times)
 - `-o, --clipboard-output` - Write response to clipboard instead of stdout
-- `-O` - Write output to file (~/.gia/outputs/, path copied to clipboard) AND open browser preview
+- `-b, --browser-output` - Write output to file (~/.gia/outputs/, path copied to clipboard) AND open browser preview
 - `-r, --resume [ID]` - Resume last conversation or specify conversation ID
 - `-R` - Resume the very last conversation
 - `-l, --list-conversations [NUMBER]` - List saved conversations (optionally limit number)
-- `-v, --show-conversation [ID]` - Show conversation in chat mode as HTML/Markdown (latest if no ID)
+- `-s, --show-conversation [ID]` - Show conversation (follows output options: stdout/clipboard/file+browser)
 - `-m, --model <MODEL>` - Specify Gemini model (default: gemini-2.5-flash-lite) see https://ai.google.dev/gemini-api/docs/models
 
 ## Logging
