@@ -73,7 +73,8 @@ jobs:
         # Add changelog if available
         $CHANGELOG = @"
 ${{ steps.changelog.outputs.changelog }}
-"@
+"@ -replace '"', '' -replace '`', ''
+
         if ($CHANGELOG.Trim() -ne "") {
           $NOTES = $NOTES + "`n`n## Changelog`n" + $CHANGELOG
         }
