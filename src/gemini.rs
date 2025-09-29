@@ -77,40 +77,19 @@ impl GeminiClient {
 
         // Add image parts from various sources
         for image_source in image_sources {
-            match image_source {
-                ImageSource::File(image_path) => {
-                    log_debug(&format!("Adding file image to request: {image_path}"));
+            let ImageSource::File(image_path) = image_source;
+            log_debug(&format!("Adding file image to request: {image_path}"));
 
-                    // Get MIME type for the image
-                    let path = std::path::Path::new(image_path);
-                    let mime_type = crate::image::get_mime_type(path).with_context(|| {
-                        format!("Failed to get MIME type for image: {image_path}")
-                    })?;
+            // Get MIME type for the image
+            let path = std::path::Path::new(image_path);
+            let mime_type = crate::image::get_mime_type(path)
+                .with_context(|| format!("Failed to get MIME type for image: {image_path}"))?;
 
-                    // Read image as base64
-                    let base64_data = crate::image::read_media_as_base64(image_path)
-                        .with_context(|| format!("Failed to read image as base64: {image_path}"))?;
+            // Read image as base64
+            let base64_data = crate::image::read_media_as_base64(image_path)
+                .with_context(|| format!("Failed to read image as base64: {image_path}"))?;
 
-                    content_parts.push(ContentPart::from_image_base64(mime_type, base64_data));
-                }
-                ImageSource::Clipboard => {
-                    log_debug("Adding clipboard image to request");
-
-                    // Read image from clipboard
-                    let image_data =
-                        read_clipboard_image().context("Failed to read image from clipboard")?;
-
-                    // Convert to PNG base64
-                    let base64_data = convert_image_data_to_base64(&image_data)
-                        .context("Failed to convert clipboard image to PNG base64")?;
-
-                    // Use PNG MIME type for clipboard images
-                    content_parts.push(ContentPart::from_image_base64(
-                        "image/png".to_string(),
-                        base64_data,
-                    ));
-                }
-            }
+            content_parts.push(ContentPart::from_image_base64(mime_type, base64_data));
         }
 
         // Create the chat request with content parts

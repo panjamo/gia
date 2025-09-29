@@ -1,4 +1,3 @@
-use crate::logging::log_info;
 use clap::{Arg, Command};
 
 #[derive(Debug, Clone)]
@@ -11,8 +10,6 @@ pub enum OutputMode {
 #[derive(Debug, Clone)]
 pub enum ImageSource {
     File(String),
-    #[allow(dead_code)] // Still used in legacy compatibility mode
-    Clipboard,
 }
 
 #[derive(Debug, Clone)]
@@ -211,12 +208,6 @@ impl Config {
             )
     }
 
-    #[allow(dead_code)] // Still used in legacy compatibility mode
-    pub fn add_clipboard_image(&mut self) {
-        log_info("Adding clipboard image to image sources");
-        self.image_sources.push(ImageSource::Clipboard);
-    }
-
     fn handle_verbose_help() {
         const GITHUB_README_URL: &str = "https://github.com/panjamo/gia/blob/master/README.md";
 
@@ -232,16 +223,4 @@ impl Config {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_image_source_debug() {
-        let file_source = ImageSource::File("test.jpg".to_string());
-        let clipboard_source = ImageSource::Clipboard;
-
-        // Test that Debug is implemented
-        let _file_debug = format!("{file_source:?}");
-        let _clipboard_debug = format!("{clipboard_source:?}");
-    }
-}
+mod tests {}

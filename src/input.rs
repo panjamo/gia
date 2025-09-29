@@ -171,17 +171,6 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
                     .ordered_content
                     .push(ContentSource::ImageFile(image_path.clone()));
             }
-            ImageSource::Clipboard => {
-                // This should already be handled in step 3, but add it if not already present
-                if !config
-                    .ordered_content
-                    .iter()
-                    .any(|c| matches!(c, ContentSource::ClipboardImage))
-                {
-                    log_info("Adding clipboard image to ordered content from image sources");
-                    config.ordered_content.push(ContentSource::ClipboardImage);
-                }
-            }
         }
     }
 
@@ -251,11 +240,6 @@ pub fn validate_image_sources(config: &Config) -> Result<()> {
             ImageSource::File(image_path) => {
                 validate_media_file(image_path)
                     .with_context(|| format!("Failed to validate image file: {image_path}"))?;
-            }
-            ImageSource::Clipboard => {
-                log_debug("Clipboard image source - validation will occur at request time");
-                // Note: We can't validate clipboard images ahead of time since clipboard content
-                // might change between validation and actual use
             }
         }
     }
