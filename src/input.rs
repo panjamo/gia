@@ -4,7 +4,7 @@ use std::fs;
 use std::io::{self, Read};
 
 use crate::audio::record_audio;
-use crate::cli::{Config, ImageSource};
+use crate::cli::{Config, ContentSource, ImageSource};
 use crate::clipboard::{has_clipboard_image, read_clipboard};
 use crate::image::validate_media_file;
 use crate::logging::{log_debug, log_info};
@@ -36,104 +36,106 @@ pub fn read_text_file(file_path: &str) -> Result<String> {
 }
 
 pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Result<String> {
-    let mut input_text = String::new();
-    let mut audio_filename: Option<String> = None;
+    // Clear any existing ordered content
+    config.ordered_content.clear();
 
-    // Handle audio recording first if requested
+    // 1. Command line prompt
+    let prompt_to_use = prompt_override.unwrap_or(&config.prompt);
+    if !prompt_to_use.is_empty() {
+        log_info("Adding command line prompt to ordered content");
+        config
+            .ordered_content
+            .push(ContentSource::CommandLinePrompt(prompt_to_use.to_string()));
+    }
+
+    // 2. Audio recording when present
     if config.record_audio {
         log_info("Audio recording requested");
         match record_audio() {
             Ok(audio_path) => {
                 log_info(&format!("Audio recorded to: {audio_path}"));
-                // Add the audio file to the image sources (for media processing)
                 config
-                    .image_sources
-                    .push(ImageSource::File(audio_path.clone()));
+                    .ordered_content
+                    .push(ContentSource::AudioRecording(audio_path));
 
-                // Extract filename for default prompt
-                if let Some(filename) = std::path::Path::new(&audio_path).file_name() {
-                    audio_filename = Some(filename.to_string_lossy().to_string());
+                // If no command line prompt provided, use default audio prompt
+                if prompt_to_use.is_empty() {
+                    let default_audio_prompt = "Your instructions are in prompt.m4a";
+                    log_info(&format!(
+                        "Using default audio prompt: {default_audio_prompt}"
+                    ));
+                    config.ordered_content.insert(
+                        0,
+                        ContentSource::CommandLinePrompt(default_audio_prompt.to_string()),
+                    );
                 }
-
-                // Schedule cleanup (we'll clean up after processing)
-                // For now, we keep the file for the API call
             }
             Err(e) => {
                 log_debug(&format!("Audio recording failed: {e}"));
                 eprintln!("Warning: Audio recording failed: {e}");
-                // Continue without audio
             }
         }
     }
 
-    // Start with command line prompt (or override)
-    let prompt_to_use = prompt_override.unwrap_or(&config.prompt);
-    if !prompt_to_use.is_empty() {
-        log_info("Using command line prompt");
-        input_text.push_str(prompt_to_use);
-    } else if config.record_audio && audio_filename.is_some() {
-        // If audio recording is enabled and no text prompt provided, use audio as default prompt
-        let default_audio_prompt = "Your instructions are in prompt.m4a"; // The task instructions are in the accompanying audio recording. Please listen to the audio and follow the directions precisely.
-        log_info(&format!(
-            "Using default audio prompt: {default_audio_prompt}"
-        ));
-        input_text.push_str(default_audio_prompt);
-    }
-
-    // Add clipboard input only if requested with -c flag
+    // 3. Clipboard text when present
     if config.use_clipboard_input {
         log_info("Checking clipboard content");
 
-        // First check if there's an image in clipboard
-        let should_read_text = match has_clipboard_image() {
+        match has_clipboard_image() {
             Ok(true) => {
-                log_info("Found image in clipboard - adding to image sources");
-                config.add_clipboard_image();
-                false // Don't read text if we found an image
+                log_info("Found image in clipboard - adding to ordered content");
+                config.ordered_content.push(ContentSource::ClipboardImage);
             }
             Ok(false) => {
-                log_info("No image in clipboard, reading text");
-                true
+                log_info("No image in clipboard, checking for text");
+                match read_clipboard() {
+                    Ok(clipboard_input) => {
+                        if !clipboard_input.trim().is_empty() {
+                            log_info("Adding clipboard text to ordered content");
+                            config
+                                .ordered_content
+                                .push(ContentSource::ClipboardText(clipboard_input));
+                        }
+                    }
+                    Err(e) => {
+                        log_debug(&format!("Failed to read clipboard text: {e}"));
+                    }
+                }
             }
             Err(e) => {
                 log_debug(&format!("Failed to check clipboard for image: {e}"));
-                log_debug("Fallback to trying text");
-                true
-            }
-        };
-
-        if should_read_text {
-            match read_clipboard() {
-                Ok(clipboard_input) => {
-                    if !input_text.is_empty() {
-                        input_text.push_str("\n\n");
+                // Fallback to trying text
+                match read_clipboard() {
+                    Ok(clipboard_input) => {
+                        if !clipboard_input.trim().is_empty() {
+                            log_info("Adding clipboard text to ordered content (fallback)");
+                            config
+                                .ordered_content
+                                .push(ContentSource::ClipboardText(clipboard_input));
+                        }
                     }
-                    writeln!(input_text, "=== Content from: clipboard ===").unwrap();
-                    input_text.push_str(&clipboard_input);
-                }
-                Err(e) => {
-                    log_debug(&format!("Failed to read clipboard text: {e}"));
+                    Err(_) => {
+                        log_debug("Failed to read clipboard text in fallback");
+                    }
                 }
             }
         }
     }
 
-    // Always check stdin if available (regardless of flag)
+    // 4. Stdin text if present
     if atty::isnt(atty::Stream::Stdin) {
-        log_info("Stdin data available - adding to input");
+        log_info("Stdin data available - adding to ordered content");
         let stdin_input = read_stdin()?;
         if !stdin_input.trim().is_empty() {
-            if !input_text.is_empty() {
-                input_text.push_str("\n\n");
-            }
-            writeln!(input_text, "=== Content from: stdin ===").unwrap();
-            input_text.push_str(&stdin_input);
+            config
+                .ordered_content
+                .push(ContentSource::StdinText(stdin_input));
         }
     } else {
         log_debug("No stdin data available (terminal input)");
     }
 
-    // Add text file contents if any are provided
+    // 5. All files coming with -f option
     if !config.text_files.is_empty() {
         log_info(&format!(
             "Processing {} text file(s)",
@@ -144,26 +146,94 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
             match read_text_file(file_path) {
                 Ok(file_content) => {
                     if !file_content.trim().is_empty() {
-                        if !input_text.is_empty() {
-                            input_text.push_str("\n\n");
-                        }
-                        writeln!(input_text, "=== Content from: {file_path} ===").unwrap();
-                        input_text.push_str(&file_content);
-                        if !file_content.ends_with('\n') {
-                            input_text.push('\n');
-                        }
+                        log_info(&format!("Adding text file to ordered content: {file_path}"));
+                        config
+                            .ordered_content
+                            .push(ContentSource::TextFile(file_path.clone(), file_content));
                     }
                 }
                 Err(e) => {
                     log_debug(&format!("Failed to read file {file_path}: {e}"));
                     eprintln!("Warning: Failed to read file '{file_path}': {e}");
-                    // Continue processing other files
                 }
             }
         }
     }
 
-    Ok(input_text)
+    // 6. All files coming with -i option
+    for image_source in &config.image_sources {
+        match image_source {
+            ImageSource::File(image_path) => {
+                log_info(&format!(
+                    "Adding image file to ordered content: {image_path}"
+                ));
+                config
+                    .ordered_content
+                    .push(ContentSource::ImageFile(image_path.clone()));
+            }
+            ImageSource::Clipboard => {
+                // This should already be handled in step 3, but add it if not already present
+                if !config
+                    .ordered_content
+                    .iter()
+                    .any(|c| matches!(c, ContentSource::ClipboardImage))
+                {
+                    log_info("Adding clipboard image to ordered content from image sources");
+                    config.ordered_content.push(ContentSource::ClipboardImage);
+                }
+            }
+        }
+    }
+
+    // Build final text for backwards compatibility
+    Ok(build_legacy_input_text(&config.ordered_content))
+}
+
+fn build_legacy_input_text(ordered_content: &[ContentSource]) -> String {
+    let mut input_text = String::new();
+
+    for content in ordered_content {
+        match content {
+            ContentSource::CommandLinePrompt(prompt) => {
+                if !input_text.is_empty() {
+                    input_text.push_str("\n\n");
+                }
+                input_text.push_str(prompt);
+            }
+            ContentSource::ClipboardText(text) => {
+                if !input_text.is_empty() {
+                    input_text.push_str("\n\n");
+                }
+                writeln!(input_text, "=== Content from: clipboard ===").unwrap();
+                input_text.push_str(text);
+            }
+            ContentSource::StdinText(text) => {
+                if !input_text.is_empty() {
+                    input_text.push_str("\n\n");
+                }
+                writeln!(input_text, "=== Content from: stdin ===").unwrap();
+                input_text.push_str(text);
+            }
+            ContentSource::TextFile(file_path, content) => {
+                if !input_text.is_empty() {
+                    input_text.push_str("\n\n");
+                }
+                writeln!(input_text, "=== Content from: {file_path} ===").unwrap();
+                input_text.push_str(content);
+                if !content.ends_with('\n') {
+                    input_text.push('\n');
+                }
+            }
+            // Audio, image files, and clipboard images are handled in multimodal request
+            ContentSource::AudioRecording(_)
+            | ContentSource::ImageFile(_)
+            | ContentSource::ClipboardImage => {
+                // These don't contribute to text content
+            }
+        }
+    }
+
+    input_text
 }
 
 pub fn validate_image_sources(config: &Config) -> Result<()> {
@@ -247,6 +317,7 @@ mod tests {
             show_conversation: None,
             model: "test-model".to_string(),
             record_audio: false,
+            ordered_content: Vec::new(),
         };
 
         let result = get_input_text(&mut config, None).unwrap();
@@ -271,6 +342,7 @@ mod tests {
             show_conversation: None,
             model: "test-model".to_string(),
             record_audio: false,
+            ordered_content: Vec::new(),
         };
 
         let result = get_input_text(&mut config, None).unwrap();

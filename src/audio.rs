@@ -16,7 +16,7 @@ pub fn record_audio() -> Result<String> {
 
     // Generate unique filename for the recording
     let temp_dir = std::env::temp_dir();
-    let audio_file = temp_dir.join(format!("prompt.m4a"));
+    let audio_file = temp_dir.join("prompt.m4a");
     let audio_path = audio_file.to_string_lossy().to_string();
 
     log_debug(&format!("Recording to: {audio_path}"));
@@ -87,14 +87,14 @@ pub fn record_audio() -> Result<String> {
                             break;
                         }
                         // Ignore other key events
-                        log_debug(&format!("Ignoring key event: {:?}", key_event));
+                        log_debug(&format!("Ignoring key event: {key_event:?}"));
                     }
                     Ok(_) => {
                         // Non-key event (mouse, resize, etc.), ignore
                         log_debug("Ignoring non-key event");
                     }
                     Err(e) => {
-                        log_debug(&format!("Error reading event: {}", e));
+                        log_debug(&format!("Error reading event: {e}"));
                     }
                 }
             }
@@ -102,7 +102,7 @@ pub fn record_audio() -> Result<String> {
                 // No event available, continue
             }
             Err(e) => {
-                log_debug(&format!("Error polling for events: {}", e));
+                log_debug(&format!("Error polling for events: {e}"));
             }
         }
 

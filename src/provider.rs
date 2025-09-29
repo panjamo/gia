@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
 
-use crate::cli::ImageSource;
+use crate::cli::{ContentSource, ImageSource};
 
 /// Generic AI provider trait for abstraction across different AI services
 #[async_trait]
@@ -15,6 +15,12 @@ pub trait AiProvider: Debug + Send + Sync {
         &mut self,
         prompt: &str,
         image_sources: &[ImageSource],
+    ) -> Result<String>;
+
+    /// Generate content from ordered content sources (new approach)
+    async fn generate_content_with_ordered_sources(
+        &mut self,
+        ordered_content: &[ContentSource],
     ) -> Result<String>;
 
     /// Get the model name being used

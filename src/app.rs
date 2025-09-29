@@ -62,24 +62,40 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     let mut provider = ProviderFactory::create_provider(provider_config)
         .context("Failed to initialize AI provider")?;
 
-    // Generate content
-    if config.image_sources.is_empty() {
+    // Generate content using ordered content sources
+    if config.ordered_content.is_empty() {
         log_info(&format!(
             "Sending text request to {} API using model: {}",
             provider.provider_name(),
             provider.model_name()
         ));
-    } else {
-        log_info(&format!(
-            "Sending multimodal request to {} API using model: {} with {} image source(s)",
-            provider.provider_name(),
-            provider.model_name(),
-            config.image_sources.len()
-        ));
+        // For backwards compatibility, if no ordered content, use the old method
+        let response = provider
+            .generate_content_with_image_sources(&context_prompt, &config.image_sources)
+            .await
+            .context("Failed to generate content")?;
+
+        // Add messages to conversation and save
+        conversation.add_message(MessageRole::User, input_text);
+        conversation.add_message(MessageRole::Assistant, response.clone());
+        conversation_manager
+            .save_conversation(&conversation)
+            .context("Failed to save conversation")?;
+
+        // Output response
+        output_text(&response, &config).context("Failed to output response")?;
+        log_info("Successfully completed request");
+        return Ok(());
     }
+    log_info(&format!(
+        "Sending multimodal request to {} API using model: {} with {} ordered content source(s)",
+        provider.provider_name(),
+        provider.model_name(),
+        config.ordered_content.len()
+    ));
 
     let response = provider
-        .generate_content_with_image_sources(&context_prompt, &config.image_sources)
+        .generate_content_with_ordered_sources(&config.ordered_content)
         .await
         .context("Failed to generate content")?;
 

@@ -1,5 +1,5 @@
 use crate::api_key::validate_api_key_format;
-use crate::cli::ImageSource;
+use crate::cli::{ContentSource, ImageSource};
 use crate::clipboard::{convert_image_data_to_base64, read_clipboard_image};
 use crate::constants::GEMINI_API_KEY_URL;
 use crate::logging::{log_debug, log_error, log_info, log_warn};
@@ -144,6 +144,238 @@ impl GeminiClient {
         Ok(generated_text.to_string())
     }
 
+    async fn try_generate_content_with_ordered_sources(
+        &self,
+        ordered_content: &[ContentSource],
+        api_key: &str,
+    ) -> Result<String> {
+        log_debug(&format!(
+            "Building multimodal request with {} ordered content source(s)",
+            ordered_content.len()
+        ));
+
+        // Update the API key in environment for this request
+        env::set_var("GEMINI_API_KEY", api_key);
+
+        // Build content parts in the specified order:
+        // 1. command line prompt, 2. audio recording, 3. clipboard text, 4. stdin text, 5. -f files, 6. -i files
+        let mut content_parts = Vec::new();
+
+        log_info("=== Building Multimodal AI Request Structure ===");
+
+        for (index, content_source) in ordered_content.iter().enumerate() {
+            let part_number = index + 1;
+            match content_source {
+                ContentSource::CommandLinePrompt(prompt) => {
+                    log_info(&format!("Part {part_number}: Command Line Prompt"));
+                    log_info("  Type: Text");
+                    log_info(&format!("  Length: {} characters", prompt.len()));
+                    log_info(&format!(
+                        "  Preview: \"{}...\"",
+                        prompt
+                            .chars()
+                            .take(50)
+                            .collect::<String>()
+                            .replace('\n', "\\n")
+                    ));
+                    content_parts.push(ContentPart::from_text(prompt));
+                }
+                ContentSource::AudioRecording(audio_path) => {
+                    log_info(&format!("Part {part_number}: Audio Recording"));
+                    log_info("  Type: Audio");
+                    log_info(&format!("  File: {audio_path}"));
+
+                    let path = std::path::Path::new(audio_path);
+                    let mime_type = crate::image::get_mime_type(path).with_context(|| {
+                        format!("Failed to get MIME type for audio: {audio_path}")
+                    })?;
+                    log_info(&format!("  MIME Type: {mime_type}"));
+
+                    // Get file size for logging
+                    if let Ok(metadata) = std::fs::metadata(audio_path) {
+                        log_info(&format!("  File Size: {} bytes", metadata.len()));
+                    }
+
+                    let base64_data = crate::image::read_media_as_base64(audio_path)
+                        .with_context(|| format!("Failed to read audio as base64: {audio_path}"))?;
+                    log_info(&format!(
+                        "  Base64 Length: {} characters",
+                        base64_data.len()
+                    ));
+
+                    content_parts.push(ContentPart::from_image_base64(mime_type, base64_data));
+                }
+                ContentSource::ClipboardText(text) => {
+                    log_info(&format!("Part {part_number}: Clipboard Text"));
+                    log_info("  Type: Text");
+                    log_info(&format!("  Length: {} characters", text.len()));
+                    log_info(&format!(
+                        "  Preview: \"{}...\"",
+                        text.chars()
+                            .take(50)
+                            .collect::<String>()
+                            .replace('\n', "\\n")
+                    ));
+
+                    let formatted_content = format!("=== Content from: clipboard ===\n{text}");
+                    content_parts.push(ContentPart::from_text(&formatted_content));
+                }
+                ContentSource::StdinText(text) => {
+                    log_info(&format!("Part {part_number}: Stdin Text"));
+                    log_info("  Type: Text");
+                    log_info(&format!("  Length: {} characters", text.len()));
+                    log_info(&format!(
+                        "  Preview: \"{}...\"",
+                        text.chars()
+                            .take(50)
+                            .collect::<String>()
+                            .replace('\n', "\\n")
+                    ));
+
+                    let formatted_content = format!("=== Content from: stdin ===\n{text}");
+                    content_parts.push(ContentPart::from_text(&formatted_content));
+                }
+                ContentSource::TextFile(file_path, content) => {
+                    log_info(&format!("Part {part_number}: Text File"));
+                    log_info("  Type: Text");
+                    log_info(&format!("  File: {file_path}"));
+                    log_info(&format!("  Length: {} characters", content.len()));
+                    log_info(&format!(
+                        "  Preview: \"{}...\"",
+                        content
+                            .chars()
+                            .take(50)
+                            .collect::<String>()
+                            .replace('\n', "\\n")
+                    ));
+
+                    let formatted_content = if content.ends_with('\n') {
+                        format!("=== Content from: {file_path} ===\n{content}")
+                    } else {
+                        format!("=== Content from: {file_path} ===\n{content}\n")
+                    };
+                    content_parts.push(ContentPart::from_text(&formatted_content));
+                }
+                ContentSource::ImageFile(image_path) => {
+                    log_info(&format!("Part {part_number}: Image File"));
+                    log_info("  Type: Image");
+                    log_info(&format!("  File: {image_path}"));
+
+                    let path = std::path::Path::new(image_path);
+                    let mime_type = crate::image::get_mime_type(path).with_context(|| {
+                        format!("Failed to get MIME type for image: {image_path}")
+                    })?;
+                    log_info(&format!("  MIME Type: {mime_type}"));
+
+                    // Get file size for logging
+                    if let Ok(metadata) = std::fs::metadata(image_path) {
+                        log_info(&format!("  File Size: {} bytes", metadata.len()));
+                    }
+
+                    let base64_data = crate::image::read_media_as_base64(image_path)
+                        .with_context(|| format!("Failed to read image as base64: {image_path}"))?;
+                    log_info(&format!(
+                        "  Base64 Length: {} characters",
+                        base64_data.len()
+                    ));
+
+                    content_parts.push(ContentPart::from_image_base64(mime_type, base64_data));
+                }
+                ContentSource::ClipboardImage => {
+                    log_info(&format!("Part {part_number}: Clipboard Image"));
+                    log_info("  Type: Image");
+                    log_info("  Source: Clipboard");
+
+                    let image_data =
+                        read_clipboard_image().context("Failed to read image from clipboard")?;
+                    log_info(&format!(
+                        "  Original Size: {} bytes",
+                        image_data.bytes.len()
+                    ));
+
+                    let base64_data = convert_image_data_to_base64(&image_data)
+                        .context("Failed to convert clipboard image to PNG base64")?;
+                    log_info("  MIME Type: image/png");
+                    log_info(&format!(
+                        "  Base64 Length: {} characters",
+                        base64_data.len()
+                    ));
+
+                    content_parts.push(ContentPart::from_image_base64(
+                        "image/png".to_string(),
+                        base64_data,
+                    ));
+                }
+            }
+        }
+
+        if content_parts.is_empty() {
+            return Err(anyhow::anyhow!("No content parts to send to API"));
+        }
+
+        // Log summary of the multimodal request structure
+        log_info("=== Multimodal AI Request Structure Summary ===");
+        log_info(&format!("Total Content Parts: {}", content_parts.len()));
+
+        let text_parts = ordered_content
+            .iter()
+            .filter(|c| {
+                matches!(
+                    c,
+                    ContentSource::CommandLinePrompt(_)
+                        | ContentSource::ClipboardText(_)
+                        | ContentSource::StdinText(_)
+                        | ContentSource::TextFile(_, _)
+                )
+            })
+            .count();
+        let media_parts = ordered_content
+            .iter()
+            .filter(|c| {
+                matches!(
+                    c,
+                    ContentSource::AudioRecording(_)
+                        | ContentSource::ImageFile(_)
+                        | ContentSource::ClipboardImage
+                )
+            })
+            .count();
+
+        log_info(&format!("Text Parts: {text_parts}"));
+        log_info(&format!("Media Parts: {media_parts} (Audio + Images)"));
+        log_info("=== End Request Structure ===");
+
+        // Create the chat request with content parts
+        let chat_request = ChatRequest::new(vec![ChatMessage::user(content_parts)]);
+
+        // Send the request using genai
+        let chat_response = self
+            .client
+            .exec_chat(&self.model, chat_request, None)
+            .await
+            .context("Failed to send multimodal request to Gemini API")?;
+
+        // Extract the response text
+        let generated_text = chat_response
+            .content_text_as_str()
+            .context("Failed to extract text from Gemini response")?;
+
+        // Check if the generated text is empty or just whitespace
+        if generated_text.trim().is_empty() {
+            log_error("Generated text is empty");
+            return Err(anyhow::anyhow!(
+                "No content was generated by the AI. The response was empty or contained only whitespace."
+            ));
+        }
+
+        log_info(&format!(
+            "Received response from Gemini API, length: {}",
+            generated_text.len()
+        ));
+
+        Ok(generated_text.to_string())
+    }
+
     fn try_next_api_key(&mut self) -> Result<String> {
         if self.api_keys.len() <= 1 {
             return Err(anyhow::anyhow!("No alternative API keys available"));
@@ -238,6 +470,74 @@ impl AiProvider for GeminiClient {
                             Err(fallback_error) => {
                                 log_error(
                                     "Alternative API key also failed for multimodal request with image sources",
+                                );
+                                let fallback_error_string = fallback_error.to_string();
+                                if fallback_error_string.contains("429")
+                                    || fallback_error_string.contains("Too Many Requests")
+                                {
+                                    eprintln!("⚠️  Rate limit exceeded on all available API keys.");
+                                }
+                                Err(fallback_error)
+                            }
+                        }
+                    } else {
+                        log_warn("No alternative API keys available for fallback");
+                        eprintln!("⚠️  Rate limit exceeded and no alternative API keys available.");
+                        Err(e)
+                    }
+                } else {
+                    // Check if it's an authentication error
+                    if error_string.contains("401")
+                        || error_string.contains("403")
+                        || error_string.contains("authentication")
+                        || error_string.contains("permission")
+                    {
+                        return Self::handle_auth_error(&error_string);
+                    }
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    async fn generate_content_with_ordered_sources(
+        &mut self,
+        ordered_content: &[ContentSource],
+    ) -> Result<String> {
+        log_debug(&format!(
+            "Sending multimodal request to Gemini API with {} ordered content source(s)",
+            ordered_content.len()
+        ));
+
+        let current_key = self.api_keys[self.current_key_index].clone();
+
+        // Try with current API key first
+        match self
+            .try_generate_content_with_ordered_sources(ordered_content, &current_key)
+            .await
+        {
+            Ok(result) => Ok(result),
+            Err(e) => {
+                let error_string = e.to_string();
+
+                // Check if it's a rate limit error and we can try another key
+                if error_string.contains("429") || error_string.contains("Too Many Requests") {
+                    log_info("Rate limit hit, trying to fallback to another API key");
+
+                    if let Ok(next_key) = self.try_next_api_key() {
+                        log_info("Found alternative API key, retrying multimodal request with ordered sources");
+
+                        match self
+                            .try_generate_content_with_ordered_sources(ordered_content, &next_key)
+                            .await
+                        {
+                            Ok(result) => {
+                                log_info("Successfully used alternative API key for multimodal request with ordered sources");
+                                Ok(result)
+                            }
+                            Err(fallback_error) => {
+                                log_error(
+                                    "Alternative API key also failed for multimodal request with ordered sources",
                                 );
                                 let fallback_error_string = fallback_error.to_string();
                                 if fallback_error_string.contains("429")

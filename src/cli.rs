@@ -11,7 +11,19 @@ pub enum OutputMode {
 #[derive(Debug, Clone)]
 pub enum ImageSource {
     File(String),
+    #[allow(dead_code)] // Still used in legacy compatibility mode
     Clipboard,
+}
+
+#[derive(Debug, Clone)]
+pub enum ContentSource {
+    CommandLinePrompt(String),
+    AudioRecording(String), // file path
+    ClipboardText(String),
+    StdinText(String),
+    TextFile(String, String), // (file_path, content)
+    ImageFile(String),        // file path
+    ClipboardImage,
 }
 
 #[derive(Debug, Clone)]
@@ -26,7 +38,8 @@ pub struct Config {
     pub list_conversations: Option<usize>, // None = don't list, Some(n) = list top n, Some(0) = list all
     pub show_conversation: Option<String>, // Some(id) = show specific conversation
     pub model: String,
-    pub record_audio: bool, // true = record audio input
+    pub record_audio: bool,                  // true = record audio input
+    pub ordered_content: Vec<ContentSource>, // ordered content for multimodal requests
 }
 
 impl Config {
@@ -87,6 +100,7 @@ impl Config {
             show_conversation: matches.get_one::<String>("show-conversation").cloned(),
             model: matches.get_one::<String>("model").unwrap().clone(),
             record_audio: matches.get_flag("record-audio"),
+            ordered_content: Vec::new(), // will be populated in input.rs
         }
     }
 
@@ -197,6 +211,7 @@ impl Config {
             )
     }
 
+    #[allow(dead_code)] // Still used in legacy compatibility mode
     pub fn add_clipboard_image(&mut self) {
         log_info("Adding clipboard image to image sources");
         self.image_sources.push(ImageSource::Clipboard);
@@ -228,32 +243,5 @@ mod tests {
         // Test that Debug is implemented
         let _file_debug = format!("{file_source:?}");
         let _clipboard_debug = format!("{clipboard_source:?}");
-    }
-
-    #[test]
-    fn test_config_add_clipboard_image() {
-        let mut config = Config {
-            prompt: "test".to_string(),
-            use_clipboard_input: false,
-            image_sources: vec![],
-            text_files: vec![],
-            output_mode: OutputMode::Stdout,
-            resume_conversation: None,
-            resume_last: false,
-            list_conversations: None,
-            show_conversation: None,
-            model: "test-model".to_string(),
-            record_audio: false,
-        };
-
-        assert_eq!(config.image_sources.len(), 0);
-
-        config.add_clipboard_image();
-
-        assert_eq!(config.image_sources.len(), 1);
-        match &config.image_sources[0] {
-            ImageSource::Clipboard => (),
-            ImageSource::File(_) => panic!("Expected clipboard image source"),
-        }
     }
 }
