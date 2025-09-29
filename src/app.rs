@@ -44,11 +44,27 @@ pub async fn run_app(mut config: Config) -> Result<()> {
         input_text.len()
     ));
 
-    // Build context prompt with conversation history
-    let context_prompt = conversation.build_context_prompt(&input_text);
-
     // Truncate conversation if it's getting too long
     conversation.truncate_if_needed(get_context_window_limit());
+
+    // Add conversation history to ordered content if we have any
+    if !conversation.messages.is_empty() {
+        // Build conversation history text
+        let mut history = String::new();
+        for message in &conversation.messages {
+            match message.role {
+                MessageRole::User => history.push_str("User: "),
+                MessageRole::Assistant => history.push_str("Assistant: "),
+            }
+            history.push_str(&message.content);
+            history.push('\n');
+        }
+
+        // Insert conversation history at the beginning of ordered content
+        config
+            .ordered_content
+            .insert(0, crate::cli::ContentSource::ConversationHistory(history));
+    }
 
     // Get API keys
     let api_keys = crate::api_key::get_api_keys().context("Failed to get API keys")?;
@@ -63,30 +79,6 @@ pub async fn run_app(mut config: Config) -> Result<()> {
         .context("Failed to initialize AI provider")?;
 
     // Generate content using ordered content sources
-    if config.ordered_content.is_empty() {
-        log_info(&format!(
-            "Sending text request to {} API using model: {}",
-            provider.provider_name(),
-            provider.model_name()
-        ));
-        // For backwards compatibility, if no ordered content, use the old method
-        let response = provider
-            .generate_content_with_image_sources(&context_prompt, &config.image_sources)
-            .await
-            .context("Failed to generate content")?;
-
-        // Add messages to conversation and save
-        conversation.add_message(MessageRole::User, input_text);
-        conversation.add_message(MessageRole::Assistant, response.clone());
-        conversation_manager
-            .save_conversation(&conversation)
-            .context("Failed to save conversation")?;
-
-        // Output response
-        output_text(&response, &config).context("Failed to output response")?;
-        log_info("Successfully completed request");
-        return Ok(());
-    }
     log_info(&format!(
         "Sending multimodal request to {} API using model: {} with {} ordered content source(s)",
         provider.provider_name(),

@@ -51,30 +51,6 @@ impl Conversation {
         self.updated_at = Utc::now();
     }
 
-    pub fn build_context_prompt(&self, new_user_message: &str) -> String {
-        let mut context = String::new();
-
-        // Add conversation history if we have any messages
-        if !self.messages.is_empty() {
-            context.push_str("Previous conversation:\n");
-            for message in &self.messages {
-                match message.role {
-                    MessageRole::User => context.push_str("User: "),
-                    MessageRole::Assistant => context.push_str("Assistant: "),
-                }
-                context.push_str(&message.content);
-                context.push('\n');
-            }
-            context.push('\n');
-        }
-
-        // Add the new user message
-        context.push_str("User: ");
-        context.push_str(new_user_message);
-
-        context
-    }
-
     pub fn truncate_if_needed(&mut self, max_length: usize) {
         let current_length = self.estimate_token_length();
         if current_length <= max_length {
@@ -364,19 +340,6 @@ mod tests {
         assert_eq!(conversation.messages.len(), 1);
         assert!(matches!(conversation.messages[0].role, MessageRole::User));
         assert_eq!(conversation.messages[0].content, "Hello");
-    }
-
-    #[test]
-    fn test_build_context_prompt() {
-        let mut conversation = Conversation::new();
-        conversation.add_message(MessageRole::User, "What's the weather?".to_string());
-        conversation.add_message(MessageRole::Assistant, "It's sunny.".to_string());
-
-        let context = conversation.build_context_prompt("What about tomorrow?");
-        assert!(context.contains("Previous conversation:"));
-        assert!(context.contains("User: What's the weather?"));
-        assert!(context.contains("Assistant: It's sunny."));
-        assert!(context.contains("User: What about tomorrow?"));
     }
 
     #[test]

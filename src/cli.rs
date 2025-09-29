@@ -21,6 +21,7 @@ pub enum ContentSource {
     TextFile(String, String), // (file_path, content)
     ImageFile(String),        // file path
     ClipboardImage,
+    ConversationHistory(String), // conversation history text
 }
 
 #[derive(Debug, Clone)]

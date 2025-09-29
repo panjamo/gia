@@ -213,6 +213,13 @@ fn build_legacy_input_text(ordered_content: &[ContentSource]) -> String {
                     input_text.push('\n');
                 }
             }
+            ContentSource::ConversationHistory(history) => {
+                if !input_text.is_empty() {
+                    input_text.push_str("\n\n");
+                }
+                writeln!(input_text, "=== Previous conversation ===").unwrap();
+                input_text.push_str(history);
+            }
             // Audio, image files, and clipboard images are handled in multimodal request
             ContentSource::AudioRecording(_)
             | ContentSource::ImageFile(_)
