@@ -10,6 +10,7 @@ mod gemini;
 mod image;
 mod input;
 mod logging;
+mod mcp;
 mod output;
 mod provider;
 

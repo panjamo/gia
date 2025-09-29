@@ -50,6 +50,59 @@ cargo run -- "Analyze this code and documentation" -f README.md -f main.rs -i di
 
 # Clipboard image analysis (copy an image to clipboard first)
 cargo run -- "What do you see in this image?" -c
+
+# MCP server integration
+
+## Loki MCP Server Examples
+
+### Stdio Transport (Process-based)
+# Connect to Loki MCP server and list available tools
+cargo run -- --mcp-server "loki:C:\bin\loki-mcp-server.exe" --list-mcp-tools
+
+### HTTP Transport (Network-based)  
+# Connect to Loki MCP server via HTTP and list available tools
+cargo run -- --mcp-server "loki-http:http://127.0.0.1:8080" --list-mcp-tools
+cargo run -- --mcp-server "loki-remote:https://loki.example.com/mcp" --list-mcp-tools
+
+### Query Examples (work with both transports)
+# Query Loki logs (basic query) - Stdio transport
+cargo run -- --mcp-server "loki:C:\bin\loki-mcp-server.exe" --mcp-call loki:loki_query:'{"query":"{app=\"myapp\"}", "limit": 100}'
+
+# Query Loki logs - HTTP transport
+cargo run -- --mcp-server "loki-http:http://127.0.0.1:8080" --mcp-call loki:loki_query:'{"query":"{app=\"myapp\"}", "limit": 100}'
+
+# Query logs with environment filter
+cargo run -- --mcp-server "loki:C:\bin\loki-mcp-server.exe" --mcp-call loki:loki_query:'{"query":"{environment=\"tst\"} |= \"error\"", "limit": 50}'
+
+# Get all available label names
+cargo run -- --mcp-server "loki:C:\bin\loki-mcp-server.exe" --mcp-call loki:loki_label_names:'{}'
+
+# Get values for a specific label
+cargo run -- --mcp-server "loki:C:\bin\loki-mcp-server.exe" --mcp-call loki:loki_label_values:'{"label": "app"}'
+
+# Query with time range
+cargo run -- --mcp-server "loki:C:\bin\loki-mcp-server.exe" --mcp-call loki:loki_query:'{"query":"{app=\"ezp-connection-service\"}", "start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z", "limit": 100}'
+
+# Complex LogQL query for print job tracking
+cargo run -- --mcp-server "loki:C:\bin\loki-mcp-server.exe" --mcp-call loki:loki_query:'{"query":"{environment=\"tst\"} |~ \"EZP_TRACE_ID.*printjob-id\" | json | line_format \"{{.EZP_TRACE_ID}} -> {{.printJobId}}\"", "limit": 50}'
+
+### Mixed Transport Usage
+# Use both stdio and HTTP servers simultaneously
+cargo run -- --mcp-server "local:C:\bin\loki-mcp-server.exe" --mcp-server "remote:http://127.0.0.1:8080" --list-mcp-tools
+
+## AI-Assisted Log Analysis Examples
+# Analyze errors and get AI suggestions
+cargo run -- --mcp-server loki:"C:\bin\loki-mcp-server.exe" --mcp-call loki:loki_query:'{"query":"{app=\"ezp-connection-service\"} |= \"error\"", "limit": 20}' "Analyze these error logs and suggest troubleshooting steps"
+
+# Print job failure analysis
+cargo run -- --mcp-server loki:"C:\bin\loki-mcp-server.exe" --mcp-call loki:loki_query:'{"query":"{module=\"EFACon.exe\"} |= \"failed\"", "limit": 10}' "What are the common patterns in these print job failures?"
+
+# Performance analysis
+cargo run -- --mcp-server loki:"C:\bin\loki-mcp-server.exe" --mcp-call loki:loki_query:'{"query":"{app=\"ezp-rendering-backend\"} |~ \"duration.*ms\"", "limit": 50}' "Analyze the performance patterns and identify potential bottlenecks"
+
+## Other MCP Server Examples
+cargo run -- --mcp-server filesystem:node:server.js --list-mcp-tools
+cargo run -- --mcp-server myserver:python:mcp_server.py --mcp-call myserver:read_file:'{"path":"README.md"}'
 ```
 
 ### Environment Setup
@@ -84,6 +137,7 @@ RUST_LOG=error cargo run -- "test"  # Error logging only
 - `clipboard.rs` - Clipboard operations using arboard
 - `conversation.rs` - Conversation management with persistent storage
 - `logging.rs` - Structured logging to stderr
+- `mcp.rs` - Model Context Protocol client implementation
 
 ### Key Design Patterns
 
@@ -106,6 +160,22 @@ RUST_LOG=error cargo run -- "test"  # Error logging only
 - Support for resuming latest or specific conversations
 
 **Error Handling**: Comprehensive error handling with user-friendly messages for common issues like missing API keys, authentication failures, and rate limits.
+
+**MCP Integration**: Support for Model Context Protocol (MCP) servers, allowing integration with external tools and resources:
+- Multiple transport protocols: stdio (process-based) and HTTP (network-based)
+- Connect to local MCP servers via stdin/stdout or remote servers via HTTP/HTTPS
+- List available tools from connected servers
+- Execute tool calls with JSON arguments
+- Support for mixed transport scenarios (multiple servers with different transports)
+- Seamless integration with existing conversation flows
+
+**Loki MCP Integration**: Specialized support for Loki log analysis:
+- Query logs using LogQL syntax via both stdio and HTTP transports
+- Print job tracking with EZP_TRACE_ID correlation
+- Environment-based filtering (tst, prod, etc.)
+- Label management and discovery
+- Time-range queries for incident analysis
+- Support for cloud-hosted and local Loki MCP instances
 
 ### API Key Management
 The `api_key.rs` module handles:

@@ -5,10 +5,27 @@ use crate::constants::get_context_window_limit;
 use crate::conversation::{Conversation, ConversationManager, MessageRole};
 use crate::input::{get_input_text, validate_image_sources};
 use crate::logging::{log_error, log_info};
+use crate::mcp::{McpClient, McpServer, McpTransportType};
 use crate::output::output_text;
 use crate::provider::{ProviderConfig, ProviderFactory};
 
 pub async fn run_app(mut config: Config) -> Result<()> {
+    // Initialize MCP client if servers are configured
+    let mut mcp_client = if !config.mcp_servers.is_empty() || config.list_mcp_tools || config.mcp_tool_call.is_some() {
+        Some(initialize_mcp_client(&config).await?)
+    } else {
+        None
+    };
+
+    // Handle MCP-specific commands
+    if config.list_mcp_tools {
+        return handle_list_mcp_tools(&mut mcp_client).await;
+    }
+
+    if let Some((server, tool, args)) = &config.mcp_tool_call {
+        return handle_mcp_tool_call(&mut mcp_client, server, tool, args).await;
+    }
+
     // Initialize conversation manager
     let conversation_manager =
         ConversationManager::new().context("Failed to initialize conversation manager")?;
@@ -112,6 +129,179 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     output_text(&response, &config).context("Failed to output response")?;
 
     log_info("Successfully completed request");
+    Ok(())
+}
+
+async fn initialize_mcp_client(config: &Config) -> Result<McpClient> {
+    let mut mcp_client = McpClient::new();
+    
+    for server_config in &config.mcp_servers {
+        let server = parse_mcp_server_config(server_config)?;
+        mcp_client.add_server(server.clone());
+        
+        log_info(&format!("Connecting to MCP server: {}", server.name));
+        match mcp_client.connect(&server.name).await {
+            Ok(_) => {
+                log_info(&format!("Successfully connected to MCP server: {}", server.name));
+            }
+            Err(e) => {
+                // Check if it's a connection error
+                let error_msg = e.to_string();
+                if error_msg.contains("No connection could be made") || 
+                   error_msg.contains("Connection refused") ||
+                   error_msg.contains("tcp connect error") ||
+                   error_msg.contains("target machine actively refused") ||
+                   error_msg.contains("Failed to send HTTP request") {
+                    eprintln!("Warning: Cannot connect to MCP server '{}' - server may not be running", server.name);
+                    eprintln!("  Server config: {}", format_server_info(&server));
+                    eprintln!("  Skipping this server and continuing...");
+                    continue;
+                } else {
+                    return Err(e).with_context(|| format!("Failed to connect to MCP server: {}", server.name));
+                }
+            }
+        }
+    }
+    
+    Ok(mcp_client)
+}
+
+fn format_server_info(server: &McpServer) -> String {
+    match &server.transport_type {
+        McpTransportType::Stdio => {
+            if server.args.is_empty() {
+                format!("stdio:{}", server.command)
+            } else {
+                format!("stdio:{}:{}", server.command, server.args.join(","))
+            }
+        }
+        McpTransportType::Http(url) => format!("http:{}", url),
+    }
+}
+
+fn parse_mcp_server_config(config: &str) -> Result<McpServer> {
+    // Find the first colon to separate name from command+args
+    let first_colon = config.find(':').context("Invalid MCP server config format. Use: name:command[:args] or name:http://host:port")?;
+    
+    let name = config[..first_colon].to_string();
+    let command_and_args = &config[first_colon + 1..];
+    
+    // Check if this is an HTTP URL
+    if command_and_args.starts_with("http://") || command_and_args.starts_with("https://") {
+        return Ok(McpServer {
+            name,
+            command: command_and_args.to_string(),
+            args: Vec::new(),
+            description: None,
+            transport_type: McpTransportType::Http(command_and_args.to_string()),
+        });
+    }
+    
+    // For args separation, we need to be more careful with Windows paths
+    // Look for a colon that is NOT immediately after a single letter (drive letter)
+    let mut args_split_pos = None;
+    let chars: Vec<char> = command_and_args.chars().collect();
+    
+    for (i, &ch) in chars.iter().enumerate() {
+        if ch == ':' {
+            // Check if this colon is part of a Windows drive path (X:\)
+            // A drive colon should be at position 1 and followed by \ or /
+            if i == 1 && (i + 1 < chars.len() && (chars[i + 1] == '\\' || chars[i + 1] == '/')) {
+                // This is a drive letter colon, skip it
+                continue;
+            }
+            // This is our args separator
+            args_split_pos = Some(i);
+            break;
+        }
+    }
+    
+    if let Some(split_pos) = args_split_pos {
+        let command = command_and_args[..split_pos].to_string();
+        let args = command_and_args[split_pos + 1..]
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect();
+        
+        Ok(McpServer {
+            name,
+            command,
+            args,
+            description: None,
+            transport_type: McpTransportType::Stdio,
+        })
+    } else {
+        // No args, just command
+        Ok(McpServer {
+            name,
+            command: command_and_args.to_string(),
+            args: Vec::new(),
+            description: None,
+            transport_type: McpTransportType::Stdio,
+        })
+    }
+}
+
+async fn handle_list_mcp_tools(mcp_client: &mut Option<McpClient>) -> Result<()> {
+    let Some(client) = mcp_client else {
+        println!("No MCP servers configured. Use --mcp-server to add servers.");
+        return Ok(());
+    };
+    
+    println!("Available MCP Tools:");
+    println!("===================");
+    
+    let server_names: Vec<String> = client.get_connected_servers().iter().map(|s| s.to_string()).collect();
+    for server_name in server_names {
+        println!("\nServer: {}", server_name);
+        match client.list_tools(&server_name).await {
+            Ok(tools) => {
+                if tools.is_empty() {
+                    println!("  No tools available");
+                } else {
+                    for tool in tools {
+                        println!("  - {}", tool.name);
+                        if let Some(description) = &tool.description {
+                            println!("    Description: {}", description);
+                        }
+                        println!("    Schema: {}", serde_json::to_string_pretty(&tool.input_schema)?);
+                    }
+                }
+            }
+            Err(e) => {
+                println!("  Error listing tools: {}", e);
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+async fn handle_mcp_tool_call(
+    mcp_client: &mut Option<McpClient>, 
+    server: &str, 
+    tool: &str, 
+    args_json: &str
+) -> Result<()> {
+    let Some(client) = mcp_client else {
+        return Err(anyhow::anyhow!("No MCP client available"));
+    };
+    
+    let arguments: serde_json::Value = serde_json::from_str(args_json)
+        .context("Failed to parse tool arguments as JSON")?;
+    
+    log_info(&format!("Calling MCP tool: {}:{} with args: {}", server, tool, args_json));
+    
+    match client.call_tool(server, tool, arguments).await {
+        Ok(result) => {
+            println!("Tool call result:");
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        }
+        Err(e) => {
+            return Err(anyhow::anyhow!("Tool call failed: {}", e));
+        }
+    }
+    
     Ok(())
 }
 

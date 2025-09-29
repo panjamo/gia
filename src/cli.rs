@@ -37,6 +37,9 @@ pub struct Config {
     pub model: String,
     pub record_audio: bool,                  // true = record audio input
     pub ordered_content: Vec<ContentSource>, // ordered content for multimodal requests
+    pub mcp_servers: Vec<String>,           // MCP server configurations
+    pub list_mcp_tools: bool,               // true = list available MCP tools
+    pub mcp_tool_call: Option<(String, String, String)>, // (server, tool, args_json)
 }
 
 impl Config {
@@ -83,6 +86,23 @@ impl Config {
             .cloned()
             .collect();
 
+        let mcp_servers: Vec<String> = matches
+            .get_many::<String>("mcp-server")
+            .unwrap_or_default()
+            .cloned()
+            .collect();
+
+        let mcp_tool_call = if let Some(call_str) = matches.get_one::<String>("mcp-call") {
+            let parts: Vec<&str> = call_str.splitn(3, ':').collect();
+            if parts.len() == 3 {
+                Some((parts[0].to_string(), parts[1].to_string(), parts[2].to_string()))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         Self {
             prompt: prompt_parts.join(" "),
             use_clipboard_input: matches.get_flag("clipboard-input"),
@@ -98,6 +118,9 @@ impl Config {
             model: matches.get_one::<String>("model").unwrap().clone(),
             record_audio: matches.get_flag("record-audio"),
             ordered_content: Vec::new(), // will be populated in input.rs
+            mcp_servers,
+            list_mcp_tools: matches.get_flag("list-mcp-tools"),
+            mcp_tool_call,
         }
     }
 
@@ -205,6 +228,26 @@ impl Config {
                     .long("record-audio")
                     .help("Record audio input using ffmpeg (requires ffmpeg to be installed)")
                     .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("mcp-server")
+                    .long("mcp-server")
+                    .help("Connect to MCP server (format: name:command:arg1,arg2,... or name:http://host:port)")
+                    .value_name("SERVER")
+                    .action(clap::ArgAction::Append),
+            )
+            .arg(
+                Arg::new("list-mcp-tools")
+                    .long("list-mcp-tools")
+                    .help("List available tools from connected MCP servers")
+                    .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("mcp-call")
+                    .long("mcp-call")
+                    .help("Call MCP tool (format: server:tool:json_args)")
+                    .value_name("CALL")
+                    .action(clap::ArgAction::Set),
             )
     }
 
