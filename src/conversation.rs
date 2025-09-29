@@ -310,13 +310,16 @@ impl ConversationSummary {
 
         let default_message = "(no messages)".to_string();
         let preview = self.first_user_message.as_ref().unwrap_or(&default_message);
+        
+        // Replace line feeds with blanks in the preview text
+        let preview_clean = preview.replace('\n', " ").replace('\r', " ");
 
         format!(
             "{} | {} messages | {} | {}",
             self.id, // Show full ID
             self.message_count,
             age_str,
-            preview
+            preview_clean
         )
     }
 }
