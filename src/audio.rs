@@ -7,7 +7,6 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::Duration;
-use uuid::Uuid;
 
 use crate::logging::{log_debug, log_info};
 
@@ -16,9 +15,8 @@ pub fn record_audio() -> Result<String> {
     log_info("Starting audio recording...");
 
     // Generate unique filename for the recording
-    let recording_id = Uuid::new_v4();
     let temp_dir = std::env::temp_dir();
-    let audio_file = temp_dir.join(format!("gia_audio_{recording_id}.m4a"));
+    let audio_file = temp_dir.join(format!("prompt.m4a"));
     let audio_path = audio_file.to_string_lossy().to_string();
 
     log_debug(&format!("Recording to: {audio_path}"));
