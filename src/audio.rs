@@ -28,8 +28,8 @@ pub fn record_audio() -> Result<String> {
     let audio_device = get_audio_device()?;
     log_info(&format!("Using audio device: {audio_device}"));
 
-    println!("🎙️  Recording audio... Press Enter to stop recording");
-    io::stdout().flush().unwrap();
+    eprintln!("🎙️  Recording audio... Press Enter to stop recording");
+    io::stderr().flush().unwrap();
 
     // Start ffmpeg recording with captured stdout/stderr for logging
     let mut ffmpeg_process = Command::new("ffmpeg")
@@ -70,7 +70,7 @@ pub fn record_audio() -> Result<String> {
     });
 
     // Wait for user to stop recording using crossterm for keyboard detection
-    println!("Press Enter to stop recording...");
+    eprintln!("Press Enter to stop recording...");
 
     // Use crossterm to detect keyboard input regardless of stdin state
     loop {
@@ -186,7 +186,7 @@ pub fn record_audio() -> Result<String> {
     log_info(&format!(
         "✅ Audio recorded successfully: {file_size} bytes"
     ));
-    println!("✅ Audio recording complete!");
+    eprintln!("✅ Audio recording complete!");
 
     Ok(audio_path)
 }
