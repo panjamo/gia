@@ -298,28 +298,27 @@ impl ConversationSummary {
         }
     }
 
-    pub fn format_for_display(&self) -> String {
+    pub fn format_as_table_row(&self) -> String {
         let age = Utc::now() - self.updated_at;
         let age_str = if age.num_days() > 0 {
-            format!("{} days ago", age.num_days())
+            format!("{}d ago", age.num_days())
         } else if age.num_hours() > 0 {
-            format!("{} hours ago", age.num_hours())
+            format!("{}h ago", age.num_hours())
         } else {
-            format!("{} minutes ago", age.num_minutes().max(1))
+            format!("{}m ago", age.num_minutes().max(1))
         };
 
         let default_message = "(no messages)".to_string();
         let preview = self.first_user_message.as_ref().unwrap_or(&default_message);
-        
-        // Replace line feeds with blanks in the preview text
-        let preview_clean = preview.replace('\n', " ").replace('\r', " ");
+
+        // Replace line feeds and tabs with spaces for table format
+        let preview_clean = preview.replace(['\n', '\r', '\t'], " ");
+
+        let updated_str = self.updated_at.format("%Y-%m-%d %H:%M:%S").to_string();
 
         format!(
-            "{} | {} messages | {} | {}",
-            self.id, // Show full ID
-            self.message_count,
-            age_str,
-            preview_clean
+            "{}\t{}\t{}\t{}\t{}",
+            self.id, self.message_count, updated_str, age_str, preview_clean
         )
     }
 }

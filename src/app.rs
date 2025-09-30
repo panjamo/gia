@@ -1,4 +1,6 @@
 use anyhow::{Context, Result};
+use std::io::Write;
+use tabwriter::TabWriter;
 
 use crate::cli::Config;
 use crate::constants::get_context_window_limit;
@@ -169,14 +171,17 @@ fn handle_list_conversations(
                 conversations.into_iter().take(limit).collect()
             };
 
-            println!("Saved Conversations:");
-            println!("===================");
+            // Use TabWriter for aligned table output
+            let mut tw = TabWriter::new(std::io::stdout());
+            writeln!(&mut tw, "ID\tMSGS\tUPDATED\tAGE\tPREVIEW")
+                .context("Failed to write table header")?;
+
             for summary in limited_conversations {
-                println!("{}", summary.format_for_display());
+                writeln!(&mut tw, "{}", summary.format_as_table_row())
+                    .context("Failed to write table row")?;
             }
-            println!();
-            println!("Use 'gia --resume <id>' to continue a conversation.");
-            println!("Use 'gia --resume' to continue the most recent conversation.");
+
+            tw.flush().context("Failed to flush table output")?;
         }
     }
     Ok(())
