@@ -12,7 +12,7 @@ pub fn get_context_window_limit() -> usize {
         .and_then(|s| s.parse().ok())
         .unwrap_or(DEFAULT_CONTEXT_WINDOW_LIMIT)
 }
-pub const CONVERSATION_TRUNCATION_KEEP_MESSAGES: usize = 2;
+pub const CONVERSATION_TRUNCATION_KEEP_MESSAGES: usize = 20;
 
 /// URLs for user guidance
 pub const GEMINI_API_KEY_URL: &str = "https://makersuite.google.com/app/apikey";
