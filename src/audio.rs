@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
-use crossterm::event::{poll, read, Event, KeyCode, KeyEventKind};
+use native_dialog::MessageDialog;
 use regex::Regex;
 use std::fs;
-use std::io::{self, BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::thread;
@@ -28,8 +28,7 @@ pub fn record_audio() -> Result<String> {
     let audio_device = get_audio_device()?;
     log_info(&format!("Using audio device: {audio_device}"));
 
-    eprintln!("🎙️  Recording audio... Press Enter to stop recording");
-    io::stderr().flush().unwrap();
+    eprintln!("🎙️  Recording audio...");
 
     // Start ffmpeg recording with captured stdout/stderr for logging
     let mut ffmpeg_process = Command::new("ffmpeg")
@@ -69,60 +68,65 @@ pub fn record_audio() -> Result<String> {
         }
     });
 
-    // Wait for user to stop recording using crossterm for keyboard detection
-    eprintln!("Press Enter to stop recording...");
+    // Wait 1 second and check if ffmpeg process is still running
+    log_debug("Waiting 1 second before showing dialog...");
+    thread::sleep(Duration::from_secs(1));
 
-    // Use crossterm to detect keyboard input regardless of stdin state
-    loop {
-        // Check for keyboard input with a short timeout
-        match poll(Duration::from_millis(100)) {
-            Ok(true) => {
-                // Event is available, read it
-                match read() {
-                    Ok(Event::Key(key_event)) => {
-                        // Only handle key press events (not release)
-                        if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Enter
-                        {
-                            log_debug("Enter key pressed, stopping recording");
-                            break;
-                        }
-                        // Ignore other key events
-                        log_debug(&format!("Ignoring key event: {key_event:?}"));
-                    }
-                    Ok(_) => {
-                        // Non-key event (mouse, resize, etc.), ignore
-                        log_debug("Ignoring non-key event");
-                    }
-                    Err(e) => {
-                        log_debug(&format!("Error reading event: {e}"));
-                    }
-                }
-            }
-            Ok(false) => {
-                // No event available, continue
-            }
-            Err(e) => {
-                log_debug(&format!("Error polling for events: {e}"));
-            }
+    match ffmpeg_process.try_wait() {
+        Ok(Some(status)) => {
+            // Process has already exited
+            log_debug(&format!(
+                "ffmpeg process exited early with status: {status}"
+            ));
+
+            // Show error dialog to user
+            let error_msg = format!(
+                "Audio recording failed!\n\nffmpeg process exited unexpectedly.\nExit code: {}\n\nPlease check:\n- Audio device is available\n- ffmpeg is properly installed\n- GIA_AUDIO_DEVICE is set correctly (if used)",
+                status.code().map_or("unknown".to_string(), |c| c.to_string())
+            );
+
+            let _ = MessageDialog::new()
+                .set_title("Recording Error")
+                .set_text(&error_msg)
+                .set_type(native_dialog::MessageType::Error)
+                .show_alert();
+
+            return Err(anyhow::anyhow!(
+                "Audio recording failed - ffmpeg process exited unexpectedly"
+            ));
         }
-
-        // Check if the ffmpeg process is still running
-        match ffmpeg_process.try_wait() {
-            Ok(Some(_)) => {
-                // Process has exited (likely due to error)
-                log_debug("ffmpeg process exited unexpectedly");
-                break;
-            }
-            Ok(None) => {
-                // Process is still running, continue
-            }
-            Err(_) => {
-                // Error checking status, break
-                log_debug("Error checking ffmpeg status");
-                break;
-            }
+        Ok(None) => {
+            // Process is still running, continue
+            log_debug("ffmpeg process is running");
+        }
+        Err(e) => {
+            log_debug(&format!("Error checking ffmpeg status: {e}"));
+            return Err(anyhow::anyhow!(
+                "Failed to check ffmpeg process status: {e}"
+            ));
         }
     }
+
+    // Show message dialog to stop recording
+    log_debug("Showing message dialog to stop recording");
+    let user_confirmed = MessageDialog::new()
+        .set_title("Stop Recording")
+        .set_text("🎙️  Recording in progress...\n\nClick Yes to stop and continue, or No to abort.")
+        .set_type(native_dialog::MessageType::Info)
+        .show_confirm()
+        .context("Failed to show recording dialog")?;
+
+    if !user_confirmed {
+        log_debug("User pressed Cancel, aborting");
+
+        // Kill ffmpeg process
+        let _ = ffmpeg_process.kill();
+        let _ = ffmpeg_process.wait();
+
+        return Err(anyhow::anyhow!("Recording cancelled by user"));
+    }
+
+    log_debug("User clicked OK, stopping recording");
 
     // Stop recording by terminating ffmpeg
     log_debug("Stopping audio recording...");
