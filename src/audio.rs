@@ -45,7 +45,7 @@ pub fn record_audio() -> Result<String> {
 
     // Generate unique filename for the recording
     let temp_dir = std::env::temp_dir();
-    let audio_file = temp_dir.join("prompt.m4a");
+    let audio_file = temp_dir.join("prompt.opus");
     let audio_path = audio_file.to_string_lossy().to_string();
 
     log_debug(&format!("Recording to: {audio_path}"));
@@ -72,10 +72,10 @@ pub fn record_audio() -> Result<String> {
             "avfoundation",
             "-i",
             &format!(":{audio_device}"), // :N format for audio device index on macOS
-            "-acodec",
-            "aac",
+            "-c:a",
+            "libopus",
             "-b:a",
-            "64k",
+            "32k",
             "-y", // Overwrite output file
             &audio_path,
         ]);
@@ -88,10 +88,10 @@ pub fn record_audio() -> Result<String> {
             "dshow",
             "-i",
             &format!("audio={}", validated_device),
-            "-acodec",
-            "aac",
+            "-c:a",
+            "libopus",
             "-b:a",
-            "64k",
+            "32k",
             "-y", // Overwrite output file
             &audio_path,
         ]);
@@ -104,10 +104,10 @@ pub fn record_audio() -> Result<String> {
             "pulse",
             "-i",
             &audio_device,
-            "-acodec",
-            "aac",
+            "-c:a",
+            "libopus",
             "-b:a",
-            "64k",
+            "32k",
             "-y", // Overwrite output file
             &audio_path,
         ]);

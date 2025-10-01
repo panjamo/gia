@@ -7,7 +7,7 @@ use crate::logging::{log_debug, log_info};
 
 /// Supported file formats for Gemini API
 const SUPPORTED_EXTENSIONS: &[&str] = &[
-    "jpg", "jpeg", "png", "webp", "heic", "pdf", "ogg", "mp3", "m4a", "mp4",
+    "jpg", "jpeg", "png", "webp", "heic", "pdf", "ogg", "opus", "mp3", "m4a", "mp4",
 ];
 
 /// Get MIME type from file extension
@@ -24,7 +24,7 @@ pub fn get_mime_type(file_path: &Path) -> Result<String> {
         "webp" => "image/webp",
         "heic" => "image/heic",
         "pdf" => "application/pdf",
-        "ogg" => "audio/ogg",
+        "ogg" | "opus" => "audio/ogg",
         "mp3" => "audio/mpeg",
         "m4a" => "audio/mp4",
         "mp4" => "video/mp4",
