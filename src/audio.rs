@@ -31,8 +31,28 @@ pub fn record_audio() -> Result<String> {
     eprintln!("🎙️  Recording audio...");
 
     // Start ffmpeg recording with captured stdout/stderr for logging
-    let mut ffmpeg_process = Command::new("ffmpeg")
-        .args([
+    // Use platform-specific audio input format
+    let mut ffmpeg_cmd = Command::new("ffmpeg");
+
+    #[cfg(target_os = "macos")]
+    {
+        ffmpeg_cmd.args([
+            "-f",
+            "avfoundation",
+            "-i",
+            &format!(":{audio_device}"), // :N format for audio device index on macOS
+            "-acodec",
+            "aac",
+            "-b:a",
+            "64k",
+            "-y", // Overwrite output file
+            &audio_path,
+        ]);
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        ffmpeg_cmd.args([
             "-f",
             "dshow",
             "-i",
@@ -43,7 +63,26 @@ pub fn record_audio() -> Result<String> {
             "64k",
             "-y", // Overwrite output file
             &audio_path,
-        ])
+        ]);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        ffmpeg_cmd.args([
+            "-f",
+            "pulse",
+            "-i",
+            &audio_device,
+            "-acodec",
+            "aac",
+            "-b:a",
+            "64k",
+            "-y", // Overwrite output file
+            &audio_path,
+        ]);
+    }
+
+    let mut ffmpeg_process = ffmpeg_cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped()) // Capture stdout for logging
         .stderr(Stdio::piped()) // Capture stderr for logging
@@ -234,37 +273,114 @@ fn get_audio_device() -> Result<String> {
     get_default_audio_device()
 }
 
-/// Get the default audio input device on Windows
+/// Get the default audio input device for the current platform
 fn get_default_audio_device() -> Result<String> {
     log_debug("Getting default audio device...");
 
-    // Try to list audio devices using ffmpeg
-    let output = Command::new("ffmpeg")
-        .args(["-f", "dshow", "-list_devices", "true", "-i", "dummy"])
-        .output()
-        .context("Failed to list audio devices with ffmpeg")?;
+    #[cfg(target_os = "macos")]
+    {
+        // Try to list audio devices using ffmpeg with avfoundation
+        let output = Command::new("ffmpeg")
+            .args(["-f", "avfoundation", "-list_devices", "true", "-i", ""])
+            .output()
+            .context("Failed to list audio devices with ffmpeg")?;
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
+        let stderr = String::from_utf8_lossy(&output.stderr);
 
-    // Parse the ffmpeg output to find audio devices
-    // Look for lines like: [dshow @ 000001fa49e956c0] "Device Name" (audio)
-    let device_regex = Regex::new(r#"\[dshow +@ +[^\]]+\] +[# "]([^"']+)["'] +\(audio\)"#)
-        .context("Failed to compile audio device regex")?;
+        // Parse the ffmpeg output to find audio devices
+        // The output format is:
+        // [AVFoundation indev @ ...] AVFoundation video devices:
+        // [AVFoundation indev @ ...] [0] FaceTime HD Camera
+        // [AVFoundation indev @ ...] AVFoundation audio devices:
+        // [AVFoundation indev @ ...] [0] Built-in Microphone
 
-    for line in stderr.lines() {
-        log_info(line);
-        if let Some(captures) = device_regex.captures(line) {
-            if let Some(device_name) = captures.get(1) {
-                let device_name = device_name.as_str();
-                log_debug(&format!("Found audio device: {device_name}"));
-                return Ok(device_name.to_string());
+        let mut in_audio_section = false;
+        let device_regex = Regex::new(r#"\[AVFoundation[^\]]*\] \[(\d+)\] (.+)"#)
+            .context("Failed to compile audio device regex")?;
+
+        for line in stderr.lines() {
+            log_debug(line);
+
+            // Check if we've entered the audio devices section
+            if line.contains("AVFoundation audio devices:") {
+                in_audio_section = true;
+                continue;
+            }
+
+            // If we're in the audio section, look for device entries
+            if in_audio_section {
+                if let Some(captures) = device_regex.captures(line) {
+                    if let (Some(device_idx), Some(device_name)) = (captures.get(1), captures.get(2)) {
+                        let device_name = device_name.as_str();
+                        let device_idx = device_idx.as_str();
+                        log_debug(&format!("Found audio device [{device_idx}]: {device_name}"));
+                        // Return the index number for macOS (avfoundation uses indices)
+                        return Ok(device_idx.to_string());
+                    }
+                }
             }
         }
+
+        // Fallback to device 0 if no devices found
+        log_debug("No audio devices found, using fallback device 0");
+        Ok("0".to_string())
     }
 
-    // Fallback to common device names if no devices found
-    log_debug("No audio devices found, using fallback");
-    Ok("Microphone".to_string())
+    #[cfg(target_os = "windows")]
+    {
+        // Try to list audio devices using ffmpeg with dshow
+        let output = Command::new("ffmpeg")
+            .args(["-f", "dshow", "-list_devices", "true", "-i", "dummy"])
+            .output()
+            .context("Failed to list audio devices with ffmpeg")?;
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        // Parse the ffmpeg output to find audio devices
+        // Look for lines like: [dshow @ 000001fa49e956c0] "Device Name" (audio)
+        let device_regex = Regex::new(r#"\[dshow +@ +[^\]]+\] +[# "]([^"']+)["'] +\(audio\)"#)
+            .context("Failed to compile audio device regex")?;
+
+        for line in stderr.lines() {
+            log_debug(line);
+            if let Some(captures) = device_regex.captures(line) {
+                if let Some(device_name) = captures.get(1) {
+                    let device_name = device_name.as_str();
+                    log_debug(&format!("Found audio device: {device_name}"));
+                    return Ok(device_name.to_string());
+                }
+            }
+        }
+
+        // Fallback to common device names if no devices found
+        log_debug("No audio devices found, using fallback");
+        Ok("Microphone".to_string())
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // Try to list audio devices using ffmpeg with pulse
+        let output = Command::new("ffmpeg")
+            .args(["-f", "pulse", "-list_devices", "true", "-i", ""])
+            .output()
+            .context("Failed to list audio devices with ffmpeg")?;
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        // Parse the ffmpeg output to find audio devices
+        for line in stderr.lines() {
+            log_debug(line);
+            // PulseAudio devices are typically listed as "default" or with specific names
+            if line.contains("Source") || line.contains("default") {
+                log_debug("Found default audio source");
+                return Ok("default".to_string());
+            }
+        }
+
+        // Fallback to "default" if no devices found
+        log_debug("No audio devices found, using fallback");
+        Ok("default".to_string())
+    }
 }
 
 #[cfg(test)]
