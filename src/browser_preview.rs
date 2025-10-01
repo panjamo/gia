@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use chrono::{DateTime, Utc};
 use std::fs;
 use std::path::Path;
 
@@ -85,10 +86,69 @@ hr {
     border-top: 1px solid #eaecef;
     margin: 24px 0;
 }
+.gia-footer {
+    margin-top: 40px;
+    padding: 16px;
+    background-color: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    font-size: 0.7em;
+    color: #6c757d;
+    line-height: 1.6;
+}
+.gia-footer h4 {
+    margin: 0 0 8px 0;
+    font-size: 1.1em;
+    color: #495057;
+    border: none;
+    padding: 0;
+}
+.gia-footer p {
+    margin: 4px 0;
+}
+.gia-footer ul {
+    margin: 4px 0;
+    padding-left: 20px;
+}
+.gia-prompt {
+    margin-bottom: 24px;
+    padding: 16px;
+    background-color: #f0f6ff;
+    border-left: 4px solid #0969da;
+    border-radius: 6px;
+}
+.gia-prompt h3 {
+    margin: 0 0 8px 0;
+    font-size: 1em;
+    color: #0969da;
+    border: none;
+    padding: 0;
+}
+.gia-prompt p {
+    margin: 0;
+    color: #1f2328;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.9em;
+}
 "#;
 
-pub fn open_markdown_preview(markdown_content: &str, md_file_path: &Path) -> Result<()> {
-    let html_content = create_markdown_html(markdown_content);
+pub struct FooterMetadata {
+    pub model_name: String,
+    pub provider_name: String,
+    pub timestamp: DateTime<Utc>,
+    pub image_files: Vec<String>,
+    pub text_files: Vec<String>,
+    pub has_clipboard: bool,
+    pub has_audio: bool,
+    pub has_stdin: bool,
+    pub prompt: String,
+}
+
+pub fn open_markdown_preview(
+    markdown_content: &str,
+    md_file_path: &Path,
+    metadata: Option<&FooterMetadata>,
+) -> Result<()> {
+    let html_content = create_markdown_html(markdown_content, metadata);
 
     // Create HTML file with same name as MD file but with .html extension
     let html_file_path = md_file_path.with_extension("html");
@@ -103,7 +163,81 @@ pub fn open_markdown_preview(markdown_content: &str, md_file_path: &Path) -> Res
     Ok(())
 }
 
-fn create_markdown_html(markdown_content: &str) -> String {
+fn build_footer_html(metadata: &FooterMetadata) -> String {
+    let mut footer = String::from(r#"<div class="gia-footer">"#);
+    footer.push_str("<h4>🤖 Powered by GIA v0.1.0</h4>");
+
+    // Timestamp
+    footer.push_str(&format!(
+        "<p><strong>Generated:</strong> {}</p>",
+        metadata.timestamp.format("%Y-%m-%d %H:%M:%S UTC")
+    ));
+
+    // Model
+    footer.push_str(&format!(
+        "<p><strong>Model:</strong> {}::{}</p>",
+        metadata.provider_name, metadata.model_name
+    ));
+
+    // Inputs section
+    if !metadata.image_files.is_empty()
+        || !metadata.text_files.is_empty()
+        || metadata.has_clipboard
+        || metadata.has_audio
+        || metadata.has_stdin
+    {
+        footer.push_str("<p><strong>Inputs:</strong></p><ul>");
+
+        if !metadata.image_files.is_empty() {
+            footer.push_str(&format!(
+                "<li>Images: {}</li>",
+                metadata.image_files.join(", ")
+            ));
+        }
+
+        if !metadata.text_files.is_empty() {
+            footer.push_str(&format!(
+                "<li>Text files: {}</li>",
+                metadata.text_files.join(", ")
+            ));
+        }
+
+        if metadata.has_clipboard {
+            footer.push_str("<li>Clipboard content</li>");
+        }
+
+        if metadata.has_audio {
+            footer.push_str("<li>Audio recording</li>");
+        }
+
+        if metadata.has_stdin {
+            footer.push_str("<li>Stdin content</li>");
+        }
+
+        footer.push_str("</ul>");
+    }
+
+    footer.push_str("</div>");
+    footer
+}
+
+fn build_prompt_header(metadata: &FooterMetadata) -> String {
+    // Don't show prompt header if prompt is empty
+    if metadata.prompt.is_empty() {
+        return String::new();
+    }
+
+    let prompt_escaped = html_escape::encode_text(&metadata.prompt);
+    format!(
+        r#"<div class="gia-prompt">
+<h3>💬 Prompt</h3>
+<p>{}</p>
+</div>"#,
+        prompt_escaped
+    )
+}
+
+fn create_markdown_html(markdown_content: &str, metadata: Option<&FooterMetadata>) -> String {
     let mut options = comrak::ComrakOptions::default();
     options.extension.table = true;
     options.extension.strikethrough = true;
@@ -112,6 +246,9 @@ fn create_markdown_html(markdown_content: &str) -> String {
     options.extension.footnotes = true;
 
     let html_body = comrak::markdown_to_html(markdown_content, &options);
+
+    let prompt_header = metadata.map(build_prompt_header).unwrap_or_default();
+    let footer_html = metadata.map(build_footer_html).unwrap_or_default();
 
     format!(
         r#"<!DOCTYPE html>
@@ -122,7 +259,9 @@ fn create_markdown_html(markdown_content: &str) -> String {
     <style>{GITHUB_CSS}</style>
 </head>
 <body>
+    {prompt_header}
     {html_body}
+    {footer_html}
 </body>
 </html>"#
     )
