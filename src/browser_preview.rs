@@ -165,7 +165,7 @@ pub fn open_markdown_preview(
 
 fn build_footer_html(metadata: &FooterMetadata) -> String {
     let mut footer = String::from(r#"<div class="gia-footer">"#);
-    footer.push_str("<h4>🤖 Powered by GIA v0.1.0</h4>");
+    footer.push_str(&format!(r#"<h4>🤖 Powered by <a href="https://github.com/panjamo/gia" target="_blank">GIA v{}</a></h4>"#, env!("GIA_VERSION")));
 
     // Timestamp
     footer.push_str(&format!(
