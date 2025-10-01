@@ -104,7 +104,7 @@ impl Config {
 
     fn build_cli() -> Command {
         Command::new("gia")
-            .version("0.1.0")
+            .version(env!("GIA_VERSION"))
             .about("AI CLI tool using Google Gemini API (stdout default)")
             .arg(
                 Arg::new("prompt")
