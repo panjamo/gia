@@ -60,13 +60,21 @@ export CONTEXT_WINDOW_LIMIT=10000
 
 For audio recording, optionally set your preferred audio device:
 
-```bash
-export GIA_AUDIO_DEVICE="Headset (WH-1000XM2)"
-```
-
-On Windows:
+**Windows:**
 ```cmd
 set GIA_AUDIO_DEVICE=Headset (WH-1000XM2)
+```
+
+**macOS:**
+```bash
+# Use device index (0, 1, 2, etc.) - run with RUST_LOG=debug to see available devices
+export GIA_AUDIO_DEVICE="0"
+```
+
+**Linux:**
+```bash
+# Use device name or "default"
+export GIA_AUDIO_DEVICE="default"
 ```
 
 GIA will randomly select an API key for each request and automatically fallback to other keys if it encounters a "429 Too Many Requests" error.
