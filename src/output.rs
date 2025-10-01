@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
 use chrono::prelude::*;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use crate::browser_preview::open_markdown_preview;
-use crate::cli::{Config, OutputMode};
+use crate::browser_preview::{open_markdown_preview, FooterMetadata};
+use crate::cli::{Config, ContentSource, OutputMode};
 use crate::clipboard::write_clipboard;
 use crate::logging::{log_error, log_info};
 
@@ -68,6 +68,60 @@ fn generate_filename_from_prompt(prompt: &str) -> String {
     format!("{sanitized}_{timestamp}.md")
 }
 
+fn build_footer_metadata(config: &Config) -> FooterMetadata {
+    // Parse provider and model from config.model
+    let (provider_name, model_name) = if config.model.contains("::") {
+        let parts: Vec<&str> = config.model.splitn(2, "::").collect();
+        (parts[0].to_string(), parts[1].to_string())
+    } else {
+        ("gemini".to_string(), config.model.clone())
+    };
+
+    // Extract file information from ordered_content
+    let mut image_files = Vec::new();
+    let mut text_files = Vec::new();
+    let mut has_clipboard = false;
+    let mut has_audio = false;
+    let mut has_stdin = false;
+
+    for content in &config.ordered_content {
+        match content {
+            ContentSource::ImageFile(path) => {
+                if let Some(filename) = Path::new(path).file_name() {
+                    image_files.push(filename.to_string_lossy().to_string());
+                }
+            }
+            ContentSource::TextFile(path, _) => {
+                if let Some(filename) = Path::new(path).file_name() {
+                    text_files.push(filename.to_string_lossy().to_string());
+                }
+            }
+            ContentSource::ClipboardText(_) | ContentSource::ClipboardImage => {
+                has_clipboard = true;
+            }
+            ContentSource::AudioRecording(_) => {
+                has_audio = true;
+            }
+            ContentSource::StdinText(_) => {
+                has_stdin = true;
+            }
+            _ => {}
+        }
+    }
+
+    FooterMetadata {
+        model_name,
+        provider_name,
+        timestamp: Utc::now(),
+        image_files,
+        text_files,
+        has_clipboard,
+        has_audio,
+        has_stdin,
+        prompt: config.prompt.clone(),
+    }
+}
+
 pub fn output_text(text: &str, config: &Config) -> Result<()> {
     match config.output_mode {
         OutputMode::TempFileWithPreview => {
@@ -91,8 +145,11 @@ pub fn output_text(text: &str, config: &Config) -> Result<()> {
             let file_path_str = output_path.to_string_lossy();
             write_clipboard(&file_path_str)?;
 
-            // Open browser preview
-            if let Err(e) = open_markdown_preview(text, &output_path) {
+            // Build footer metadata
+            let metadata = build_footer_metadata(config);
+
+            // Open browser preview with metadata
+            if let Err(e) = open_markdown_preview(text, &output_path, Some(&metadata)) {
                 log_error(&format!("Failed to open browser preview: {e}"));
             } else {
                 log_info("Opened browser preview");

@@ -213,9 +213,9 @@ fn handle_show_conversation(
     // Generate markdown content
     let markdown_content = conversation.format_as_chat_markdown();
 
-    // Create a temporary config for output with proper prompt for filename generation
+    // Create a temporary config for output with empty prompt to suppress prompt header
     let mut output_config = config.clone();
-    output_config.prompt = format!("conversation_{}", conversation.id);
+    output_config.prompt = String::new();
 
     // Use the normal output system
     output_text(&markdown_content, &output_config).context("Failed to output conversation")?;
