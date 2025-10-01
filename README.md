@@ -8,7 +8,7 @@ A command-line tool that sends text prompts to Google's Gemini API and returns A
 - **Audio recording** - Record audio prompts using ffmpeg with `-a` flag
 - **Media file support** - Include images and audio/video files
   - `-i` flag: Media files only (JPEG, PNG, WebP, HEIC, PDF, OGG, OPUS, MP3, M4A, MP4)
-  - `-f` flag: Text files (any extension) or media files (same formats as `-i`)
+  - `-f` flag: Text files (any extension)
 - Optional additional input from clipboard or stdin (auto-detects text vs images)
 - Output responses to stdout (default) or clipboard
 - Persistent conversation history with resume capability
@@ -90,7 +90,7 @@ GIA automatically combines input from multiple sources:
 - **Stdin**: Automatically detected when piped
 - **Clipboard**: With `-c` flag only
 - **Text files**: With `-f` flag (any extension)
-- **Media files**: With `-i` flag (media only) or `-f` flag (text or media)
+- **Media files**: With `-i` flag (media only) or `-f` flag (text)
 - **Output**: Response written to stdout (default)
 
 ## Usage
@@ -130,12 +130,12 @@ echo "extra context" | gia "Main question about this topic" -c
 gia "Summarize these documents" -f doc1.txt -f doc2.txt
 
 # Include audio/video files:
-gia "Transcribe this recording" -f meeting.mp3
-gia "What is discussed in this video?" -f presentation.mp4
+gia "Transcribe this recording" -i meeting.mp3
+gia "What is discussed in this video?" -i presentation.mp4
 
 # Combine multiple input sources:
 gia "Analyze code and docs" -f README.md -f main.rs -i diagram.png
-gia "Analyze audio and images" -f recording.mp3 -i screenshot.png
+gia "Analyze audio and images" -i recording.mp3 -i screenshot.png
 ```
 
 ### Image analysis
@@ -202,7 +202,7 @@ gia -s -b                         # Show latest conversation (file + browser)
 - `-a, --record-audio` - Record audio input using ffmpeg (auto-generates prompt if no text provided)
 - `-c, --clipboard-input` - Add clipboard content to prompt (auto-detects images vs text)
 - `-i, --image <FILE>` - Add media file to prompt (can be used multiple times; JPEG, PNG, WebP, HEIC, PDF, OGG, OPUS, MP3, M4A, MP4)
-- `-f, --file <FILE>` - Add text or media file to prompt (text files with any extension, or same media formats as `-i`)
+- `-f, --file <FILE>` - Add text or media file to prompt (text files with any extension)
 - `-o, --clipboard-output` - Write response to clipboard instead of stdout
 - `-b, --browser-output` - Write output to file (~/.gia/outputs/, path copied to clipboard) AND open browser preview
 - `-r, --resume [ID]` - Resume last conversation or specify conversation ID
