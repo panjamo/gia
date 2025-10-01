@@ -10,6 +10,35 @@ use std::time::Duration;
 
 use crate::logging::{log_debug, log_info};
 
+// Whitelist of allowed audio device characters to prevent command injection
+fn validate_audio_device(device: &str) -> Result<String> {
+    // Block dangerous shell metacharacters while allowing legitimate device name characters
+    let dangerous_chars = [
+        '&', '|', ';', '`', '$', '>', '<', '*', '?', '\\', '/', '"', '\'',
+    ];
+
+    if device.len() > 200 {
+        return Err(anyhow::anyhow!(
+            "Audio device name too long (max 200 characters)"
+        ));
+    }
+
+    // Check for dangerous characters that could enable command injection
+    for ch in dangerous_chars {
+        if device.contains(ch) {
+            log_debug(&format!(
+                "Device validation failed for: '{}' - contains dangerous character: '{}'",
+                device, ch
+            ));
+            return Err(anyhow::anyhow!(
+                "Audio device name contains dangerous characters"
+            ));
+        }
+    }
+
+    Ok(device.to_string())
+}
+
 /// Record audio using ffmpeg and return the path to the recorded file
 pub fn record_audio() -> Result<String> {
     log_info("Starting audio recording...");
@@ -24,9 +53,11 @@ pub fn record_audio() -> Result<String> {
     // Check if ffmpeg is available
     check_ffmpeg_available()?;
 
-    // Get audio device (from environment variable or auto-detect)
+    // Get and validate audio device
     let audio_device = get_audio_device()?;
-    log_info(&format!("Using audio device: {audio_device}"));
+    let validated_device =
+        validate_audio_device(&audio_device).context("Invalid audio device name")?;
+    log_info(&format!("Using validated audio device: {validated_device}"));
 
     eprintln!("🎙️  Recording audio...");
 
@@ -56,7 +87,7 @@ pub fn record_audio() -> Result<String> {
             "-f",
             "dshow",
             "-i",
-            &format!("audio={audio_device}"),
+            &format!("audio={}", validated_device),
             "-acodec",
             "aac",
             "-b:a",
@@ -260,11 +291,12 @@ fn check_ffmpeg_available() -> Result<()> {
 fn get_audio_device() -> Result<String> {
     // Check for environment variable first
     if let Ok(device) = std::env::var("GIA_AUDIO_DEVICE") {
-        if !device.trim().is_empty() {
+        let trimmed = device.trim();
+        if !trimmed.is_empty() {
             log_info(&format!(
-                "Using audio device from GIA_AUDIO_DEVICE: {device}"
+                "Using audio device from GIA_AUDIO_DEVICE: {trimmed}"
             ));
-            return Ok(device);
+            return Ok(trimmed.to_string());
         }
     }
 
@@ -388,13 +420,72 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_check_ffmpeg_available() {
-        // This test might fail in CI environments without ffmpeg
-        // but it's useful for local development
-        let result = check_ffmpeg_available();
+    fn test_validate_audio_device_valid() {
+        let result = validate_audio_device("Test Microphone");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "Test Microphone");
+    }
 
-        // We don't assert success/failure since ffmpeg availability varies
-        // Just ensure the function doesn't panic
+    #[test]
+    fn test_validate_audio_device_command_injection() {
+        let result = validate_audio_device("Test; rm -rf /");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_audio_device_pipe_injection() {
+        let result = validate_audio_device("Test | malicious");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_audio_device_ampersand_injection() {
+        let result = validate_audio_device("Test & evil");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_audio_device_too_long() {
+        let long_name = "a".repeat(201);
+        let result = validate_audio_device(&long_name);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_audio_device_with_brackets() {
+        let result = validate_audio_device("Test Microphone [USB]");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "Test Microphone [USB]");
+    }
+
+    #[test]
+    fn test_validate_audio_device_with_parentheses() {
+        let result = validate_audio_device("Test Microphone (High Definition)");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "Test Microphone (High Definition)");
+    }
+
+    #[test]
+    fn test_validate_audio_device_real_device_name() {
+        let result =
+            validate_audio_device("Headset Microphone (2- Plantronics Blackwire 5220 Series)");
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            "Headset Microphone (2- Plantronics Blackwire 5220 Series)"
+        );
+    }
+
+    #[test]
+    fn test_validate_audio_device_with_numbers_and_dashes() {
+        let result = validate_audio_device("Audio Device 123-456");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "Audio Device 123-456");
+    }
+
+    #[test]
+    fn test_check_ffmpeg_available() {
+        let result = check_ffmpeg_available();
         match result {
             Ok(()) => println!("ffmpeg is available"),
             Err(e) => println!("ffmpeg not available: {e}"),
@@ -403,28 +494,22 @@ mod tests {
 
     #[test]
     fn test_get_audio_device_with_env_var() {
-        // Set environment variable
         std::env::set_var("GIA_AUDIO_DEVICE", "Test Microphone");
 
         let result = get_audio_device();
 
-        // Clean up
         std::env::remove_var("GIA_AUDIO_DEVICE");
 
-        // Verify result
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "Test Microphone");
     }
 
     #[test]
     fn test_get_audio_device_without_env_var() {
-        // Ensure env var is not set
         std::env::remove_var("GIA_AUDIO_DEVICE");
 
         let result = get_audio_device();
 
-        // Should fall back to auto-detection (might fail in CI, but shouldn't panic)
-        // We just verify it doesn't panic and returns a Result
         match result {
             Ok(device) => println!("Auto-detected device: {device}"),
             Err(e) => println!("Auto-detection failed (expected in CI): {e}"),
