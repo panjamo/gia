@@ -172,8 +172,13 @@ jobs:
           --title "Release ${{ needs.detect-version.outputs.version }}" \
           --notes-file "release_notes.txt"
 
-        # Upload binaries with custom names
+        # Rename binaries with platform-specific names
+        cp ./artifacts/windows/gia.exe ./gia-windows-x86_64.exe
+        cp ./artifacts/macos-intel/gia ./gia-macos-x86_64
+        cp ./artifacts/macos-arm/gia ./gia-macos-aarch64
+
+        # Upload binaries
         gh release upload "${{ needs.detect-version.outputs.version }}" \
-          ./artifacts/windows/gia.exe#gia-windows-x86_64.exe \
-          ./artifacts/macos-intel/gia#gia-macos-x86_64 \
-          ./artifacts/macos-arm/gia#gia-macos-aarch64
+          ./gia-windows-x86_64.exe \
+          ./gia-macos-x86_64 \
+          ./gia-macos-aarch64
