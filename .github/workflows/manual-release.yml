@@ -24,6 +24,8 @@ jobs:
         # Always generate version from commit count (like build.rs)
         COMMIT_COUNT=$(git rev-list --count HEAD)
         VERSION="v0.1.$COMMIT_COUNT"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git config user.name "GitHub Actions"
         git tag -a "$VERSION" -m "Release $VERSION"
         git push origin "$VERSION"
         echo "Generated version: $VERSION"
