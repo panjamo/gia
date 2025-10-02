@@ -7,9 +7,12 @@ permissions:
   contents: write
 
 jobs:
-  create-release:
-    runs-on: windows-latest
-
+  detect-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prev_tag: ${{ steps.changelog.outputs.prev_tag }}
+      changelog: ${{ steps.changelog.outputs.changelog }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -19,23 +22,48 @@ jobs:
       id: version
       run: |
         # Try to get the latest git tag
-        $LATEST_TAG = ""
-        try {
-          $LATEST_TAG = git describe --tags --abbrev=0 2>$null
-        } catch {
-          Write-Host "No tags found"
-        }
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
 
-        if ($LATEST_TAG) {
-          Write-Host "Using existing tag: $LATEST_TAG"
-          echo "version=$LATEST_TAG" >> $env:GITHUB_OUTPUT
-        } else {
+        if [ -n "$LATEST_TAG" ]; then
+          echo "Using existing tag: $LATEST_TAG"
+          echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
+        else
           # Generate version from commit count (like build.rs)
-          $COMMIT_COUNT = git rev-list --count HEAD
-          $VERSION = "v0.1.$COMMIT_COUNT"
-          Write-Host "Generated new version: $VERSION"
-          echo "version=$VERSION" >> $env:GITHUB_OUTPUT
-        }
+          COMMIT_COUNT=$(git rev-list --count HEAD)
+          VERSION="v0.1.$COMMIT_COUNT"
+          echo "Generated new version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Generate Changelog
+      id: changelog
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Get the previous release tag
+        PREV_TAG=$(gh release list --limit 10 --json tagName --jq '.[].tagName' | grep -v "${{ steps.version.outputs.version }}" | head -1 || echo "")
+
+        # Store previous tag for later use
+        echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+
+        if [ -n "$PREV_TAG" ]; then
+          echo "Generating changelog from $PREV_TAG to HEAD"
+          CHANGELOG=$(gh api repos/:owner/:repo/compare/$PREV_TAG...HEAD --jq '.commits[] | "- " + .commit.message')
+        else
+          echo "No previous tag found, using all recent commits"
+          CHANGELOG=$(git log --oneline --pretty=format:"- %s" -10)
+        fi
+
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Needed for build.rs version generation
 
     - name: Setup Rust
       uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -46,61 +74,104 @@ jobs:
     - name: Build Windows Release
       run: cargo build --release --target x86_64-pc-windows-msvc
 
-    - name: Generate Changelog
-      id: changelog
+    - name: Upload Windows Binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: gia-windows
+        path: target/x86_64-pc-windows-msvc/release/gia.exe
+        retention-days: 1
+
+  build-macos-intel:
+    runs-on: macos-13  # Intel runner
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Needed for build.rs version generation
+
+    - name: Setup Rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: stable
+        target: x86_64-apple-darwin
+
+    - name: Build macOS Intel Release
+      run: cargo build --release --target x86_64-apple-darwin
+
+    - name: Upload macOS Intel Binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: gia-macos-intel
+        path: target/x86_64-apple-darwin/release/gia
+        retention-days: 1
+
+  build-macos-arm:
+    runs-on: macos-latest  # ARM runner
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Needed for build.rs version generation
+
+    - name: Setup Rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: stable
+        target: aarch64-apple-darwin
+
+    - name: Build macOS ARM Release
+      run: cargo build --release --target aarch64-apple-darwin
+
+    - name: Upload macOS ARM Binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: gia-macos-arm
+        path: target/aarch64-apple-darwin/release/gia
+        retention-days: 1
+
+  create-release:
+    needs: [detect-version, build-windows, build-macos-intel, build-macos-arm]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download Windows Binary
+      uses: actions/download-artifact@v4
+      with:
+        name: gia-windows
+        path: ./artifacts/windows
+
+    - name: Download macOS Intel Binary
+      uses: actions/download-artifact@v4
+      with:
+        name: gia-macos-intel
+        path: ./artifacts/macos-intel
+
+    - name: Download macOS ARM Binary
+      uses: actions/download-artifact@v4
+      with:
+        name: gia-macos-arm
+        path: ./artifacts/macos-arm
+
+    - name: Create Release and Upload Assets
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # Get the previous release tag
-        $PREV_TAG = ""
-        try {
-          $PREV_TAG = gh release list --limit 10 --json tagName --jq '.[].tagName' | Where-Object { $_ -ne "${{ steps.version.outputs.version }}" } | Select-Object -First 1
-        } catch {
-          Write-Host "No previous releases found"
-        }
-
-        # Store previous tag for later use
-        echo "prev_tag=$PREV_TAG" >> $env:GITHUB_OUTPUT
-
-        if ($PREV_TAG) {
-          Write-Host "Generating changelog from $PREV_TAG to HEAD"
-          $CHANGELOG = gh api repos/:owner/:repo/compare/$PREV_TAG...HEAD --jq '.commits[] | "- " + .commit.message' | Out-String
-        } else {
-          Write-Host "No previous tag found, using all recent commits"
-          $CHANGELOG = git log --oneline --pretty=format:"- %s" -10 | Out-String
-        }
-
-        # Escape quotes and special characters for PowerShell
-        $CHANGELOG = $CHANGELOG -replace '"', '\"' -replace '`', '``'
-
-        echo "changelog<<EOF" >> $env:GITHUB_OUTPUT
-        echo $CHANGELOG >> $env:GITHUB_OUTPUT
-        echo "EOF" >> $env:GITHUB_OUTPUT
-
-    - name: Create Release and Upload Asset
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        # Use only auto-generated changelog
-        $CHANGELOG = @"
-        ${{ steps.changelog.outputs.changelog }}
-        "@ -replace '"', '\"' -replace '`', '``'
-
-        $NOTES = "## Changelog`n" + $CHANGELOG
+        CHANGELOG="${{ needs.detect-version.outputs.changelog }}"
+        NOTES="## Changelog"$'\n'"$CHANGELOG"
 
         # Add Full Changelog link if we have a previous release
-        $PREV_TAG = "${{ steps.changelog.outputs.prev_tag }}"
-        if ($PREV_TAG -and $PREV_TAG.Trim() -ne "") {
-          $NOTES = $NOTES + "`n`n**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREV_TAG...${{ steps.version.outputs.version }}"
-        }
+        PREV_TAG="${{ needs.detect-version.outputs.prev_tag }}"
+        if [ -n "$PREV_TAG" ]; then
+          NOTES="$NOTES"$'\n\n'"**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREV_TAG...${{ needs.detect-version.outputs.version }}"
+        fi
 
-        # Write notes to file
-        $NOTES | Out-File -FilePath "release_notes.txt" -Encoding UTF8
+        echo "$NOTES" > release_notes.txt
 
-        Write-Host "Final release notes:"
-        Write-Host $NOTES
+        echo "Final release notes:"
+        cat release_notes.txt
 
-        gh release create "${{ steps.version.outputs.version }}" `
-          --title "Release ${{ steps.version.outputs.version }}" `
-          --notes-file "release_notes.txt" `
-          target/x86_64-pc-windows-msvc/release/gia.exe
+        gh release create "${{ needs.detect-version.outputs.version }}" \
+          --title "Release ${{ needs.detect-version.outputs.version }}" \
+          --notes-file "release_notes.txt" \
+          ./artifacts/windows/gia.exe#gia-windows-x86_64.exe \
+          ./artifacts/macos-intel/gia#gia-macos-x86_64 \
+          ./artifacts/macos-arm/gia#gia-macos-aarch64
