@@ -21,19 +21,11 @@ jobs:
     - name: Detect Version
       id: version
       run: |
-        # Try to get the latest git tag
-        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-
-        if [ -n "$LATEST_TAG" ]; then
-          echo "Using existing tag: $LATEST_TAG"
-          echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
-        else
-          # Generate version from commit count (like build.rs)
-          COMMIT_COUNT=$(git rev-list --count HEAD)
-          VERSION="v0.1.$COMMIT_COUNT"
-          echo "Generated new version: $VERSION"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-        fi
+        # Always generate version from commit count (like build.rs)
+        COMMIT_COUNT=$(git rev-list --count HEAD)
+        VERSION="v0.1.$COMMIT_COUNT"
+        echo "Generated version: $VERSION"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
 
     - name: Generate Changelog
       id: changelog
