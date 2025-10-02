@@ -11,7 +11,22 @@ use crate::logging::{log_error, log_info};
 
 fn wrap_text(text: &str, width: usize) -> String {
     text.lines()
-        .map(|line| textwrap::fill(line, width))
+        .map(|line| {
+            // Find the position of the first alphanumeric character
+            let first_char_pos = line
+                .chars()
+                .position(|c| c.is_alphanumeric())
+                .unwrap_or(0);
+            
+            // Create indentation string matching the position
+            let indent = " ".repeat(first_char_pos);
+            
+            // Configure textwrap options with subsequent indent
+            let options = textwrap::Options::new(width)
+                .subsequent_indent(&indent);
+            
+            textwrap::fill(line, &options)
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
