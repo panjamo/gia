@@ -2,11 +2,19 @@ use anyhow::{Context, Result};
 use chrono::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
+use textwrap;
 
 use crate::browser_preview::{open_markdown_preview, FooterMetadata};
 use crate::cli::{Config, ContentSource, OutputMode};
 use crate::clipboard::write_clipboard;
 use crate::logging::{log_error, log_info};
+
+fn wrap_text(text: &str, width: usize) -> String {
+    text.lines()
+        .map(|line| textwrap::fill(line, width))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 fn get_outputs_dir() -> Result<PathBuf> {
     let home_dir =
@@ -167,7 +175,9 @@ pub fn output_text(text: &str, config: &Config) -> Result<()> {
         OutputMode::Stdout => {
             log_info("Writing response to stdout");
             let plain_text = markdown_to_text::convert(text);
-            print!("{plain_text}");
+            let plain_text = plain_text.replace('\t', "  ");
+            let wrapped_text = wrap_text(&plain_text, 100);
+            print!("{wrapped_text}");
             Ok(())
         }
     }
