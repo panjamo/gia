@@ -19,18 +19,18 @@ Gui, Add, Edit, x10 y30 w560 h100 vPrompt gPromptEdit
 Gui, Add, GroupBox, x10 y140 w560 h80, Options
 
 ; Add checkboxes
-Gui, Add, Checkbox, x20 y160 vUseClipboard, Use clipboard input (-c)
-Gui, Add, Checkbox, x20 y185 vBrowserOutput, Browser output (--browser-output)
-Gui, Add, Checkbox, x300 y160 vResume, Resume last conversation (-R)
+Gui, Add, Checkbox, x20 y160 vUseClipboard, &Use clipboard input (-c)
+Gui, Add, Checkbox, x20 y185 vBrowserOutput, &Browser output (--browser-output)
+Gui, Add, Checkbox, x300 y160 vResume, &Resume last conversation (-R)
 
 ; Add response output
 Gui, Add, Text, x10 y230, Response:
 Gui, Add, Edit, x10 y250 w560 h295 vResponse ReadOnly Multi
 
 ; Add buttons
-Gui, Add, Button, x10 y555 w100 h30 gSendPrompt Default, Send
-Gui, Add, Button, x120 y555 w100 h30 gClearForm, Clear
-Gui, Add, Button, x230 y555 w100 h30 gCopyResponse, Copy Response
+Gui, Add, Button, x10 y555 w100 h30 gSendPrompt Default, &Send
+Gui, Add, Button, x120 y555 w100 h30 gClearForm, &Clear
+Gui, Add, Button, x230 y555 w100 h30 gCopyResponse, C&opy Response
 
 ; Add status bar
 Gui, Add, Text, x10 y595 w560 vStatusBar, Ready
