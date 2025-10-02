@@ -2,16 +2,6 @@ name: Manual Release
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Release version (e.g., v1.0.0)'
-        required: true
-        type: string
-      release_notes:
-        description: 'Release notes (optional)'
-        required: false
-        type: string
-        default: 'Manual release'
 
 permissions:
   contents: write
@@ -22,6 +12,30 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history for tags
+
+    - name: Detect Version
+      id: version
+      run: |
+        # Try to get the latest git tag
+        $LATEST_TAG = ""
+        try {
+          $LATEST_TAG = git describe --tags --abbrev=0 2>$null
+        } catch {
+          Write-Host "No tags found"
+        }
+
+        if ($LATEST_TAG) {
+          Write-Host "Using existing tag: $LATEST_TAG"
+          echo "version=$LATEST_TAG" >> $env:GITHUB_OUTPUT
+        } else {
+          # Generate version from commit count (like build.rs)
+          $COMMIT_COUNT = git rev-list --count HEAD
+          $VERSION = "v0.1.$COMMIT_COUNT"
+          Write-Host "Generated new version: $VERSION"
+          echo "version=$VERSION" >> $env:GITHUB_OUTPUT
+        }
 
     - name: Setup Rust
       uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -37,10 +51,10 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # Get the previous release tag (excluding the current one being created)
+        # Get the previous release tag
         $PREV_TAG = ""
         try {
-          $PREV_TAG = gh release list --limit 10 --json tagName --jq '.[].tagName' | Where-Object { $_ -ne "${{ github.event.inputs.version }}" } | Select-Object -First 1
+          $PREV_TAG = gh release list --limit 10 --json tagName --jq '.[].tagName' | Where-Object { $_ -ne "${{ steps.version.outputs.version }}" } | Select-Object -First 1
         } catch {
           Write-Host "No previous releases found"
         }
@@ -67,22 +81,17 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # Create release notes in a file to avoid PowerShell escaping issues
-        $NOTES = "${{ github.event.inputs.release_notes }}"
-
-        # Add changelog if available
+        # Use only auto-generated changelog
         $CHANGELOG = @"
         ${{ steps.changelog.outputs.changelog }}
         "@ -replace '"', '\"' -replace '`', '``'
 
-        if ($CHANGELOG.Trim() -ne "") {
-          $NOTES = $NOTES + "`n`n## Changelog`n" + $CHANGELOG
-        }
+        $NOTES = "## Changelog`n" + $CHANGELOG
 
         # Add Full Changelog link if we have a previous release
         $PREV_TAG = "${{ steps.changelog.outputs.prev_tag }}"
         if ($PREV_TAG -and $PREV_TAG.Trim() -ne "") {
-          $NOTES = $NOTES + "`n`n**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREV_TAG...${{ github.event.inputs.version }}"
+          $NOTES = $NOTES + "`n`n**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREV_TAG...${{ steps.version.outputs.version }}"
         }
 
         # Write notes to file
@@ -91,7 +100,7 @@ jobs:
         Write-Host "Final release notes:"
         Write-Host $NOTES
 
-        gh release create "${{ github.event.inputs.version }}" `
-          --title "Release ${{ github.event.inputs.version }}" `
+        gh release create "${{ steps.version.outputs.version }}" `
+          --title "Release ${{ steps.version.outputs.version }}" `
           --notes-file "release_notes.txt" `
           target/x86_64-pc-windows-msvc/release/gia.exe
