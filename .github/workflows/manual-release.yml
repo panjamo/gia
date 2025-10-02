@@ -151,7 +151,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        CHANGELOG="${{ needs.detect-version.outputs.changelog }}"
+        CHANGELOG=@"${{ needs.detect-version.outputs.changelog }}"@
         NOTES="## Changelog"$'\n'"$CHANGELOG"
 
         # Add Full Changelog link if we have a previous release
