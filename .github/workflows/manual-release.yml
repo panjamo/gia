@@ -151,16 +151,18 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        CHANGELOG=@"${{ needs.detect-version.outputs.changelog }}"@
-        NOTES="## Changelog"$'\n'"$CHANGELOG"
+        CHANGELOG="${{ needs.detect-version.outputs.changelog }}"
+        
+        # Create release notes
+        echo "## Changelog" > release_notes.txt
+        echo "$CHANGELOG" >> release_notes.txt
 
         # Add Full Changelog link if we have a previous release
         PREV_TAG="${{ needs.detect-version.outputs.prev_tag }}"
         if [ -n "$PREV_TAG" ]; then
-          NOTES="$NOTES"$'\n\n'"**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREV_TAG...${{ needs.detect-version.outputs.version }}"
+          echo "" >> release_notes.txt
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREV_TAG...${{ needs.detect-version.outputs.version }}" >> release_notes.txt
         fi
-
-        echo "$NOTES" > release_notes.txt
 
         echo "Final release notes:"
         cat release_notes.txt
