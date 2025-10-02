@@ -151,11 +151,11 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        CHANGELOG="${{ needs.detect-version.outputs.changelog }}"
-        
         # Create release notes
         echo "## Changelog" > release_notes.txt
-        echo "$CHANGELOG" >> release_notes.txt
+        cat >> release_notes.txt << 'CHANGELOG_EOF'
+        ${{ needs.detect-version.outputs.changelog }}
+        CHANGELOG_EOF
 
         # Add Full Changelog link if we have a previous release
         PREV_TAG="${{ needs.detect-version.outputs.prev_tag }}"
