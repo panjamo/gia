@@ -145,7 +145,7 @@ return
 ; Run command and capture output
 RunWaitOutput(Cmd) {
     tempFileName := A_Temp . "\gia_output.txt"
-    MsgBox, 4, Confirm, Are you sure you want to execute the following command?`n`n%Cmd%`n%tempFileName%
+    ; MsgBox, 4, Confirm, Are you sure you want to execute the following command?`n`n%Cmd%`n%tempFileName%
     RunWait, cmd /c %Cmd% > %tempFileName%, , UseErrorLevel hide
     return ErrorLevel ? ErrorLevel : tempFileName
 }
