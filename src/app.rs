@@ -102,6 +102,11 @@ pub async fn run_app(mut config: Config) -> Result<()> {
         .save_conversation(&conversation)
         .context("Failed to save conversation")?;
 
+    // Save markdown
+    conversation_manager
+        .save_markdown(&conversation)
+        .context("Failed to save markdown")?;
+
     // Output response
     output_text(&response, &config).context("Failed to output response")?;
 
@@ -209,6 +214,11 @@ fn handle_show_conversation(
             .load_conversation(conversation_id)
             .with_context(|| format!("Conversation with ID '{conversation_id}' not found"))?
     };
+
+    // Save markdown to outputs folder
+    conversation_manager
+        .save_markdown(&conversation)
+        .context("Failed to save markdown")?;
 
     // Generate markdown content
     let markdown_content = conversation.format_as_chat_markdown();

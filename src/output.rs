@@ -51,35 +51,21 @@ fn wrap_text(text: &str, width: usize) -> String {
         .join("\n")
 }
 
-fn get_outputs_dir() -> Result<PathBuf> {
+pub fn get_outputs_dir() -> Result<PathBuf> {
     let home_dir =
         dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
     Ok(home_dir.join(".gia").join("outputs"))
 }
 
-fn generate_filename_from_prompt(prompt: &str) -> String {
-    // Get current timestamp
-    let timestamp = Local::now().format("%Y%m%d_%H%M%S");
+pub fn sanitize_prompt_for_filename(prompt: &str) -> String {
+    let words: Vec<&str> = prompt.split_whitespace().take(4).collect();
+    
+    let mut sanitized = if words.is_empty() {
+        return String::new();
+    } else {
+        words.join("_").to_lowercase()
+    };
 
-    // Handle empty prompt
-    if prompt.trim().is_empty() {
-        return format!("gia_output_{timestamp}.md");
-    }
-
-    // Extract first few words and sanitize
-    let words: Vec<&str> = prompt
-        .split_whitespace()
-        .take(4) // Take first 4 words
-        .collect();
-
-    if words.is_empty() {
-        return format!("gia_output_{timestamp}.md");
-    }
-
-    // Join words and sanitize
-    let mut sanitized = words.join("_").to_lowercase();
-
-    // Replace invalid filesystem characters
     sanitized = sanitized
         .chars()
         .map(|c| match c {
@@ -89,26 +75,28 @@ fn generate_filename_from_prompt(prompt: &str) -> String {
         })
         .collect();
 
-    // Remove multiple consecutive underscores
     while sanitized.contains("__") {
         sanitized = sanitized.replace("__", "_");
     }
-
-    // Trim underscores from start and end
     sanitized = sanitized.trim_matches('_').to_string();
 
-    // Limit length to 50 characters
     if sanitized.len() > 50 {
         sanitized.truncate(50);
         sanitized = sanitized.trim_matches('_').to_string();
     }
 
-    // Final check - if we ended up with empty string, use fallback
-    if sanitized.is_empty() {
-        return format!("gia_output_{timestamp}.md");
-    }
+    sanitized
+}
 
-    format!("{sanitized}_{timestamp}.md")
+pub fn generate_filename_from_prompt(prompt: &str) -> String {
+    let timestamp = Local::now().format("%Y%m%d_%H%M%S");
+    let sanitized = sanitize_prompt_for_filename(prompt);
+
+    if sanitized.is_empty() {
+        format!("gia_output_{timestamp}.md")
+    } else {
+        format!("{sanitized}_{timestamp}.md")
+    }
 }
 
 fn build_footer_metadata(config: &Config) -> FooterMetadata {
