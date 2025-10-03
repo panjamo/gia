@@ -81,7 +81,7 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
 
                 // If no command line prompt provided, use default audio prompt
                 if prompt_to_use.is_empty() {
-                    let default_audio_prompt = "Your instructions are in prompt.m4a";
+                    let default_audio_prompt = "Your instructions are in prompt.opus";
                     log_info(&format!(
                         "Using default audio prompt: {default_audio_prompt}"
                     ));
