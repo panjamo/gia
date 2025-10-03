@@ -3,8 +3,11 @@
 SendMode Input
 SetWorkingDir %A_ScriptDir%
 
+; Extract embedded icon to icons directory
+FileInstall,icons\gia.png, %A_Temp%\gia.png, 1
+
 ; Set icon
-Menu, Tray, Icon, %A_ScriptDir%\icons\gia.png
+Menu, Tray, Icon, %A_Temp%\gia.png
 
 ; GIA GUI Wrapper
 ; A graphical interface for the GIA command-line tool
@@ -22,7 +25,7 @@ Gui, Add, Edit, x10 y30 w672 h100 vPrompt
 Gui, Add, GroupBox, x10 y140 w672 h80, Options
 
 ; Add icon to groupbox
-Gui, Add, Picture, x590 y152 w64 h64, %A_ScriptDir%\icons\gia.png
+Gui, Add, Picture, x590 y152 w64 h64, %A_Temp%\gia.png
 
 ; Add checkboxes
 Gui, Add, Checkbox, x20 y160 vUseClipboard, &Use clipboard input (-c)
