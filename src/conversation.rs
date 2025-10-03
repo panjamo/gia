@@ -122,17 +122,30 @@ impl Conversation {
 
             match message.role {
                 MessageRole::User => {
-                    write!(markdown, "**{username}:** ").unwrap();
+                    // Format user prompts in a styled box similar to browser output
+                    // Use raw HTML with escaped content
+                    let escaped_content = html_escape::encode_text(&message.content).replace('\n', "<br>");
+                    markdown.push_str(&format!(
+                        r#"<div class="gia-prompt">
+<h3>💬 {}</h3>
+<p>{}</p>
+</div>
+
+"#,
+                        username,
+                        escaped_content
+                    ));
                 }
                 MessageRole::Assistant => {
                     markdown.push_str("**Assistant:** ");
+                    markdown.push_str(&message.content);
+                    markdown.push_str("\n");
                 }
             }
 
-            markdown.push_str(&message.content);
             write!(
                 markdown,
-                "\n\n*{}*\n",
+                "\n*{}*\n",
                 message.timestamp.format("%Y-%m-%d %H:%M:%S UTC")
             )
             .unwrap();

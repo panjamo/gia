@@ -244,6 +244,7 @@ fn create_markdown_html(markdown_content: &str, metadata: Option<&FooterMetadata
     options.extension.autolink = true;
     options.extension.tasklist = true;
     options.extension.footnotes = true;
+    options.render.unsafe_ = true; // Allow raw HTML in markdown (needed for user prompt styling)
 
     let html_body = comrak::markdown_to_html(markdown_content, &options);
 
