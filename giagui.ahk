@@ -25,7 +25,7 @@ Gui, Add, Edit, x10 y30 w672 h100 vPrompt
 Gui, Add, GroupBox, x10 y140 w672 h80, Options
 
 ; Add icon to groupbox
-Gui, Add, Picture, x590 y152 w64 h64, %A_Temp%\gia.png
+Gui, Add, Picture, x710 y152 w64 h64, %A_Temp%\gia.png
 
 ; Add checkboxes
 Gui, Add, Checkbox, x20 y160 vUseClipboard, &Use clipboard input (-c)
@@ -34,7 +34,9 @@ Gui, Add, Checkbox, x300 y160 vResume, &Resume last conversation (-R)
 
 ; Add response output
 Gui, Add, Text, x10 y230, Response:
-Gui, Add, Edit, x10 y250 w672 h295 vResponse ReadOnly Multi
+Gui, Font, s10, iosevka
+Gui, Add, Edit, x10 y250 w672 h295 vResponse ReadOnly Multi HScroll
+Gui, Font, s10, Segoe UI
 
 ; Add buttons
 Gui, Add, Button, x10 y555 w100 h30 gSendPrompt Default, &Send
@@ -46,7 +48,7 @@ Gui, Add, Button, x340 y555 w100 h30 gBrowserView, Browser &View
 Gui, Add, Text, x10 y595 w672 vStatusBar, Ready
 
 ; Show GUI
-Gui, Show, w692 h625, GIA - Google Intelligence Assistant
+Gui, Show, w830 h625, GIA - Google Intelligence Assistant
 return
 
 GuiClose:
