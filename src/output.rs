@@ -10,17 +10,32 @@ use crate::clipboard::write_clipboard;
 use crate::logging::{log_error, log_info};
 
 fn wrap_text(text: &str, width: usize) -> String {
-    // First pass: merge lines ending with '•'
+    // First pass: merge lines ending with '•' or number followed by '.'
     let mut merged_lines = Vec::new();
     let lines: Vec<&str> = text.lines().collect();
     let mut i = 0;
     
     while i < lines.len() {
         let line = lines[i];
-        if line.trim_end().ends_with('•') && i + 1 < lines.len() {
-            // Remove the '•' and concatenate with next line
-            let trimmed = line.trim_end().trim_end_matches('•');
-            merged_lines.push(format!("{} {}", trimmed, lines[i + 1]));
+        let trimmed = line.trim_end();
+        
+        // Check if line ends with '•' or a digit followed by '.'
+        let should_merge = if trimmed.ends_with('•') {
+            true
+        } else if trimmed.ends_with('.') {
+            trimmed.chars().rev().nth(1).map_or(false, |c| c.is_ascii_digit())
+        } else {
+            false
+        };
+        
+        if should_merge && i + 1 < lines.len() {
+            // Remove the '•' or keep the number+period, then concatenate with next line
+            let content = if trimmed.ends_with('•') {
+                trimmed.trim_end_matches('•')
+            } else {
+                trimmed
+            };
+            merged_lines.push(format!("{} {}", content, lines[i + 1]));
             i += 2; // Skip the next line as we've merged it
         } else {
             merged_lines.push(line.to_string());
