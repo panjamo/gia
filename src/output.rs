@@ -128,9 +128,13 @@ fn build_footer_metadata(config: &Config) -> FooterMetadata {
     let mut has_clipboard = false;
     let mut has_audio = false;
     let mut has_stdin = false;
+    let mut roles = Vec::new();
 
     for content in &config.ordered_content {
         match content {
+            ContentSource::RoleDefinition(name, _, _is_task) => {
+                roles.push(name.clone());
+            }
             ContentSource::ImageFile(path) => {
                 if let Some(filename) = Path::new(path).file_name() {
                     image_files.push(filename.to_string_lossy().to_string());
@@ -163,6 +167,7 @@ fn build_footer_metadata(config: &Config) -> FooterMetadata {
         has_clipboard,
         has_audio,
         has_stdin,
+        roles,
         prompt: config.prompt.clone(),
     }
 }
@@ -343,6 +348,7 @@ mod tests {
             show_conversation: None,
             model: "gemini-2.5-flash-lite".to_string(),
             record_audio: false,
+            roles: vec![],
             ordered_content: vec![
                 ContentSource::ImageFile("test.jpg".to_string()),
                 ContentSource::TextFile("file.txt".to_string(), "content".to_string()),
@@ -374,6 +380,7 @@ mod tests {
             show_conversation: None,
             model: "openai::gpt-4".to_string(),
             record_audio: false,
+            roles: vec![],
             ordered_content: vec![],
         };
 

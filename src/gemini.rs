@@ -91,7 +91,9 @@ impl GeminiClient {
                             .collect::<String>()
                             .replace('\n', "\\n")
                     ));
-                    content_parts.push(ContentPart::from_text(prompt));
+
+                    let formatted_content = format!("=== Prompt ===\n\n{}", prompt);
+                    content_parts.push(ContentPart::from_text(&formatted_content));
                 }
                 ContentSource::AudioRecording(audio_path) => {
                     log_info(&format!("Part {part_number}: Audio Recording"));
@@ -233,6 +235,34 @@ impl GeminiClient {
                     ));
 
                     let formatted_content = format!("=== Previous conversation ===\n{history}");
+                    content_parts.push(ContentPart::from_text(&formatted_content));
+                }
+                ContentSource::RoleDefinition(name, content, is_task) => {
+                    let item_type = if *is_task { "Task" } else { "Role" };
+                    log_info(&format!("Part {part_number}: {item_type} Definition"));
+                    log_info("  Type: Text");
+                    log_info(&format!("  {item_type}: {name}"));
+                    log_info(&format!("  Length: {} characters", content.len()));
+                    log_info(&format!(
+                        "  Preview: \"{}...\"",
+                        content
+                            .chars()
+                            .take(50)
+                            .collect::<String>()
+                            .replace('\n', "\\n")
+                    ));
+
+                    let header = if *is_task {
+                        format!("=== Task: {name} ===")
+                    } else {
+                        format!("=== Role: {name} ===")
+                    };
+
+                    let formatted_content = if content.ends_with('\n') {
+                        format!("{header}\n{content}")
+                    } else {
+                        format!("{header}\n{content}\n")
+                    };
                     content_parts.push(ContentPart::from_text(&formatted_content));
                 }
             }

@@ -8,6 +8,7 @@ use crate::cli::{Config, ContentSource, ImageSource};
 use crate::clipboard::{has_clipboard_image, read_clipboard};
 use crate::image::validate_media_file;
 use crate::logging::{log_debug, log_info};
+use crate::role::load_all_roles;
 
 pub fn read_stdin() -> Result<String> {
     log_debug("Reading from stdin");
@@ -38,6 +39,26 @@ pub fn read_text_file(file_path: &str) -> Result<String> {
 pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Result<String> {
     // Clear any existing ordered content
     config.ordered_content.clear();
+
+    // 0. Role/task definitions (placed first)
+    if !config.roles.is_empty() {
+        log_info(&format!("Loading {} role(s)/task(s)", config.roles.len()));
+        match load_all_roles(&config.roles) {
+            Ok(items) => {
+                for (name, content, is_task) in items {
+                    let item_type = if is_task { "task" } else { "role" };
+                    log_info(&format!("Adding {item_type} to ordered content: {name}"));
+                    config
+                        .ordered_content
+                        .push(ContentSource::RoleDefinition(name, content, is_task));
+                }
+            }
+            Err(e) => {
+                log_debug(&format!("Failed to load roles/tasks: {e}"));
+                eprintln!("Warning: Failed to load roles/tasks: {e}");
+            }
+        }
+    }
 
     // 1. Command line prompt
     let prompt_to_use = prompt_override.unwrap_or(&config.prompt);
@@ -187,6 +208,7 @@ fn build_legacy_input_text(ordered_content: &[ContentSource]) -> String {
                 if !input_text.is_empty() {
                     input_text.push_str("\n\n");
                 }
+                writeln!(input_text, "=== Prompt ===").unwrap();
                 input_text.push_str(prompt);
             }
             ContentSource::ClipboardText(text) => {
@@ -219,6 +241,20 @@ fn build_legacy_input_text(ordered_content: &[ContentSource]) -> String {
                 }
                 writeln!(input_text, "=== Previous conversation ===").unwrap();
                 input_text.push_str(history);
+            }
+            ContentSource::RoleDefinition(name, content, is_task) => {
+                if !input_text.is_empty() {
+                    input_text.push_str("\n\n");
+                }
+                if *is_task {
+                    writeln!(input_text, "=== Task: {name} ===").unwrap();
+                } else {
+                    writeln!(input_text, "=== Role: {name} ===").unwrap();
+                }
+                input_text.push_str(content);
+                if !content.ends_with('\n') {
+                    input_text.push('\n');
+                }
             }
             // Audio, image files, and clipboard images are handled in multimodal request
             ContentSource::AudioRecording(_)
@@ -308,6 +344,7 @@ mod tests {
             show_conversation: None,
             model: "test-model".to_string(),
             record_audio: false,
+            roles: vec![],
             ordered_content: Vec::new(),
         };
 
@@ -333,11 +370,12 @@ mod tests {
             show_conversation: None,
             model: "test-model".to_string(),
             record_audio: false,
+            roles: vec![],
             ordered_content: Vec::new(),
         };
 
         let result = get_input_text(&mut config, None).unwrap();
-        assert_eq!(result, "Test prompt");
+        assert_eq!(result, "=== Prompt ===\nTest prompt");
     }
 
     #[test]
@@ -354,11 +392,12 @@ mod tests {
             show_conversation: None,
             model: "test-model".to_string(),
             record_audio: false,
+            roles: vec![],
             ordered_content: Vec::new(),
         };
 
         let result = get_input_text(&mut config, Some("Override prompt")).unwrap();
-        assert_eq!(result, "Override prompt");
+        assert_eq!(result, "=== Prompt ===\nOverride prompt");
         assert_eq!(config.ordered_content.len(), 1);
     }
 
@@ -430,6 +469,7 @@ mod tests {
             show_conversation: None,
             model: "test-model".to_string(),
             record_audio: false,
+            roles: vec![],
             ordered_content: Vec::new(),
         };
 

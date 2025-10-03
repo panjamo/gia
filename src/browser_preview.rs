@@ -140,6 +140,7 @@ pub struct FooterMetadata {
     pub has_clipboard: bool,
     pub has_audio: bool,
     pub has_stdin: bool,
+    pub roles: Vec<String>,
     pub prompt: String,
 }
 
@@ -185,8 +186,13 @@ fn build_footer_html(metadata: &FooterMetadata) -> String {
         || metadata.has_clipboard
         || metadata.has_audio
         || metadata.has_stdin
+        || !metadata.roles.is_empty()
     {
         footer.push_str("<p><strong>Inputs:</strong></p><ul>");
+
+        if !metadata.roles.is_empty() {
+            footer.push_str(&format!("<li>Roles: {}</li>", metadata.roles.join(", ")));
+        }
 
         if !metadata.image_files.is_empty() {
             footer.push_str(&format!(
@@ -283,6 +289,7 @@ mod tests {
             has_clipboard: false,
             has_audio: false,
             has_stdin: false,
+            roles: vec![],
             prompt: "Test prompt".to_string(),
         };
 
@@ -303,6 +310,7 @@ mod tests {
             has_clipboard: true,
             has_audio: true,
             has_stdin: true,
+            roles: vec![],
             prompt: "Test".to_string(),
         };
 
@@ -327,6 +335,7 @@ mod tests {
             has_clipboard: false,
             has_audio: false,
             has_stdin: false,
+            roles: vec![],
             prompt: "What is AI?".to_string(),
         };
 
@@ -347,6 +356,7 @@ mod tests {
             has_clipboard: false,
             has_audio: false,
             has_stdin: false,
+            roles: vec![],
             prompt: "".to_string(),
         };
 
@@ -366,6 +376,7 @@ mod tests {
             has_clipboard: false,
             has_audio: false,
             has_stdin: false,
+            roles: vec![],
             prompt: "<script>alert('xss')</script>".to_string(),
         };
 
@@ -398,6 +409,7 @@ mod tests {
             has_clipboard: false,
             has_audio: false,
             has_stdin: false,
+            roles: vec![],
             prompt: "Test prompt".to_string(),
         };
 

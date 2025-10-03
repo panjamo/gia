@@ -17,6 +17,7 @@ pub enum ResourceType {
     ClipboardText,
     ClipboardImage,
     Stdin,
+    Role,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -182,6 +183,13 @@ impl Conversation {
                                 ResourceType::ClipboardText => "📋 Clipboard text".to_string(),
                                 ResourceType::ClipboardImage => "📋 Clipboard image".to_string(),
                                 ResourceType::Stdin => "⌨️  Stdin input".to_string(),
+                                ResourceType::Role => {
+                                    if let Some(role_name) = &resource.path {
+                                        format!("🎭 Role: {}", role_name)
+                                    } else {
+                                        "🎭 Role".to_string()
+                                    }
+                                }
                             };
                             let escaped_resource = html_escape::encode_text(&resource_text);
                             resources_html.push_str(&format!("<li>{}</li>", escaped_resource));

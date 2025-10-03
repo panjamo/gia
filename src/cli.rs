@@ -21,7 +21,8 @@ pub enum ContentSource {
     TextFile(String, String), // (file_path, content)
     ImageFile(String),        // file path
     ClipboardImage,
-    ConversationHistory(String), // conversation history text
+    ConversationHistory(String),          // conversation history text
+    RoleDefinition(String, String, bool), // (name, content, is_task)
 }
 
 #[derive(Debug, Clone)]
@@ -37,6 +38,7 @@ pub struct Config {
     pub show_conversation: Option<String>, // Some(id) = show specific conversation
     pub model: String,
     pub record_audio: bool,                  // true = record audio input
+    pub roles: Vec<String>,                  // role names to load from ~/.gia/<role>.md
     pub ordered_content: Vec<ContentSource>, // ordered content for multimodal requests
 }
 
@@ -84,6 +86,12 @@ impl Config {
             .cloned()
             .collect();
 
+        let roles: Vec<String> = matches
+            .get_many::<String>("role")
+            .unwrap_or_default()
+            .cloned()
+            .collect();
+
         Self {
             prompt: prompt_parts.join(" "),
             use_clipboard_input: matches.get_flag("clipboard-input"),
@@ -98,6 +106,7 @@ impl Config {
             show_conversation: matches.get_one::<String>("show-conversation").cloned(),
             model: matches.get_one::<String>("model").unwrap().clone(),
             record_audio: matches.get_flag("record-audio"),
+            roles,
             ordered_content: Vec::new(), // will be populated in input.rs
         }
     }
@@ -206,6 +215,14 @@ impl Config {
                     .long("record-audio")
                     .help("Record audio input using ffmpeg (requires ffmpeg to be installed)")
                     .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("role")
+                    .short('t')
+                    .long("role")
+                    .help("Load role/task from ~/.gia/roles/<name>.md or ~/.gia/tasks/<name>.md (can be used multiple times)")
+                    .value_name("NAME")
+                    .action(clap::ArgAction::Append),
             )
     }
 

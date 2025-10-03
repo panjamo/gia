@@ -12,6 +12,7 @@ mod input;
 mod logging;
 mod output;
 mod provider;
+mod role;
 
 use anyhow::Result;
 

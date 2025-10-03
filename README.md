@@ -7,6 +7,7 @@ A command-line tool that sends text prompts to Google's Gemini API and returns A
 ## Features
 
 - Uses command line arguments as the main prompt
+- **Roles & Tasks** - Load AI role definitions and task instructions from markdown files
 - **Audio recording** - Record audio prompts using ffmpeg with `-a` flag
 - **Media file support** - Include images and audio/video files
   - `-i` flag: Media files only (JPEG, PNG, WebP, HEIC, PDF, OGG, OPUS, MP3, M4A, MP4)
@@ -103,6 +104,10 @@ GIA automatically combines input from multiple sources:
 gia "What is artificial intelligence?"
 gia "Explain quantum computing"
 
+# With roles/tasks:
+gia -t rust-dev "Explain this code" -c
+gia -t code-review -t security-audit "Review this PR"
+
 # Audio recording (auto-generates prompt):
 gia --record-audio
 gia -a  # Short option
@@ -115,6 +120,17 @@ gia "Summarize this text" -c
 
 # With stdin input (automatic):
 echo "data to process" | gia "Analyze this data"
+```
+
+### Roles & Tasks
+```bash
+# Create role/task files:
+# ~/.gia/roles/rust-dev.md - AI persona definitions
+# ~/.gia/tasks/code-review.md - Specific task instructions
+
+# Use roles/tasks (searches roles/ first, then tasks/):
+gia -t rust-dev "Optimize this function" -c
+gia -t code-review -t security-audit "Review changes"
 ```
 
 ### Adding input sources
@@ -201,6 +217,7 @@ gia -s -b                         # Show latest conversation (file + browser)
 ### Command line options
 
 - `[PROMPT_TEXT]` - Prompt text for the AI (main input)
+- `-t, --role <NAME>` - Load role/task from ~/.gia/roles/ or ~/.gia/tasks/ (can be used multiple times)
 - `-a, --record-audio` - Record audio input using ffmpeg (auto-generates prompt if no text provided)
 - `-c, --clipboard-input` - Add clipboard content to prompt (auto-detects images vs text)
 - `-i, --image <FILE>` - Add media file to prompt (can be used multiple times; JPEG, PNG, WebP, HEIC, PDF, OGG, OPUS, MP3, M4A, MP4)
