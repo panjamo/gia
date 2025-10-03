@@ -3,6 +3,9 @@
 SendMode Input
 SetWorkingDir %A_ScriptDir%
 
+; Set icon
+Menu, Tray, Icon, %A_ScriptDir%\icons\gia.png
+
 ; GIA GUI Wrapper
 ; A graphical interface for the GIA command-line tool
 
@@ -17,6 +20,9 @@ Gui, Add, Edit, x10 y30 w672 h100 vPrompt
 
 ; Add options group
 Gui, Add, GroupBox, x10 y140 w672 h80, Options
+
+; Add icon to groupbox
+Gui, Add, Picture, x590 y152 w64 h64, %A_ScriptDir%\icons\gia.png
 
 ; Add checkboxes
 Gui, Add, Checkbox, x20 y160 vUseClipboard, &Use clipboard input (-c)
