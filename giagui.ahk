@@ -13,7 +13,7 @@ Gui, Margin, 10, 10
 
 ; Add prompt input
 Gui, Add, Text, x10 y10, Prompt:
-Gui, Add, Edit, x10 y30 w672 h100 vPrompt +WantCtrlEnter
+Gui, Add, Edit, x10 y30 w672 h100 vPrompt
 
 ; Add options group
 Gui, Add, GroupBox, x10 y140 w672 h80, Options
@@ -42,13 +42,6 @@ return
 
 GuiClose:
 ExitApp
-
-^Enter::
-    ; When Ctrl+Enter is pressed anywhere, check if we're in the prompt field
-    ControlGetFocus, FocusedControl, A
-    if (FocusedControl = "Edit1")  ; Edit1 is the Prompt field
-        Gosub, SendPrompt
-return
 
 GuiSize:
     if (A_EventInfo = 1)  ; Minimized

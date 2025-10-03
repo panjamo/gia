@@ -195,7 +195,7 @@ fn handle_list_conversations(
 fn handle_show_conversation(
     conversation_manager: &ConversationManager,
     conversation_id: &str,
-    config: &Config,
+    _config: &Config,
 ) -> Result<()> {
     let conversation = if conversation_id.is_empty() {
         // Load the latest conversation
@@ -215,20 +215,28 @@ fn handle_show_conversation(
             .with_context(|| format!("Conversation with ID '{conversation_id}' not found"))?
     };
 
-    // Save markdown to outputs folder
-    conversation_manager
-        .save_markdown(&conversation)
-        .context("Failed to save markdown")?;
+    // Get the path to the existing markdown file in conversations folder
+    let markdown_path = conversation_manager
+        .get_markdown_path(&conversation)
+        .context("Failed to get markdown path")?;
 
-    // Generate markdown content
-    let markdown_content = conversation.format_as_chat_markdown();
+    // Read the existing markdown content
+    let markdown_content = std::fs::read_to_string(&markdown_path)
+        .context("Failed to read existing markdown file")?;
 
-    // Create a temporary config for output with empty prompt to suppress prompt header
-    let mut output_config = config.clone();
-    output_config.prompt = String::new();
+    // Copy the markdown path to clipboard
+    use crate::clipboard::write_clipboard;
+    let path_str = markdown_path.to_string_lossy();
+    write_clipboard(&path_str).context("Failed to copy path to clipboard")?;
+    log_info(&format!("Copied markdown path to clipboard: {}", path_str));
 
-    // Use the normal output system
-    output_text(&markdown_content, &output_config).context("Failed to output conversation")?;
+    // Open browser preview directly using the existing markdown file
+    use crate::browser_preview::open_markdown_preview;
+    if let Err(e) = open_markdown_preview(&markdown_content, &markdown_path, None) {
+        log_error(&format!("Failed to open browser preview: {e}"));
+    } else {
+        log_info("Opened browser preview");
+    }
 
     Ok(())
 }

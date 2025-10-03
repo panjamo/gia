@@ -220,6 +220,28 @@ impl ConversationManager {
         Ok(())
     }
 
+    pub fn get_markdown_path(&self, conversation: &Conversation) -> Result<PathBuf> {
+        use crate::output::sanitize_prompt_for_filename;
+
+        let prompt = conversation
+            .messages
+            .iter()
+            .find(|m| matches!(m.role, MessageRole::User))
+            .map(|m| m.content.as_str())
+            .unwrap_or("");
+
+        let sanitized = sanitize_prompt_for_filename(prompt);
+        let sanitized = if sanitized.is_empty() {
+            "conversation".to_string()
+        } else {
+            sanitized
+        };
+
+        let conv_prefix = &conversation.id[..8];
+        let filename = format!("{}_{}.md", conv_prefix, sanitized);
+        Ok(self.conversations_dir.join(filename))
+    }
+
     pub fn load_conversation(&self, id: &str) -> Result<Conversation> {
         let filename = format!("{id}.json");
         let file_path = self.conversations_dir.join(filename);
