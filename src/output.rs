@@ -10,7 +10,27 @@ use crate::clipboard::write_clipboard;
 use crate::logging::{log_error, log_info};
 
 fn wrap_text(text: &str, width: usize) -> String {
-    text.lines()
+    // First pass: merge lines ending with '•'
+    let mut merged_lines = Vec::new();
+    let lines: Vec<&str> = text.lines().collect();
+    let mut i = 0;
+    
+    while i < lines.len() {
+        let line = lines[i];
+        if line.trim_end().ends_with('•') && i + 1 < lines.len() {
+            // Remove the '•' and concatenate with next line
+            let trimmed = line.trim_end().trim_end_matches('•');
+            merged_lines.push(format!("{} {}", trimmed, lines[i + 1]));
+            i += 2; // Skip the next line as we've merged it
+        } else {
+            merged_lines.push(line.to_string());
+            i += 1;
+        }
+    }
+    
+    // Second pass: wrap the merged lines
+    merged_lines
+        .iter()
         .map(|line| {
             // Find the position of the first alphanumeric character
             let first_char_pos = line
