@@ -1,3 +1,5 @@
+<img src="icons/gia.png" alt="gia" width="128" height="128">
+
 # GIA - Google Intelligence Assistant
 
 A command-line tool that sends text prompts to Google's Gemini API and returns AI-generated responses.
