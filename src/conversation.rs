@@ -195,7 +195,7 @@ impl ConversationManager {
     }
 
     pub fn save_markdown(&self, conversation: &Conversation) -> Result<()> {
-        use crate::output::{get_outputs_dir, sanitize_prompt_for_filename};
+        use crate::output::sanitize_prompt_for_filename;
 
         let prompt = conversation
             .messages
@@ -203,11 +203,6 @@ impl ConversationManager {
             .find(|m| matches!(m.role, MessageRole::User))
             .map(|m| m.content.as_str())
             .unwrap_or("");
-
-        let outputs_dir = get_outputs_dir()?;
-        if !outputs_dir.exists() {
-            fs::create_dir_all(&outputs_dir).context("Failed to create outputs directory")?;
-        }
 
         let sanitized = sanitize_prompt_for_filename(prompt);
         let sanitized = if sanitized.is_empty() {
@@ -218,7 +213,7 @@ impl ConversationManager {
 
         let conv_prefix = &conversation.id[..8];
         let filename = format!("{}_{}.md", conv_prefix, sanitized);
-        let file_path = outputs_dir.join(filename);
+        let file_path = self.conversations_dir.join(filename);
         let markdown = conversation.format_as_chat_markdown();
         fs::write(&file_path, markdown).context("Failed to write markdown file")?;
         log_debug(&format!("Saved markdown to: {file_path:?}"));
