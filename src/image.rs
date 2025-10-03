@@ -125,4 +125,73 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_get_mime_type_case_insensitive() {
+        assert_eq!(get_mime_type(Path::new("test.JPG")).unwrap(), "image/jpeg");
+        assert_eq!(get_mime_type(Path::new("test.PNG")).unwrap(), "image/png");
+        assert_eq!(get_mime_type(Path::new("test.Mp3")).unwrap(), "audio/mpeg");
+    }
+
+    #[test]
+    fn test_validate_media_file_nonexistent() {
+        let result = validate_media_file("nonexistent_file.jpg");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_validate_media_file_unsupported_format() {
+        let temp_file = NamedTempFile::with_suffix(".txt").unwrap();
+        fs::write(temp_file.path(), b"test content").unwrap();
+
+        let result = validate_media_file(temp_file.path().to_str().unwrap());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Unsupported"));
+    }
+
+    #[test]
+    fn test_validate_media_file_valid() -> Result<()> {
+        let temp_file = NamedTempFile::with_suffix(".jpg").unwrap();
+        fs::write(temp_file.path(), b"fake jpeg data")?;
+
+        let result = validate_media_file(temp_file.path().to_str().unwrap());
+        assert!(result.is_ok());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_mime_type_audio_formats() {
+        assert_eq!(get_mime_type(Path::new("file.ogg")).unwrap(), "audio/ogg");
+        assert_eq!(get_mime_type(Path::new("file.opus")).unwrap(), "audio/ogg");
+        assert_eq!(get_mime_type(Path::new("file.mp3")).unwrap(), "audio/mpeg");
+        assert_eq!(get_mime_type(Path::new("file.m4a")).unwrap(), "audio/mp4");
+    }
+
+    #[test]
+    fn test_get_mime_type_video_format() {
+        assert_eq!(get_mime_type(Path::new("file.mp4")).unwrap(), "video/mp4");
+    }
+
+    #[test]
+    fn test_get_mime_type_no_extension() {
+        let result = get_mime_type(Path::new("file_without_extension"));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("no extension"));
+    }
+
+    #[test]
+    fn test_read_media_as_base64_empty_file() -> Result<()> {
+        let temp_file = NamedTempFile::with_suffix(".jpg")?;
+        // Create empty file
+        fs::write(temp_file.path(), b"")?;
+
+        let result = read_media_as_base64(temp_file.path().to_str().unwrap())?;
+
+        // Empty file should produce empty base64 string
+        assert_eq!(result, "");
+
+        Ok(())
+    }
 }

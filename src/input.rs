@@ -339,4 +339,101 @@ mod tests {
         let result = get_input_text(&mut config, None).unwrap();
         assert_eq!(result, "Test prompt");
     }
+
+    #[test]
+    fn test_get_input_text_with_prompt_override() {
+        let mut config = Config {
+            prompt: "Original prompt".to_string(),
+            use_clipboard_input: false,
+            image_sources: vec![],
+            text_files: vec![],
+            output_mode: OutputMode::Stdout,
+            resume_conversation: None,
+            resume_last: false,
+            list_conversations: None,
+            show_conversation: None,
+            model: "test-model".to_string(),
+            record_audio: false,
+            ordered_content: Vec::new(),
+        };
+
+        let result = get_input_text(&mut config, Some("Override prompt")).unwrap();
+        assert_eq!(result, "Override prompt");
+        assert_eq!(config.ordered_content.len(), 1);
+    }
+
+    #[test]
+    fn test_build_legacy_input_text_multiple_sources() {
+        let ordered_content = vec![
+            ContentSource::CommandLinePrompt("Main prompt".to_string()),
+            ContentSource::ClipboardText("Clipboard content".to_string()),
+            ContentSource::StdinText("Stdin content".to_string()),
+        ];
+
+        let result = build_legacy_input_text(&ordered_content);
+
+        assert!(result.contains("Main prompt"));
+        assert!(result.contains("=== Content from: clipboard ==="));
+        assert!(result.contains("Clipboard content"));
+        assert!(result.contains("=== Content from: stdin ==="));
+        assert!(result.contains("Stdin content"));
+    }
+
+    #[test]
+    fn test_build_legacy_input_text_with_images_excluded() {
+        let ordered_content = vec![
+            ContentSource::CommandLinePrompt("Text prompt".to_string()),
+            ContentSource::ImageFile("image.jpg".to_string()),
+            ContentSource::ClipboardImage,
+        ];
+
+        let result = build_legacy_input_text(&ordered_content);
+
+        assert!(result.contains("Text prompt"));
+        assert!(!result.contains("image.jpg"));
+        assert!(!result.contains("clipboard"));
+    }
+
+    #[test]
+    fn test_build_legacy_input_text_text_file_with_newline() {
+        let content_with_newline = "File content\n";
+        let content_without_newline = "File content";
+
+        let ordered_with = vec![ContentSource::TextFile(
+            "file1.txt".to_string(),
+            content_with_newline.to_string(),
+        )];
+        let ordered_without = vec![ContentSource::TextFile(
+            "file2.txt".to_string(),
+            content_without_newline.to_string(),
+        )];
+
+        let result_with = build_legacy_input_text(&ordered_with);
+        let result_without = build_legacy_input_text(&ordered_without);
+
+        // Both should end with newline
+        assert!(result_with.contains("File content\n"));
+        assert!(result_without.contains("File content\n"));
+    }
+
+    #[test]
+    fn test_validate_image_sources_empty() {
+        let config = Config {
+            prompt: "Test".to_string(),
+            use_clipboard_input: false,
+            image_sources: vec![],
+            text_files: vec![],
+            output_mode: OutputMode::Stdout,
+            resume_conversation: None,
+            resume_last: false,
+            list_conversations: None,
+            show_conversation: None,
+            model: "test-model".to_string(),
+            record_audio: false,
+            ordered_content: Vec::new(),
+        };
+
+        let result = validate_image_sources(&config);
+        assert!(result.is_ok());
+    }
 }

@@ -219,3 +219,167 @@ pub fn output_text(text: &str, config: &Config) -> Result<()> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cli::ImageSource;
+
+    #[test]
+    fn test_wrap_text_basic() {
+        let text = "This is a simple line that should be wrapped at the specified width limit.";
+        let wrapped = wrap_text(text, 30);
+        let lines: Vec<&str> = wrapped.lines().collect();
+
+        // Should be wrapped into multiple lines
+        assert!(lines.len() > 1);
+        for line in lines {
+            assert!(line.len() <= 30);
+        }
+    }
+
+    #[test]
+    fn test_wrap_text_bullet_merge() {
+        let text = "Item 1•\nContinuation of item 1";
+        let wrapped = wrap_text(text, 100);
+
+        // Should merge lines ending with bullet
+        assert!(!wrapped.contains("•\n"));
+        assert!(wrapped.contains("Item 1 Continuation of item 1"));
+    }
+
+    #[test]
+    fn test_wrap_text_numbered_list_merge() {
+        let text = "1.\nFirst item content";
+        let wrapped = wrap_text(text, 100);
+
+        // Should merge numbered list with content
+        assert!(wrapped.contains("1. First item content"));
+    }
+
+    #[test]
+    fn test_wrap_text_preserves_indentation() {
+        let text = "    Indented line that needs wrapping at some point in the future";
+        let wrapped = wrap_text(text, 30);
+        let lines: Vec<&str> = wrapped.lines().collect();
+
+        // First line should have indentation
+        assert!(lines[0].starts_with("    "));
+
+        // Continuation lines should also be indented
+        if lines.len() > 1 {
+            assert!(lines[1].starts_with("    "));
+        }
+    }
+
+    #[test]
+    fn test_sanitize_prompt_for_filename() {
+        assert_eq!(sanitize_prompt_for_filename("What is AI?"), "what_is_ai");
+
+        assert_eq!(
+            sanitize_prompt_for_filename("Test: <file> with/special\\chars*"),
+            "test_file_with_special_chars"
+        );
+
+        assert_eq!(
+            sanitize_prompt_for_filename("One Two Three Four Five Six"),
+            "one_two_three_four"
+        );
+
+        assert_eq!(sanitize_prompt_for_filename(""), "");
+
+        let long_prompt = "word ".repeat(30);
+        let result = sanitize_prompt_for_filename(&long_prompt);
+        assert!(result.len() <= 50);
+    }
+
+    #[test]
+    fn test_generate_filename_from_prompt() {
+        let filename = generate_filename_from_prompt("Test prompt");
+        assert!(filename.starts_with("test_prompt_"));
+        assert!(filename.ends_with(".md"));
+
+        let filename_empty = generate_filename_from_prompt("");
+        assert!(filename_empty.starts_with("gia_output_"));
+        assert!(filename_empty.ends_with(".md"));
+    }
+
+    #[test]
+    fn test_sanitize_prompt_double_underscores() {
+        let result = sanitize_prompt_for_filename("Test  __  multiple   spaces");
+        assert!(!result.contains("__"));
+        assert_eq!(result, "test_multiple_spaces");
+    }
+
+    #[test]
+    fn test_sanitize_prompt_trim_underscores() {
+        let result = sanitize_prompt_for_filename("___Test___");
+        assert!(!result.starts_with('_'));
+        assert!(!result.ends_with('_'));
+        assert_eq!(result, "test");
+    }
+
+    #[test]
+    fn test_get_outputs_dir() {
+        let result = get_outputs_dir();
+        assert!(result.is_ok());
+
+        let path = result.unwrap();
+        assert!(path.to_string_lossy().contains(".gia"));
+        assert!(path.to_string_lossy().contains("outputs"));
+    }
+
+    #[test]
+    fn test_build_footer_metadata() {
+        let config = Config {
+            prompt: "Test prompt".to_string(),
+            use_clipboard_input: true,
+            image_sources: vec![ImageSource::File("test.jpg".to_string())],
+            text_files: vec!["file.txt".to_string()],
+            output_mode: OutputMode::Stdout,
+            resume_conversation: None,
+            resume_last: false,
+            list_conversations: None,
+            show_conversation: None,
+            model: "gemini-2.5-flash-lite".to_string(),
+            record_audio: false,
+            ordered_content: vec![
+                ContentSource::ImageFile("test.jpg".to_string()),
+                ContentSource::TextFile("file.txt".to_string(), "content".to_string()),
+                ContentSource::ClipboardText("clipboard".to_string()),
+            ],
+        };
+
+        let metadata = build_footer_metadata(&config);
+
+        assert_eq!(metadata.provider_name, "gemini");
+        assert_eq!(metadata.model_name, "gemini-2.5-flash-lite");
+        assert_eq!(metadata.prompt, "Test prompt");
+        assert!(metadata.has_clipboard);
+        assert_eq!(metadata.image_files, vec!["test.jpg"]);
+        assert_eq!(metadata.text_files, vec!["file.txt"]);
+    }
+
+    #[test]
+    fn test_build_footer_metadata_with_provider_prefix() {
+        let config = Config {
+            prompt: "Test".to_string(),
+            use_clipboard_input: false,
+            image_sources: vec![],
+            text_files: vec![],
+            output_mode: OutputMode::Stdout,
+            resume_conversation: None,
+            resume_last: false,
+            list_conversations: None,
+            show_conversation: None,
+            model: "openai::gpt-4".to_string(),
+            record_audio: false,
+            ordered_content: vec![],
+        };
+
+        let metadata = build_footer_metadata(&config);
+
+        assert_eq!(metadata.provider_name, "openai");
+        assert_eq!(metadata.model_name, "gpt-4");
+    }
+}

@@ -267,3 +267,165 @@ fn create_markdown_html(markdown_content: &str, metadata: Option<&FooterMetadata
 </html>"#
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_footer_html_basic() {
+        let metadata = FooterMetadata {
+            model_name: "test-model".to_string(),
+            provider_name: "test-provider".to_string(),
+            timestamp: Utc::now(),
+            image_files: vec![],
+            text_files: vec![],
+            has_clipboard: false,
+            has_audio: false,
+            has_stdin: false,
+            prompt: "Test prompt".to_string(),
+        };
+
+        let footer = build_footer_html(&metadata);
+
+        assert!(footer.contains("test-provider::test-model"));
+        assert!(footer.contains("gia-footer"));
+    }
+
+    #[test]
+    fn test_build_footer_html_with_inputs() {
+        let metadata = FooterMetadata {
+            model_name: "model".to_string(),
+            provider_name: "provider".to_string(),
+            timestamp: Utc::now(),
+            image_files: vec!["image1.jpg".to_string(), "image2.png".to_string()],
+            text_files: vec!["file.txt".to_string()],
+            has_clipboard: true,
+            has_audio: true,
+            has_stdin: true,
+            prompt: "Test".to_string(),
+        };
+
+        let footer = build_footer_html(&metadata);
+
+        assert!(footer.contains("image1.jpg"));
+        assert!(footer.contains("image2.png"));
+        assert!(footer.contains("file.txt"));
+        assert!(footer.contains("Clipboard"));
+        assert!(footer.contains("Audio"));
+        assert!(footer.contains("Stdin"));
+    }
+
+    #[test]
+    fn test_build_prompt_header_with_prompt() {
+        let metadata = FooterMetadata {
+            model_name: "model".to_string(),
+            provider_name: "provider".to_string(),
+            timestamp: Utc::now(),
+            image_files: vec![],
+            text_files: vec![],
+            has_clipboard: false,
+            has_audio: false,
+            has_stdin: false,
+            prompt: "What is AI?".to_string(),
+        };
+
+        let header = build_prompt_header(&metadata);
+
+        assert!(header.contains("What is AI?"));
+        assert!(header.contains("gia-prompt"));
+    }
+
+    #[test]
+    fn test_build_prompt_header_empty_prompt() {
+        let metadata = FooterMetadata {
+            model_name: "model".to_string(),
+            provider_name: "provider".to_string(),
+            timestamp: Utc::now(),
+            image_files: vec![],
+            text_files: vec![],
+            has_clipboard: false,
+            has_audio: false,
+            has_stdin: false,
+            prompt: "".to_string(),
+        };
+
+        let header = build_prompt_header(&metadata);
+
+        assert_eq!(header, "");
+    }
+
+    #[test]
+    fn test_build_prompt_header_escapes_html() {
+        let metadata = FooterMetadata {
+            model_name: "model".to_string(),
+            provider_name: "provider".to_string(),
+            timestamp: Utc::now(),
+            image_files: vec![],
+            text_files: vec![],
+            has_clipboard: false,
+            has_audio: false,
+            has_stdin: false,
+            prompt: "<script>alert('xss')</script>".to_string(),
+        };
+
+        let header = build_prompt_header(&metadata);
+
+        assert!(!header.contains("<script>"));
+        assert!(header.contains("&lt;script&gt;"));
+    }
+
+    #[test]
+    fn test_create_markdown_html_without_metadata() {
+        let markdown = "# Test\n\nThis is a test.";
+        let html = create_markdown_html(markdown, None);
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("<h1>Test</h1>"));
+        assert!(html.contains("This is a test"));
+        // When metadata is None, footer_html should be empty string
+    }
+
+    #[test]
+    fn test_create_markdown_html_with_metadata() {
+        let markdown = "# Test";
+        let metadata = FooterMetadata {
+            model_name: "model".to_string(),
+            provider_name: "provider".to_string(),
+            timestamp: Utc::now(),
+            image_files: vec![],
+            text_files: vec![],
+            has_clipboard: false,
+            has_audio: false,
+            has_stdin: false,
+            prompt: "Test prompt".to_string(),
+        };
+
+        let html = create_markdown_html(markdown, Some(&metadata));
+
+        assert!(html.contains("<h1>Test</h1>"));
+        assert!(html.contains("gia-footer"));
+        assert!(html.contains("gia-prompt"));
+        assert!(html.contains("Test prompt"));
+    }
+
+    #[test]
+    fn test_create_markdown_html_with_code_blocks() {
+        let markdown = "```rust\nfn main() {}\n```";
+        let html = create_markdown_html(markdown, None);
+
+        assert!(html.contains("<pre>"));
+        assert!(html.contains("<code"));
+        assert!(html.contains("fn main()"));
+    }
+
+    #[test]
+    fn test_create_markdown_html_with_tables() {
+        let markdown = "| Column 1 | Column 2 |\n|----------|----------|\n| A | B |";
+        let html = create_markdown_html(markdown, None);
+
+        assert!(html.contains("<table"));
+        assert!(html.contains("<th>Column 1</th>"));
+        assert!(html.contains("<td>A</td>"));
+    }
+}
