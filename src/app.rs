@@ -123,8 +123,12 @@ pub async fn run_app(mut config: Config) -> Result<()> {
                 resource_type: ResourceType::Stdin,
                 path: None,
             }),
-            ContentSource::RoleDefinition(name, _, _is_task) => Some(ResourceInfo {
-                resource_type: ResourceType::Role,
+            ContentSource::RoleDefinition(name, _, is_task) => Some(ResourceInfo {
+                resource_type: if *is_task {
+                    ResourceType::Task
+                } else {
+                    ResourceType::Role
+                },
                 path: Some(name.clone()),
             }),
             _ => None, // Skip CommandLinePrompt and ConversationHistory

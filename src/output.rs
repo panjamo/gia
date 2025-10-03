@@ -129,11 +129,16 @@ fn build_footer_metadata(config: &Config) -> FooterMetadata {
     let mut has_audio = false;
     let mut has_stdin = false;
     let mut roles = Vec::new();
+    let mut tasks = Vec::new();
 
     for content in &config.ordered_content {
         match content {
-            ContentSource::RoleDefinition(name, _, _is_task) => {
-                roles.push(name.clone());
+            ContentSource::RoleDefinition(name, _, is_task) => {
+                if *is_task {
+                    tasks.push(name.clone());
+                } else {
+                    roles.push(name.clone());
+                }
             }
             ContentSource::ImageFile(path) => {
                 if let Some(filename) = Path::new(path).file_name() {
@@ -168,6 +173,7 @@ fn build_footer_metadata(config: &Config) -> FooterMetadata {
         has_audio,
         has_stdin,
         roles,
+        tasks,
         prompt: config.prompt.clone(),
     }
 }

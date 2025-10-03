@@ -18,6 +18,7 @@ pub enum ResourceType {
     ClipboardImage,
     Stdin,
     Role,
+    Task,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -188,6 +189,13 @@ impl Conversation {
                                         format!("🎭 Role: {}", role_name)
                                     } else {
                                         "🎭 Role".to_string()
+                                    }
+                                }
+                                ResourceType::Task => {
+                                    if let Some(task_name) = &resource.path {
+                                        format!("✅ Task: {}", task_name)
+                                    } else {
+                                        "✅ Task".to_string()
                                     }
                                 }
                             };

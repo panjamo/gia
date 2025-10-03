@@ -5,9 +5,9 @@ use std::path::PathBuf;
 use crate::logging::{log_info, log_warn};
 
 #[cfg(test)]
-use anyhow::Context;
-#[cfg(test)]
 use crate::logging::log_debug;
+#[cfg(test)]
+use anyhow::Context;
 
 /// Load a role or task definition file
 /// Searches first in ~/.gia/roles/<name>.md, then in ~/.gia/tasks/<name>.md
