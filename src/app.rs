@@ -2,9 +2,11 @@ use anyhow::{Context, Result};
 use std::io::Write;
 use tabwriter::TabWriter;
 
-use crate::cli::Config;
+use crate::cli::{Config, ContentSource};
 use crate::constants::get_context_window_limit;
-use crate::conversation::{Conversation, ConversationManager, MessageRole};
+use crate::conversation::{
+    Conversation, ConversationManager, MessageRole, ResourceInfo, ResourceType,
+};
 use crate::input::{get_input_text, validate_image_sources};
 use crate::logging::{log_error, log_info};
 use crate::output::output_text;
@@ -93,9 +95,45 @@ pub async fn run_app(mut config: Config) -> Result<()> {
         .await
         .context("Failed to generate content")?;
 
+    // Build resources from ordered content
+    let mut resources = Vec::new();
+    for content_source in &config.ordered_content {
+        let resource = match content_source {
+            ContentSource::ImageFile(path) => Some(ResourceInfo {
+                resource_type: ResourceType::Image,
+                path: Some(path.clone()),
+            }),
+            ContentSource::AudioRecording(path) => Some(ResourceInfo {
+                resource_type: ResourceType::Audio,
+                path: Some(path.clone()),
+            }),
+            ContentSource::TextFile(path, _) => Some(ResourceInfo {
+                resource_type: ResourceType::TextFile,
+                path: Some(path.clone()),
+            }),
+            ContentSource::ClipboardText(_) => Some(ResourceInfo {
+                resource_type: ResourceType::ClipboardText,
+                path: None,
+            }),
+            ContentSource::ClipboardImage => Some(ResourceInfo {
+                resource_type: ResourceType::ClipboardImage,
+                path: None,
+            }),
+            ContentSource::StdinText(_) => Some(ResourceInfo {
+                resource_type: ResourceType::Stdin,
+                path: None,
+            }),
+            _ => None, // Skip CommandLinePrompt and ConversationHistory
+        };
+
+        if let Some(res) = resource {
+            resources.push(res);
+        }
+    }
+
     // Add messages to conversation
-    conversation.add_message(MessageRole::User, input_text);
-    conversation.add_message(MessageRole::Assistant, response.clone());
+    conversation.add_message(MessageRole::User, input_text, resources);
+    conversation.add_message(MessageRole::Assistant, response.clone(), Vec::new());
 
     // Save conversation
     conversation_manager
@@ -221,8 +259,8 @@ fn handle_show_conversation(
         .context("Failed to get markdown path")?;
 
     // Read the existing markdown content
-    let markdown_content = std::fs::read_to_string(&markdown_path)
-        .context("Failed to read existing markdown file")?;
+    let markdown_content =
+        std::fs::read_to_string(&markdown_path).context("Failed to read existing markdown file")?;
 
     // Copy the markdown path to clipboard
     use crate::clipboard::write_clipboard;

@@ -2,7 +2,6 @@ use anyhow::{Context, Result};
 use chrono::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
-use textwrap;
 
 use crate::browser_preview::{open_markdown_preview, FooterMetadata};
 use crate::cli::{Config, ContentSource, OutputMode};
@@ -14,20 +13,24 @@ fn wrap_text(text: &str, width: usize) -> String {
     let mut merged_lines = Vec::new();
     let lines: Vec<&str> = text.lines().collect();
     let mut i = 0;
-    
+
     while i < lines.len() {
         let line = lines[i];
         let trimmed = line.trim_end();
-        
+
         // Check if line ends with '•' or a digit followed by '.'
         let should_merge = if trimmed.ends_with('•') {
             true
         } else if trimmed.ends_with('.') {
-            trimmed.chars().rev().nth(1).map_or(false, |c| c.is_ascii_digit())
+            trimmed
+                .chars()
+                .rev()
+                .nth(1)
+                .is_some_and(|c| c.is_ascii_digit())
         } else {
             false
         };
-        
+
         if should_merge && i + 1 < lines.len() {
             // Remove the '•' or keep the number+period, then concatenate with next line
             let content = if trimmed.ends_with('•') {
@@ -42,24 +45,20 @@ fn wrap_text(text: &str, width: usize) -> String {
             i += 1;
         }
     }
-    
+
     // Second pass: wrap the merged lines
     merged_lines
         .iter()
         .map(|line| {
             // Find the position of the first alphanumeric character
-            let first_char_pos = line
-                .chars()
-                .position(|c| c.is_alphanumeric())
-                .unwrap_or(0);
-            
+            let first_char_pos = line.chars().position(|c| c.is_alphanumeric()).unwrap_or(0);
+
             // Create indentation string matching the position
             let indent = " ".repeat(first_char_pos);
-            
+
             // Configure textwrap options with subsequent indent
-            let options = textwrap::Options::new(width)
-                .subsequent_indent(&indent);
-            
+            let options = textwrap::Options::new(width).subsequent_indent(&indent);
+
             textwrap::fill(line, &options)
         })
         .collect::<Vec<_>>()
@@ -74,7 +73,7 @@ pub fn get_outputs_dir() -> Result<PathBuf> {
 
 pub fn sanitize_prompt_for_filename(prompt: &str) -> String {
     let words: Vec<&str> = prompt.split_whitespace().take(4).collect();
-    
+
     let mut sanitized = if words.is_empty() {
         return String::new();
     } else {

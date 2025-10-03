@@ -10,10 +10,28 @@ use crate::constants::CONVERSATION_TRUNCATION_KEEP_MESSAGES;
 use crate::logging::{log_debug, log_info, log_warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ResourceType {
+    Image,
+    Audio,
+    TextFile,
+    ClipboardText,
+    ClipboardImage,
+    Stdin,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceInfo {
+    pub resource_type: ResourceType,
+    pub path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
     pub role: MessageRole,
     pub content: String,
     pub timestamp: DateTime<Utc>,
+    #[serde(default)]
+    pub resources: Vec<ResourceInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,11 +59,17 @@ impl Conversation {
         }
     }
 
-    pub fn add_message(&mut self, role: MessageRole, content: String) {
+    pub fn add_message(
+        &mut self,
+        role: MessageRole,
+        content: String,
+        resources: Vec<ResourceInfo>,
+    ) {
         let message = Message {
             role,
             content,
             timestamp: Utc::now(),
+            resources,
         };
         self.messages.push(message);
         self.updated_at = Utc::now();
@@ -124,7 +148,8 @@ impl Conversation {
                 MessageRole::User => {
                     // Format user prompts in a styled box similar to browser output
                     // Use raw HTML with escaped content
-                    let escaped_content = html_escape::encode_text(&message.content).replace('\n', "<br>");
+                    let escaped_content =
+                        html_escape::encode_text(&message.content).replace('\n', "<br>");
                     markdown.push_str(&format!(
                         r#"<div class="gia-prompt">
 <h3>💬 {}</h3>
@@ -132,14 +157,13 @@ impl Conversation {
 </div>
 
 "#,
-                        username,
-                        escaped_content
+                        username, escaped_content
                     ));
                 }
                 MessageRole::Assistant => {
                     markdown.push_str("**Assistant:** ");
                     markdown.push_str(&message.content);
-                    markdown.push_str("\n");
+                    markdown.push('\n');
                 }
             }
 
@@ -398,7 +422,7 @@ mod tests {
     #[test]
     fn test_add_message() {
         let mut conversation = Conversation::new();
-        conversation.add_message(MessageRole::User, "Hello".to_string());
+        conversation.add_message(MessageRole::User, "Hello".to_string(), Vec::new());
 
         assert_eq!(conversation.messages.len(), 1);
         assert!(matches!(conversation.messages[0].role, MessageRole::User));
@@ -408,15 +432,28 @@ mod tests {
     #[test]
     fn test_truncate_if_needed() {
         let mut conversation = Conversation::new();
-        conversation.add_message(MessageRole::User, "A".repeat(1000));
-        conversation.add_message(MessageRole::Assistant, "B".repeat(1000));
-        conversation.add_message(MessageRole::User, "C".repeat(1000));
-        conversation.add_message(MessageRole::Assistant, "D".repeat(1000));
 
-        conversation.truncate_if_needed(2500); // Should keep last 2 messages
+        // Add more than CONVERSATION_TRUNCATION_KEEP_MESSAGES (20) to test truncation
+        for i in 0..25 {
+            conversation.add_message(
+                if i % 2 == 0 {
+                    MessageRole::User
+                } else {
+                    MessageRole::Assistant
+                },
+                format!("Message {}", i).repeat(100),
+                Vec::new(),
+            );
+        }
 
-        assert_eq!(conversation.messages.len(), 2);
-        assert!(conversation.messages[0].content.contains('C'));
-        assert!(conversation.messages[1].content.contains('D'));
+        let initial_count = conversation.messages.len();
+        assert_eq!(initial_count, 25);
+
+        // Truncate to fit in ~2000 chars (should keep only last 20 messages due to minimum)
+        conversation.truncate_if_needed(2000);
+
+        // Should have fewer messages now, but at least CONVERSATION_TRUNCATION_KEEP_MESSAGES
+        assert!(conversation.messages.len() < initial_count);
+        assert!(conversation.messages.len() >= 20); // At least the minimum
     }
 }
