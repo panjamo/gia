@@ -150,14 +150,54 @@ impl Conversation {
                     // Use raw HTML with escaped content
                     let escaped_content =
                         html_escape::encode_text(&message.content).replace('\n', "<br>");
+
+                    // Build resources list if any
+                    let mut resources_html = String::new();
+                    if !message.resources.is_empty() {
+                        resources_html
+                            .push_str("<p><small><strong>Resources:</strong></small></p><ul>");
+                        for resource in &message.resources {
+                            let resource_text = match &resource.resource_type {
+                                ResourceType::Image => {
+                                    if let Some(path) = &resource.path {
+                                        format!("📷 Image: {}", path)
+                                    } else {
+                                        "📷 Image".to_string()
+                                    }
+                                }
+                                ResourceType::Audio => {
+                                    if let Some(path) = &resource.path {
+                                        format!("🎤 Audio: {}", path)
+                                    } else {
+                                        "🎤 Audio".to_string()
+                                    }
+                                }
+                                ResourceType::TextFile => {
+                                    if let Some(path) = &resource.path {
+                                        format!("📄 File: {}", path)
+                                    } else {
+                                        "📄 File".to_string()
+                                    }
+                                }
+                                ResourceType::ClipboardText => "📋 Clipboard text".to_string(),
+                                ResourceType::ClipboardImage => "📋 Clipboard image".to_string(),
+                                ResourceType::Stdin => "⌨️  Stdin input".to_string(),
+                            };
+                            let escaped_resource = html_escape::encode_text(&resource_text);
+                            resources_html.push_str(&format!("<li>{}</li>", escaped_resource));
+                        }
+                        resources_html.push_str("</ul>");
+                    }
+
                     markdown.push_str(&format!(
                         r#"<div class="gia-prompt">
 <h3>💬 {}</h3>
 <p>{}</p>
+{}
 </div>
 
 "#,
-                        username, escaped_content
+                        username, escaped_content, resources_html
                     ));
                 }
                 MessageRole::Assistant => {
