@@ -255,6 +255,21 @@ gia "Fix any errors in this code" -c
 gia "Rewrite this professionally" -c -o
 ```
 
+## Windows GUI Wrapper
+
+![giagui.png](icons/giagui.png)
+
+For Windows users, `giagui.ahk` provides a graphical interface to GIA. The AutoHotkey script offers:
+- Text prompt input with multi-line support
+- Checkbox options for clipboard input, browser output, and conversation resuming
+- Response display area
+- Quick action buttons (Send, Clear, Copy Response, Browser View)
+- Auto-detection of clipboard content (text/images)
+
+To use the GUI:
+1. Install [AutoHotkey](https://www.autohotkey.com/)
+2. Run `giagui.ahk`
+
 ## Dependencies
 
 - `tokio` - Async runtime
