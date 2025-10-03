@@ -212,7 +212,7 @@ pub fn output_text(text: &str, config: &Config) -> Result<()> {
             let plain_text = markdown_to_text::convert(text);
             let plain_text = plain_text.replace('\t', "  ");
             let wrapped_text = wrap_text(&plain_text, 100);
-            print!("{wrapped_text}");
+            println!("{wrapped_text}");
             Ok(())
         }
     }

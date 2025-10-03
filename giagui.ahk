@@ -31,6 +31,7 @@ Gui, Add, Edit, x10 y250 w672 h295 vResponse ReadOnly Multi
 Gui, Add, Button, x10 y555 w100 h30 gSendPrompt Default, &Send
 Gui, Add, Button, x120 y555 w100 h30 gClearForm, &Clear
 Gui, Add, Button, x230 y555 w100 h30 gCopyResponse, C&opy Response
+Gui, Add, Button, x340 y555 w100 h30 gBrowserView, Browser &View
 
 ; Add status bar
 Gui, Add, Text, x10 y595 w672 vStatusBar, Ready
@@ -142,9 +143,27 @@ CopyResponse:
     }
 return
 
+BrowserView:
+    ; Update status
+    GuiControl,, StatusBar, Opening browser view...
+    
+    ; Execute command
+    Cmd := "gia.exe -bs"
+    Output := RunWaitOutput(Cmd)
+    
+    if (ErrorLevel) {
+        GuiControl,, StatusBar, Error opening browser view
+        MsgBox, 16, Error, Failed to open browser view.`n`nError: %Output%
+    } else {
+        GuiControl,, StatusBar, Browser view opened
+    }
+return
+
 ; Run command and capture output
 RunWaitOutput(Cmd) {
-    tempFileName := A_Temp . "\gia_output.txt"
+; Generate random temp file name to avoid conflicts
+    Random, RandomNum, 10000000, 99999999
+    tempFileName := A_Temp . "\" . RandomNum . ".txt"
     ; MsgBox, 4, Confirm, Are you sure you want to execute the following command?`n`n%Cmd%`n%tempFileName%
     RunWait, cmd /c %Cmd% > %tempFileName%, , UseErrorLevel hide
     return ErrorLevel ? ErrorLevel : tempFileName
