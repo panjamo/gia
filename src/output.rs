@@ -46,23 +46,35 @@ fn wrap_text(text: &str, width: usize) -> String {
         }
     }
 
-    // Second pass: wrap the merged lines
-    merged_lines
-        .iter()
-        .map(|line| {
-            // Find the position of the first alphanumeric character
-            let first_char_pos = line.chars().position(|c| c.is_alphanumeric()).unwrap_or(0);
+    // Second pass: wrap the merged lines and add spacing when indentation decreases
+    let mut result = Vec::new();
+    let mut prev_indent: Option<usize> = None;
+    let mut prev_was_empty = false;
 
-            // Create indentation string matching the position
-            let indent = " ".repeat(first_char_pos);
+    for line in merged_lines.iter() {
+        let is_empty = line.trim().is_empty();
+        let curr_indent = line.chars().position(|c| c.is_alphanumeric()).unwrap_or(0);
 
-            // Configure textwrap options with subsequent indent
-            let options = textwrap::Options::new(width).subsequent_indent(&indent);
+        // Add newline if indentation decreased and previous line wasn't empty
+        if let Some(prev) = prev_indent {
+            if !prev_was_empty && !is_empty && curr_indent < prev {
+                result.push(String::new());
+            }
+        }
 
-            textwrap::fill(line, &options)
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+        // Create indentation string matching the position
+        let indent = " ".repeat(curr_indent);
+
+        // Configure textwrap options with subsequent indent
+        let options = textwrap::Options::new(width).subsequent_indent(&indent);
+
+        result.push(textwrap::fill(line, &options));
+
+        prev_indent = Some(curr_indent);
+        prev_was_empty = is_empty;
+    }
+
+    result.join("\n")
 }
 
 pub fn get_outputs_dir() -> Result<PathBuf> {
