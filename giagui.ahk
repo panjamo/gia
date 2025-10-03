@@ -13,10 +13,10 @@ Gui, Margin, 10, 10
 
 ; Add prompt input
 Gui, Add, Text, x10 y10, Prompt:
-Gui, Add, Edit, x10 y30 w560 h100 vPrompt gPromptEdit
+Gui, Add, Edit, x10 y30 w672 h100 vPrompt gPromptEdit
 
 ; Add options group
-Gui, Add, GroupBox, x10 y140 w560 h80, Options
+Gui, Add, GroupBox, x10 y140 w672 h80, Options
 
 ; Add checkboxes
 Gui, Add, Checkbox, x20 y160 vUseClipboard, &Use clipboard input (-c)
@@ -25,7 +25,7 @@ Gui, Add, Checkbox, x300 y160 vResume, &Resume last conversation (-R)
 
 ; Add response output
 Gui, Add, Text, x10 y230, Response:
-Gui, Add, Edit, x10 y250 w560 h295 vResponse ReadOnly Multi
+Gui, Add, Edit, x10 y250 w672 h295 vResponse ReadOnly Multi
 
 ; Add buttons
 Gui, Add, Button, x10 y555 w100 h30 gSendPrompt Default, &Send
@@ -33,10 +33,10 @@ Gui, Add, Button, x120 y555 w100 h30 gClearForm, &Clear
 Gui, Add, Button, x230 y555 w100 h30 gCopyResponse, C&opy Response
 
 ; Add status bar
-Gui, Add, Text, x10 y595 w560 vStatusBar, Ready
+Gui, Add, Text, x10 y595 w672 vStatusBar, Ready
 
 ; Show GUI
-Gui, Show, w580 h625, GIA - Google Intelligence Assistant
+Gui, Show, w692 h625, GIA - Google Intelligence Assistant
 return
 
 GuiClose:
