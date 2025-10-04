@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use chardetng::EncodingDetector;
 use std::fmt::Write;
 use std::fs;
 use std::io::{self, Read};
@@ -25,15 +26,41 @@ pub fn read_stdin() -> Result<String> {
 pub fn read_text_file(file_path: &str) -> Result<String> {
     log_debug(&format!("Reading text file: {file_path}"));
 
-    let content = fs::read_to_string(file_path)
-        .with_context(|| format!("Failed to read file: {file_path}"))?;
+    // First try to read as bytes
+    let bytes = fs::read(file_path).with_context(|| format!("Failed to read file: {file_path}"))?;
 
-    log_info(&format!(
-        "Read {} characters from file: {}",
-        content.len(),
-        file_path
-    ));
-    Ok(content)
+    // Try to decode as UTF-8 first
+    match String::from_utf8(bytes.clone()) {
+        Ok(content) => {
+            log_info(&format!(
+                "Read {} characters from file (UTF-8): {}",
+                content.len(),
+                file_path
+            ));
+            Ok(content)
+        }
+        Err(_) => {
+            // If UTF-8 fails, use encoding detection
+            let mut detector = EncodingDetector::new();
+            detector.feed(&bytes, true);
+            let encoding = detector.guess(None, true);
+
+            let (content, _, had_errors) = encoding.decode(&bytes);
+            if had_errors {
+                log_debug(&format!(
+                    "Encoding detection had errors for file: {file_path}"
+                ));
+            }
+
+            log_info(&format!(
+                "Read {} characters from file ({}): {}",
+                content.len(),
+                encoding.name(),
+                file_path
+            ));
+            Ok(content.into_owned())
+        }
+    }
 }
 
 pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Result<String> {
