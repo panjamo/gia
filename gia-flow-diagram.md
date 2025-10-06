@@ -1,0 +1,109 @@
+# GIA Input/Output Flow Diagram
+
+This diagram visualizes all the different input sources and output destinations available in the GIA (Google Intelligence Assistant) tool.
+
+```mermaid
+flowchart TD
+    %% Input Sources
+    CMD[Command Line Arguments<br/>Main Prompt Text]
+    AUDIO[Audio Recording<br/>-a, --record-audio<br/>Uses ffmpeg]
+    CLIPBOARD[Clipboard Content<br/>-c, --clipboard-input<br/>Auto-detects text vs images]
+    STDIN[Standard Input<br/>Auto-detected when piped]
+    TEXTFILES[Text Files<br/>-f, --file<br/>Any extension]
+    MEDIAFILES[Media Files<br/>-i, --image<br/>JPEG, PNG, WebP, HEIC, PDF<br/>OGG, OPUS, MP3, M4A, MP4]
+    ROLES[Roles & Tasks<br/>-t, --role<br/>From ~/.gia/roles/ or ~/.gia/tasks/]
+    RESUME[Resume Conversation<br/>-r, --resume<br/>Continue previous conversation]
+    
+    %% Processing Core
+    GIA[GIA Core<br/>Google Gemini API<br/>Multi-key fallback<br/>Conversation management]
+    
+    %% Output Destinations
+    STDOUT[Standard Output<br/>Default destination<br/>Clean for piping]
+    CLIPOUT[Clipboard Output<br/>-o, --clipboard-output<br/>Copy response to clipboard]
+    BROWSER[Browser Output<br/>-b, --browser-output<br/>File + browser preview<br/>~/.gia/outputs/]
+    TTS[Text-to-Speech<br/>-T, --tts<br/>Audio output with voice]
+    
+    %% Additional Features
+    CONV[Conversation Storage<br/>~/.gia/conversations/<br/>Persistent JSON storage]
+    LIST[List Conversations<br/>-l, --list-conversations<br/>Show saved conversations]
+    SHOW[Show Conversation<br/>-s, --show-conversation<br/>Display conversation history]
+    
+    %% Input Flow
+    CMD --> GIA
+    AUDIO --> GIA
+    CLIPBOARD --> GIA
+    STDIN --> GIA
+    TEXTFILES --> GIA
+    MEDIAFILES --> GIA
+    ROLES --> GIA
+    RESUME --> CONV
+    CONV --> GIA
+    
+    %% Output Flow
+    GIA --> STDOUT
+    GIA --> CLIPOUT
+    GIA --> BROWSER
+    GIA --> TTS
+    GIA --> CONV
+    
+    %% Management Flow
+    LIST --> CONV
+    SHOW --> CONV
+    CONV --> STDOUT
+    CONV --> CLIPOUT
+    CONV --> BROWSER
+    
+    %% Styling
+    classDef inputSource fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef outputDest fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef core fill:#fff3e0,stroke:#e65100,stroke-width:3px
+    classDef storage fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    
+    class CMD,AUDIO,CLIPBOARD,STDIN,TEXTFILES,MEDIAFILES,ROLES,RESUME inputSource
+    class STDOUT,CLIPOUT,BROWSER,TTS outputDest
+    class GIA core
+    class CONV,LIST,SHOW storage
+```
+
+## Input Sources
+
+1. **Command Line Arguments** - Main prompt text (required, except audio-only)
+2. **Audio Recording** (-a) - Record audio using ffmpeg, auto-generates prompt
+3. **Clipboard Content** (-c) - Auto-detects text vs images
+4. **Standard Input** - Automatically detected when piped
+5. **Text Files** (-f) - Any file extension, content added to prompt
+6. **Media Files** (-i) - Images, audio, video files for AI analysis
+7. **Roles & Tasks** (-t) - Load AI personas and instructions from markdown files
+8. **Resume Conversation** (-r) - Continue previous conversations with context
+
+## Output Destinations
+
+1. **Standard Output** - Default, clean output suitable for piping
+2. **Clipboard Output** (-o) - Copy response directly to clipboard
+3. **Browser Output** (-b) - Save to file and open browser preview
+4. **Text-to-Speech** (-T) - Audio output with configurable voice
+
+## Key Features
+
+- **Multi-source Input**: Combine multiple input sources in a single command
+- **Intelligent Processing**: Auto-detection of input types and formats
+- **Flexible Output**: Choose how and where to receive responses
+- **Conversation Persistence**: Automatic conversation saving and resumption
+- **Fallback Support**: Multi-API key support with automatic rate limit handling
+- **Cross-platform**: Works on Windows, macOS, and Linux
+
+## Example Combinations
+
+```bash
+# Multiple inputs to clipboard output
+gia "Analyze this code and documentation" -f README.md -f main.rs -i diagram.png -o
+
+# Audio + text with browser preview
+gia -a "Also consider this context" -c -b
+
+# Resume conversation with file input
+gia --resume "Continue with this new data" -f data.csv
+
+# Role-based analysis with multiple sources
+gia -t code-review "Review this implementation" -f src/ -i architecture.png
+```
