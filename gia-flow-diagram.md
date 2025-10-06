@@ -3,8 +3,8 @@
 This diagram visualizes all the different input sources and output destinations available in the GIA (Google Intelligence Assistant) tool.
 
 ```mermaid
-flowchart TD
-    %% Input Sources
+flowchart LR
+    %% Input Sources (Left Side)
     CMD[Command Line Arguments<br/>Main Prompt Text]
     AUDIO[Audio Recording<br/>-a, --record-audio<br/>Uses ffmpeg]
     CLIPBOARD[Clipboard Content<br/>-c, --clipboard-input<br/>Auto-detects text vs images]
@@ -14,16 +14,16 @@ flowchart TD
     ROLES[Roles & Tasks<br/>-t, --role<br/>From ~/.gia/roles/ or ~/.gia/tasks/]
     RESUME[Resume Conversation<br/>-r, --resume<br/>Continue previous conversation]
 
-    %% Processing Core
+    %% Processing Core (Center)
     GIA[GIA Core<br/>Google Gemini API<br/>Multi-key fallback<br/>Conversation management]
 
-    %% Output Destinations
+    %% Output Destinations (Right Side)
     STDOUT[Standard Output<br/>Default destination<br/>Clean for piping]
     CLIPOUT[Clipboard Output<br/>-o, --clipboard-output<br/>Copy response to clipboard]
     BROWSER[Browser Output<br/>-b, --browser-output<br/>File + browser preview<br/>~/.gia/outputs/]
     TTS[Text-to-Speech<br/>-T, --tts<br/>Audio output with voice]
 
-    %% Input Flow
+    %% Input Flow (Left to Center)
     CMD --> GIA
     AUDIO --> GIA
     CLIPBOARD --> GIA
@@ -32,14 +32,12 @@ flowchart TD
     MEDIAFILES --> GIA
     ROLES --> GIA
     RESUME --> GIA
-    CONV --> GIA
 
-    %% Output Flow
+    %% Output Flow (Center to Right)
     GIA --> STDOUT
     GIA --> CLIPOUT
     GIA --> BROWSER
     GIA --> TTS
-
 
     %% Styling
     classDef inputSource fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#000000
@@ -50,7 +48,6 @@ flowchart TD
     class CMD,AUDIO,CLIPBOARD,STDIN,TEXTFILES,MEDIAFILES,ROLES,RESUME inputSource
     class STDOUT,CLIPOUT,BROWSER,TTS outputDest
     class GIA core
-    class CONV,LIST,SHOW storage
 ```
 
 ## Input Sources
