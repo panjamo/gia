@@ -56,6 +56,7 @@ struct GiaApp {
     pending_response: Arc<Mutex<Option<String>>>,
     tts_enabled: bool,
     tts_language: String,
+    logo_texture: Option<egui::TextureHandle>,
 }
 
 impl Default for GiaApp {
@@ -81,6 +82,7 @@ impl Default for GiaApp {
             pending_response: Arc::new(Mutex::new(None)),
             tts_enabled: false,
             tts_language: "de-DE".to_string(),
+            logo_texture: None,
         }
     }
 }
@@ -140,6 +142,9 @@ fn collect_files_recursive(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
 
 impl eframe::App for GiaApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Cache mutex values at the start
+        let is_executing = *self.is_executing.lock().unwrap();
+
         // Check for pending response
         if let Ok(mut pending) = self.pending_response.lock() {
             if let Some(response) = pending.take() {
@@ -147,9 +152,8 @@ impl eframe::App for GiaApp {
             }
         }
 
-        // Request repaint for animation
-        let is_exec = *self.is_executing.lock().unwrap();
-        if is_exec {
+        // Request repaint for animation (use cached value)
+        if is_executing {
             self.animation_time += ctx.input(|i| i.stable_dt as f64);
             ctx.request_repaint();
         }
@@ -278,25 +282,29 @@ impl eframe::App for GiaApp {
                         });
                     });
 
-                    // GIA logo
-                    let logo_bytes = include_bytes!("../../icons/gia.png");
-                    if let Ok(image) = image::load_from_memory(logo_bytes) {
-                        let size = [80.0, 80.0];
-                        let image =
-                            image.resize_exact(80, 80, image::imageops::FilterType::Lanczos3);
-                        let rgba_image = image.to_rgba8();
-                        let pixels = rgba_image.as_flat_samples();
-                        let color_image = egui::ColorImage::from_rgba_unmultiplied(
-                            [size[0] as usize, size[1] as usize],
-                            pixels.as_slice(),
-                        );
-                        let texture = ui.ctx().load_texture(
-                            "gia_logo",
-                            color_image,
-                            egui::TextureOptions::LINEAR,
-                        );
+                    // GIA logo (load once and cache)
+                    if self.logo_texture.is_none() {
+                        let logo_bytes = include_bytes!("../../icons/gia.png");
+                        if let Ok(image) = image::load_from_memory(logo_bytes) {
+                            let image =
+                                image.resize_exact(80, 80, image::imageops::FilterType::Lanczos3);
+                            let rgba_image = image.to_rgba8();
+                            let pixels = rgba_image.as_flat_samples();
+                            let color_image = egui::ColorImage::from_rgba_unmultiplied(
+                                [80, 80],
+                                pixels.as_slice(),
+                            );
+                            self.logo_texture = Some(ui.ctx().load_texture(
+                                "gia_logo",
+                                color_image,
+                                egui::TextureOptions::LINEAR,
+                            ));
+                        }
+                    }
+
+                    if let Some(ref texture) = self.logo_texture {
                         ui.add_space(10.0);
-                        ui.image(&texture);
+                        ui.image(texture);
                         ui.add_space(10.0);
                     }
 
@@ -448,9 +456,8 @@ impl eframe::App for GiaApp {
 
                 ui.add_space(5.0);
 
-                // Animation during execution
-                let is_exec = *self.is_executing.lock().unwrap();
-                if is_exec {
+                // Animation during execution (use cached value)
+                if is_executing {
                     ui.horizontal(|ui| {
                         ui.label("Executing GIA");
 
