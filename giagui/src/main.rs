@@ -175,13 +175,13 @@ impl eframe::App for GiaApp {
         }
         // Checkbox shortcuts
         if ctx.input(|i| i.key_pressed(egui::Key::Num1) && i.modifiers.ctrl) {
-            self.use_clipboard = !self.use_clipboard;
+            self.resume = !self.resume;
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Num2) && i.modifiers.ctrl) {
-            self.browser_output = !self.browser_output;
+            self.use_clipboard = !self.use_clipboard;
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Num3) && i.modifiers.ctrl) {
-            self.resume = !self.resume;
+            self.browser_output = !self.browser_output;
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Num4) && i.modifiers.ctrl) {
             self.tts_enabled = !self.tts_enabled;
@@ -258,17 +258,23 @@ impl eframe::App for GiaApp {
                     // Checkboxes
                     ui.group(|ui| {
                         ui.vertical(|ui| {
-                            ui.label("Options");
+                            ui.checkbox(
+                                &mut self.resume,
+                                "📥 Resume last conversation (-R) [Ctrl+1]",
+                            );
                             ui.checkbox(
                                 &mut self.use_clipboard,
-                                "Use clipboard input (-c) [Ctrl+1]",
+                                "📥 Use clipboard input (-c) [Ctrl+2]",
                             );
+                            ui.add_space(3.0);
                             ui.checkbox(
                                 &mut self.browser_output,
-                                "Browser output (--browser-output) [Ctrl+2]",
+                                "📤 Browser output (--browser-output) [Ctrl+3]",
                             );
-                            ui.checkbox(&mut self.resume, "Resume last conversation (-R) [Ctrl+3]");
-                            ui.checkbox(&mut self.tts_enabled, "Text-to-Speech (--tts) [Ctrl+4]");
+                            ui.checkbox(
+                                &mut self.tts_enabled,
+                                "📤 Text-to-Speech (--tts) [Ctrl+4]",
+                            );
                         });
                     });
 
@@ -296,7 +302,7 @@ impl eframe::App for GiaApp {
 
                     // Custom options input
                     ui.vertical(|ui| {
-                        ui.label("Options: (Drop files here)");
+                        ui.label("GIA Command Line Options: (Drop files here)");
                         let options_lines = self.options.lines().count().clamp(1, 10);
                         egui::ScrollArea::vertical()
                             .max_height(200.0)
