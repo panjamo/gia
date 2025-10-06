@@ -4,9 +4,8 @@ use tabwriter::TabWriter;
 
 use crate::cli::{Config, ContentSource};
 use crate::constants::get_context_window_limit;
-use crate::conversation::{
-    Conversation, ConversationManager, MessageRole, ResourceInfo, ResourceType,
-};
+use crate::content_part_wrapper::{ChatMessageWrapper, ContentPartWrapper, MessageContentWrapper};
+use crate::conversation::{Conversation, ConversationManager, ResourceInfo, ResourceType};
 use crate::input::{get_input_text, validate_image_sources};
 use crate::logging::{log_error, log_info};
 use crate::output::output_text;
@@ -31,7 +30,8 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     validate_image_sources(&config).context("Failed to validate image sources")?;
 
     // Determine conversation mode and adjust prompt if needed
-    let (mut conversation, final_prompt) = resolve_conversation(&config, &conversation_manager)?;
+    let (mut conversation, final_prompt) =
+        resolve_conversation(&config, &conversation_manager, &config.model)?;
 
     // Get input text (this may modify config to add clipboard images)
     let input_text =
@@ -51,25 +51,6 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     // Truncate conversation if it's getting too long
     conversation.truncate_if_needed(get_context_window_limit());
 
-    // Add conversation history to ordered content if we have any
-    if !conversation.messages.is_empty() {
-        // Build conversation history text
-        let mut history = String::new();
-        for message in &conversation.messages {
-            match message.role {
-                MessageRole::User => history.push_str("User: "),
-                MessageRole::Assistant => history.push_str("Assistant: "),
-            }
-            history.push_str(&message.content);
-            history.push('\n');
-        }
-
-        // Insert conversation history at the beginning of ordered content
-        config
-            .ordered_content
-            .insert(0, crate::cli::ContentSource::ConversationHistory(history));
-    }
-
     // Get API keys
     let api_keys = crate::api_key::get_api_keys().context("Failed to get API keys")?;
 
@@ -82,16 +63,30 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     let mut provider = ProviderFactory::create_provider(provider_config)
         .context("Failed to initialize AI provider")?;
 
-    // Generate content using ordered content sources
+    // 1. Build new user message wrapper from ordered content
+    let content_part_wrappers = build_content_part_wrappers(&config.ordered_content)?;
+
+    let new_user_message_wrapper = ChatMessageWrapper {
+        role: "User".to_string(),
+        content: MessageContentWrapper::Parts {
+            parts: content_part_wrappers,
+        },
+    };
+
+    // 2. Convert conversation history + new message to genai ChatMessages for API
+    let mut all_genai_messages = conversation.to_genai_messages()?;
+    all_genai_messages.push(new_user_message_wrapper.to_genai_chat_message()?);
+
+    // 3. Generate content using chat messages
     log_info(&format!(
-        "Sending multimodal request to {} API using model: {} with {} ordered content source(s)",
+        "Sending chat request to {} API using model: {} with {} message(s)",
         provider.provider_name(),
         provider.model_name(),
-        config.ordered_content.len()
+        all_genai_messages.len()
     ));
 
     let response = provider
-        .generate_content_with_ordered_sources(&config.ordered_content)
+        .generate_content_with_chat_messages(all_genai_messages)
         .await
         .context("Failed to generate content")?;
 
@@ -139,9 +134,17 @@ pub async fn run_app(mut config: Config) -> Result<()> {
         }
     }
 
-    // Add messages to conversation
-    conversation.add_message(MessageRole::User, input_text, resources);
-    conversation.add_message(MessageRole::Assistant, response.clone(), Vec::new());
+    // 4. Create assistant message wrapper
+    let assistant_message_wrapper = ChatMessageWrapper {
+        role: "Assistant".to_string(),
+        content: MessageContentWrapper::Text {
+            text: response.clone(),
+        },
+    };
+
+    // 5. Add messages to conversation
+    conversation.add_message(new_user_message_wrapper, resources);
+    conversation.add_message(assistant_message_wrapper, Vec::new());
 
     // Save conversation
     conversation_manager
@@ -160,9 +163,75 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     Ok(())
 }
 
+fn build_content_part_wrappers(ordered_content: &[ContentSource]) -> Result<Vec<ContentPartWrapper>> {
+    let mut wrappers = Vec::new();
+
+    for content_source in ordered_content {
+        match content_source {
+            ContentSource::CommandLinePrompt(prompt) => {
+                wrappers.push(ContentPartWrapper::Prompt(prompt.clone()));
+            }
+            ContentSource::RoleDefinition(name, content, is_task) => {
+                wrappers.push(ContentPartWrapper::RoleDefinition {
+                    name: name.clone(),
+                    content: content.clone(),
+                    is_task: *is_task,
+                });
+            }
+            ContentSource::TextFile(path, content) => {
+                wrappers.push(ContentPartWrapper::TextFile {
+                    path: path.clone(),
+                    content: content.clone(),
+                });
+            }
+            ContentSource::ClipboardText(text) => {
+                wrappers.push(ContentPartWrapper::ClipboardText(text.clone()));
+            }
+            ContentSource::StdinText(text) => {
+                wrappers.push(ContentPartWrapper::StdinText(text.clone()));
+            }
+            ContentSource::ImageFile(path) => {
+                let mime_type = crate::image::get_mime_type(std::path::Path::new(path))?;
+                let data = crate::image::read_media_as_base64(path)?;
+                wrappers.push(ContentPartWrapper::Image {
+                    path: Some(path.clone()),
+                    mime_type,
+                    data,
+                });
+            }
+            ContentSource::ClipboardImage => {
+                let image_data = crate::clipboard::read_clipboard_image()?;
+                let data = crate::clipboard::convert_image_data_to_base64(&image_data)?;
+                let mime_type = "image/png".to_string(); // Clipboard images are typically PNG
+                wrappers.push(ContentPartWrapper::Image {
+                    path: None,
+                    mime_type,
+                    data,
+                });
+            }
+            ContentSource::AudioRecording(path) => {
+                // Audio files use the same image MIME type detection for now
+                let mime_type = crate::image::get_mime_type(std::path::Path::new(path))?;
+                let data = crate::image::read_media_as_base64(path)?;
+                wrappers.push(ContentPartWrapper::Audio {
+                    path: path.clone(),
+                    mime_type,
+                    data,
+                });
+            }
+            ContentSource::ConversationHistory(_) => {
+                // Skip - conversation history is handled separately via conversation.to_genai_messages()
+            }
+        }
+    }
+
+    Ok(wrappers)
+}
+
 fn resolve_conversation(
     config: &Config,
     conversation_manager: &ConversationManager,
+    model: &str,
 ) -> Result<(Conversation, String)> {
     if config.resume_last {
         // Resume latest conversation with -R flag
@@ -172,7 +241,7 @@ fn resolve_conversation(
             conv
         } else {
             log_info("No previous conversations found, starting new conversation");
-            Conversation::new()
+            Conversation::new(model.to_string())
         };
         return Ok((conv, config.prompt.clone()));
     }
@@ -181,7 +250,7 @@ fn resolve_conversation(
         None => {
             // New conversation
             log_info("Starting new conversation");
-            Ok((Conversation::new(), config.prompt.clone()))
+            Ok((Conversation::new(model.to_string()), config.prompt.clone()))
         }
         Some(id) if id.is_empty() => {
             // Resume latest conversation
@@ -191,7 +260,7 @@ fn resolve_conversation(
                 conv
             } else {
                 log_info("No previous conversations found, starting new conversation");
-                Conversation::new()
+                Conversation::new(model.to_string())
             };
             Ok((conv, config.prompt.clone()))
         }

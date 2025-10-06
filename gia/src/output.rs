@@ -7,7 +7,7 @@ use tts::Tts;
 use crate::browser_preview::{open_markdown_preview, FooterMetadata};
 use crate::cli::{Config, ContentSource, OutputMode};
 use crate::clipboard::write_clipboard;
-use crate::conversation::{Conversation, MessageRole};
+use crate::conversation::Conversation;
 use crate::logging::{log_error, log_info};
 
 fn wrap_text(text: &str, width: usize) -> String {
@@ -268,22 +268,7 @@ pub fn output_text(text: &str, config: &Config) -> Result<()> {
     }
 }
 
-fn extract_prompt_section(content: &str) -> String {
-    // Look for "=== Prompt ===" section
-    if let Some(prompt_start) = content.find("=== Prompt ===") {
-        let after_header = &content[prompt_start + 14..]; // Skip "=== Prompt ==="
-        
-        // Find the next section marker or end of content
-        if let Some(next_section) = after_header.find("\n===") {
-            after_header[..next_section].trim().to_string()
-        } else {
-            after_header.trim().to_string()
-        }
-    } else {
-        // No Prompt section found, return the whole content
-        content.trim().to_string()
-    }
-}
+// Function removed - now in conversation.rs as Conversation::extract_prompt_section()
 
 fn setup_tts_voice(tts: &mut Tts, lang: &str) -> Result<()> {
     let voices = tts.voices()?;
@@ -318,26 +303,27 @@ pub fn speak_conversation(conversation: &Conversation, lang: &str) -> Result<()>
     let mut content_to_speak = String::new();
 
     for message in &conversation.messages {
-        match message.role {
-            MessageRole::User => {
+        match message.role.as_str() {
+            "User" => {
                 // Only include command line prompts (skip resources)
-                if !message.content.is_empty() {
-                    // Extract only the Prompt section
-                    let prompt_text = extract_prompt_section(&message.content);
-                    if !prompt_text.is_empty() {
-                        content_to_speak.push_str("User: ");
-                        content_to_speak.push_str(&prompt_text);
-                        content_to_speak.push_str("\n\n");
-                    }
+                let prompt_text = Conversation::extract_prompt_section(message);
+                if !prompt_text.is_empty() {
+                    content_to_speak.push_str("User: ");
+                    content_to_speak.push_str(&prompt_text);
+                    content_to_speak.push_str("\n\n");
                 }
             }
-            MessageRole::Assistant => {
+            "Assistant" => {
                 // Convert markdown to plain text and add to content
-                let plain_text = markdown_to_text::convert(&message.content);
+                let text_content = Conversation::extract_text_content(message);
+                let plain_text = markdown_to_text::convert(&text_content);
                 let plain_text = plain_text.replace('\t', "  ");
                 content_to_speak.push_str("Assistant: ");
                 content_to_speak.push_str(&plain_text);
                 content_to_speak.push_str("\n\n");
+            }
+            _ => {
+                // Ignore System/Tool messages
             }
         }
     }

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use genai::chat::ChatMessage;
 use std::fmt::Debug;
 
 use crate::cli::ContentSource;
@@ -7,13 +8,17 @@ use crate::cli::ContentSource;
 /// Generic AI provider trait for abstraction across different AI services
 #[async_trait]
 pub trait AiProvider: Debug + Send + Sync {
-    // /// Generate content from a text prompt
-    // async fn generate_content(&mut self, prompt: &str) -> Result<String>;
-
-    /// Generate content from ordered content sources (new approach)
+    /// Generate content from ordered content sources (legacy approach)
+    #[allow(dead_code)]
     async fn generate_content_with_ordered_sources(
         &mut self,
         ordered_content: &[ContentSource],
+    ) -> Result<String>;
+
+    /// Generate content from chat messages (new approach for conversations)
+    async fn generate_content_with_chat_messages(
+        &mut self,
+        chat_messages: Vec<ChatMessage>,
     ) -> Result<String>;
 
     /// Get the model name being used

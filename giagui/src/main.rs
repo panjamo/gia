@@ -9,7 +9,7 @@ use std::thread;
 fn main() -> eframe::Result<()> {
     let version = env!("GIA_VERSION");
     let title = format!("GIA GUI - v{}", version);
-    
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([800.0, 600.0])
@@ -258,7 +258,10 @@ impl eframe::App for GiaApp {
                     ui.group(|ui| {
                         ui.vertical(|ui| {
                             ui.label("Options");
-                            ui.checkbox(&mut self.use_clipboard, "Use clipboard input (-c) [Ctrl+1]");
+                            ui.checkbox(
+                                &mut self.use_clipboard,
+                                "Use clipboard input (-c) [Ctrl+1]",
+                            );
                             ui.checkbox(
                                 &mut self.browser_output,
                                 "Browser output (--browser-output) [Ctrl+2]",

@@ -6,10 +6,11 @@ use crate::logging::{log_debug, log_error, log_info, log_warn};
 use crate::provider::AiProvider;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use genai::chat::{ChatMessage, ChatRequest, ContentPart};
+use genai::chat::{ChatMessage, ChatRequest, ContentPart, MessageContent};
 use genai::Client;
 use rand::prelude::*;
 use std::env;
+use std::path::Path;
 
 #[derive(Debug)]
 pub struct GeminiClient {
@@ -388,10 +389,264 @@ impl GeminiClient {
             "Authentication failed. Please check your API key and billing settings."
         ))
     }
+
+    /// Build chat messages from ordered content sources
+    /// Returns a Vec<ContentPart> that will be used to create a single user message
+    #[allow(dead_code)]
+    pub fn build_content_parts_from_ordered_sources(
+        ordered_content: &[ContentSource],
+    ) -> Result<Vec<ContentPart>> {
+        let mut content_parts = Vec::new();
+
+        log_info("=== Building Content Parts from Sources ===");
+
+        for (index, content_source) in ordered_content.iter().enumerate() {
+            let part_number = index + 1;
+            match content_source {
+                ContentSource::CommandLinePrompt(prompt) => {
+                    log_info(&format!("Part {part_number}: Command Line Prompt"));
+                    log_info("  Type: Text");
+                    log_info(&format!("  Length: {} characters", prompt.len()));
+
+                    let formatted_content =
+                        format!("=== NEW REQUEST ===\n\n=== Prompt ===\n\n{}", prompt);
+                    content_parts.push(ContentPart::Text(formatted_content));
+                }
+                ContentSource::AudioRecording(audio_path) => {
+                    log_info(&format!("Part {part_number}: Audio Recording"));
+                    log_info(&format!("  File: {audio_path}"));
+
+                    let path = Path::new(audio_path);
+                    let mime_type = crate::image::get_mime_type(path).with_context(|| {
+                        format!("Failed to get MIME type for audio: {audio_path}")
+                    })?;
+                    let base64_data = crate::image::read_media_as_base64(audio_path)
+                        .with_context(|| format!("Failed to read audio as base64: {audio_path}"))?;
+
+                    content_parts.push(ContentPart::from_image_base64(mime_type, base64_data));
+                }
+                ContentSource::ClipboardText(text) => {
+                    log_info(&format!("Part {part_number}: Clipboard Text"));
+                    log_info(&format!("  Length: {} characters", text.len()));
+
+                    let formatted_content = format!("=== Content from: clipboard ===\n{text}");
+                    content_parts.push(ContentPart::Text(formatted_content));
+                }
+                ContentSource::StdinText(text) => {
+                    log_info(&format!("Part {part_number}: Stdin Text"));
+                    log_info(&format!("  Length: {} characters", text.len()));
+
+                    let formatted_content = format!("=== Content from: stdin ===\n{text}");
+                    content_parts.push(ContentPart::Text(formatted_content));
+                }
+                ContentSource::TextFile(file_path, content) => {
+                    log_info(&format!("Part {part_number}: Text File"));
+                    log_info(&format!("  File: {file_path}"));
+
+                    let formatted_content = if content.ends_with('\n') {
+                        format!("=== Content from: {file_path} ===\n{content}")
+                    } else {
+                        format!("=== Content from: {file_path} ===\n{content}\n")
+                    };
+                    content_parts.push(ContentPart::Text(formatted_content));
+                }
+                ContentSource::ImageFile(image_path) => {
+                    log_info(&format!("Part {part_number}: Image File"));
+                    log_info(&format!("  File: {image_path}"));
+
+                    let path = Path::new(image_path);
+                    let mime_type = crate::image::get_mime_type(path).with_context(|| {
+                        format!("Failed to get MIME type for image: {image_path}")
+                    })?;
+                    let base64_data = crate::image::read_media_as_base64(image_path)
+                        .with_context(|| format!("Failed to read image as base64: {image_path}"))?;
+
+                    content_parts.push(ContentPart::from_image_base64(mime_type, base64_data));
+                }
+                ContentSource::ClipboardImage => {
+                    log_info(&format!("Part {part_number}: Clipboard Image"));
+
+                    let image_data =
+                        read_clipboard_image().context("Failed to read image from clipboard")?;
+                    let base64_data = convert_image_data_to_base64(&image_data)
+                        .context("Failed to convert clipboard image to PNG base64")?;
+
+                    content_parts.push(ContentPart::from_image_base64(
+                        "image/png".to_string(),
+                        base64_data,
+                    ));
+                }
+                ContentSource::RoleDefinition(name, content, is_task) => {
+                    let item_type = if *is_task { "Task" } else { "Role" };
+                    log_info(&format!("Part {part_number}: {item_type} Definition"));
+                    log_info(&format!("  {item_type}: {name}"));
+
+                    let header = if *is_task {
+                        format!("=== Task: {name} ===")
+                    } else {
+                        format!("=== Role: {name} ===")
+                    };
+
+                    let formatted_content = if content.ends_with('\n') {
+                        format!("{header}\n{content}")
+                    } else {
+                        format!("{header}\n{content}\n")
+                    };
+                    content_parts.push(ContentPart::Text(formatted_content));
+                }
+                ContentSource::ConversationHistory(_) => {
+                    // Skip - history is handled separately as previous messages
+                    log_debug("Skipping ConversationHistory in content parts (handled separately)");
+                }
+            }
+        }
+
+        log_info(&format!(
+            "=== Built {} content parts ===",
+            content_parts.len()
+        ));
+        Ok(content_parts)
+    }
+
+    /// Log chat request structure
+    fn log_chat_request_structure(messages: &[ChatMessage]) {
+        log_info("=== Chat Request Structure ===");
+        log_info(&format!("Total Messages: {}", messages.len()));
+
+        for (i, msg) in messages.iter().enumerate() {
+            log_info(&format!("Message {}: {:?}", i + 1, msg.role));
+            match &msg.content {
+                MessageContent::Text(text) => {
+                    log_info(&format!("  Type: Text ({} chars)", text.len()));
+                }
+                MessageContent::Parts(parts) => {
+                    log_info(&format!("  Type: Multimodal ({} parts)", parts.len()));
+                }
+                _ => {
+                    log_info("  Type: Other");
+                }
+            }
+        }
+        log_info("=== End Chat Request Structure ===");
+    }
+
+    /// Send chat request with the given messages
+    async fn try_chat_request_with_messages(
+        &self,
+        messages: Vec<ChatMessage>,
+        api_key: &str,
+    ) -> Result<String> {
+        log_debug(&format!(
+            "Sending chat request with {} message(s)",
+            messages.len()
+        ));
+
+        // Update the API key in environment for this request
+        env::set_var("GEMINI_API_KEY", api_key);
+
+        // Log request structure
+        Self::log_chat_request_structure(&messages);
+
+        // Create the chat request
+        let chat_request = ChatRequest::new(messages);
+
+        // Send the request using genai
+        let chat_response = self
+            .client
+            .exec_chat(&self.model, chat_request, None)
+            .await
+            .context("Failed to send chat request to Gemini API")?;
+
+        // Extract the response text
+        let generated_text = chat_response
+            .content_text_as_str()
+            .context("Failed to extract text from Gemini response")?;
+
+        // Check if the generated text is empty or just whitespace
+        if generated_text.trim().is_empty() {
+            log_error("Generated text is empty");
+            return Err(anyhow::anyhow!(
+                "No content was generated by the AI. The response was empty or contained only whitespace."
+            ));
+        }
+
+        log_info(&format!(
+            "Received response from Gemini API, length: {}",
+            generated_text.len()
+        ));
+
+        Ok(generated_text.to_string())
+    }
 }
 
 #[async_trait]
 impl AiProvider for GeminiClient {
+    async fn generate_content_with_chat_messages(
+        &mut self,
+        chat_messages: Vec<ChatMessage>,
+    ) -> Result<String> {
+        log_debug(&format!(
+            "Sending chat request to Gemini API with {} message(s)",
+            chat_messages.len()
+        ));
+
+        let current_key = self.api_keys[self.current_key_index].clone();
+
+        // Try with current API key first
+        match self
+            .try_chat_request_with_messages(chat_messages.clone(), &current_key)
+            .await
+        {
+            Ok(result) => Ok(result),
+            Err(e) => {
+                let error_string = e.to_string();
+
+                // Check if it's a rate limit error and we can try another key
+                if error_string.contains("429") || error_string.contains("Too Many Requests") {
+                    log_info("Rate limit hit, trying to fallback to another API key");
+
+                    if let Ok(next_key) = self.try_next_api_key() {
+                        log_info("Found alternative API key, retrying chat request");
+
+                        match self
+                            .try_chat_request_with_messages(chat_messages, &next_key)
+                            .await
+                        {
+                            Ok(result) => {
+                                log_info("Successfully used alternative API key for chat request");
+                                Ok(result)
+                            }
+                            Err(fallback_error) => {
+                                log_error("Alternative API key also failed for chat request");
+                                let fallback_error_string = fallback_error.to_string();
+                                if fallback_error_string.contains("429")
+                                    || fallback_error_string.contains("Too Many Requests")
+                                {
+                                    eprintln!("⚠️  Rate limit exceeded on all available API keys.");
+                                }
+                                Err(fallback_error)
+                            }
+                        }
+                    } else {
+                        log_warn("No alternative API keys available for fallback");
+                        eprintln!("⚠️  Rate limit exceeded and no alternative API keys available.");
+                        Err(e)
+                    }
+                } else {
+                    // Check if it's an authentication error
+                    if error_string.contains("401")
+                        || error_string.contains("403")
+                        || error_string.contains("authentication")
+                        || error_string.contains("permission")
+                    {
+                        return Self::handle_auth_error(&error_string);
+                    }
+                    Err(e)
+                }
+            }
+        }
+    }
+
     async fn generate_content_with_ordered_sources(
         &mut self,
         ordered_content: &[ContentSource],

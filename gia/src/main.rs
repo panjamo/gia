@@ -5,6 +5,7 @@ mod browser_preview;
 mod cli;
 mod clipboard;
 mod constants;
+mod content_part_wrapper;
 mod conversation;
 mod gemini;
 mod image;

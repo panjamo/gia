@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
+use genai::chat::ChatMessage;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 use std::fs;
@@ -7,6 +8,7 @@ use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 use crate::constants::CONVERSATION_TRUNCATION_KEEP_MESSAGES;
+use crate::content_part_wrapper::ChatMessageWrapper;
 use crate::logging::{log_debug, log_info, log_warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,18 +30,9 @@ pub struct ResourceInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Message {
-    pub role: MessageRole,
-    pub content: String,
-    pub timestamp: DateTime<Utc>,
-    #[serde(default)]
-    pub resources: Vec<ResourceInfo>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum MessageRole {
-    User,
-    Assistant,
+pub struct ConversationMetadata {
+    pub resources_per_message: Vec<Vec<ResourceInfo>>,
+    pub model_used: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,34 +40,37 @@ pub struct Conversation {
     pub id: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    pub messages: Vec<Message>,
+    pub messages: Vec<ChatMessageWrapper>,
+    pub metadata: ConversationMetadata,
 }
 
 impl Conversation {
-    pub fn new() -> Self {
+    pub fn new(model_name: String) -> Self {
         let now = Utc::now();
         Self {
             id: Uuid::new_v4().to_string(),
             created_at: now,
             updated_at: now,
             messages: Vec::new(),
+            metadata: ConversationMetadata {
+                resources_per_message: Vec::new(),
+                model_used: model_name,
+            },
         }
     }
 
-    pub fn add_message(
-        &mut self,
-        role: MessageRole,
-        content: String,
-        resources: Vec<ResourceInfo>,
-    ) {
-        let message = Message {
-            role,
-            content,
-            timestamp: Utc::now(),
-            resources,
-        };
+    pub fn add_message(&mut self, message: ChatMessageWrapper, resources: Vec<ResourceInfo>) {
         self.messages.push(message);
+        self.metadata.resources_per_message.push(resources);
         self.updated_at = Utc::now();
+    }
+
+    /// Convert wrapper messages to genai ChatMessages for API calls
+    pub fn to_genai_messages(&self) -> Result<Vec<ChatMessage>> {
+        self.messages
+            .iter()
+            .map(|wrapper| wrapper.to_genai_chat_message())
+            .collect()
     }
 
     pub fn truncate_if_needed(&mut self, max_length: usize) {
@@ -92,6 +88,7 @@ impl Conversation {
             && self.messages.len() > CONVERSATION_TRUNCATION_KEEP_MESSAGES
         {
             self.messages.remove(0);
+            self.metadata.resources_per_message.remove(0);
             log_debug("Removed oldest message to fit context window");
         }
 
@@ -102,7 +99,14 @@ impl Conversation {
             let last_messages = self
                 .messages
                 .split_off(self.messages.len() - CONVERSATION_TRUNCATION_KEEP_MESSAGES);
+            let last_resources = self
+                .metadata
+                .resources_per_message
+                .split_off(self.messages.len());
+
             self.messages = last_messages;
+            self.metadata.resources_per_message = last_resources;
+
             log_warn(&format!(
                 "Had to truncate conversation to only the last {CONVERSATION_TRUNCATION_KEEP_MESSAGES} messages"
             ));
@@ -114,9 +118,54 @@ impl Conversation {
         let content_length: usize = self
             .messages
             .iter()
-            .map(|m| m.content.len() + 20) // +20 for role prefix and formatting
+            .map(|m| Self::estimate_message_length(m) + 20) // +20 for role prefix and formatting
             .sum();
         content_length
+    }
+
+    fn estimate_message_length(message: &ChatMessageWrapper) -> usize {
+        use crate::content_part_wrapper::MessageContentWrapper;
+        
+        match &message.content {
+            MessageContentWrapper::Text { text } => text.len(),
+            MessageContentWrapper::Parts { parts } => {
+                parts.iter().map(|part| {
+                    part.extract_text().map(|t| t.len()).unwrap_or(100)
+                }).sum()
+            }
+        }
+    }
+
+    /// Extract text content from a ChatMessageWrapper
+    pub fn extract_text_content(message: &ChatMessageWrapper) -> String {
+        use crate::content_part_wrapper::MessageContentWrapper;
+        
+        match &message.content {
+            MessageContentWrapper::Text { text } => text.clone(),
+            MessageContentWrapper::Parts { parts } => {
+                parts
+                    .iter()
+                    .filter_map(|part| part.extract_text())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            }
+        }
+    }
+
+    /// Extract only the Prompt section from a message (for TTS)
+    pub fn extract_prompt_section(message: &ChatMessageWrapper) -> String {
+        use crate::content_part_wrapper::MessageContentWrapper;
+        
+        match &message.content {
+            MessageContentWrapper::Text { text } => text.clone(),
+            MessageContentWrapper::Parts { parts } => {
+                parts
+                    .iter()
+                    .filter_map(|part| part.extract_prompt())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            }
+        }
     }
 
     pub fn format_as_chat_markdown(&self) -> String {
@@ -138,27 +187,33 @@ impl Conversation {
         )
         .unwrap();
         write!(markdown, "**Messages:** {}\n\n", self.messages.len()).unwrap();
+        writeln!(markdown, "**Model:** {}\n", self.metadata.model_used).unwrap();
         markdown.push_str("---\n\n");
 
-        // Add messages
-        for (i, message) in self.messages.iter().enumerate() {
+        // Add messages with metadata
+        for (i, (message, resources)) in self
+            .messages
+            .iter()
+            .zip(self.metadata.resources_per_message.iter())
+            .enumerate()
+        {
             if i > 0 {
                 markdown.push_str("\n---\n\n");
             }
 
-            match message.role {
-                MessageRole::User => {
-                    // Format user prompts in a styled box similar to browser output
-                    // Use raw HTML with escaped content
+            match message.role.as_str() {
+                "User" => {
+                    // Extract text content from message
+                    let text_content = Self::extract_text_content(message);
                     let escaped_content =
-                        html_escape::encode_text(&message.content).replace('\n', "<br>");
+                        html_escape::encode_text(&text_content).replace('\n', "<br>");
 
                     // Build resources list if any
                     let mut resources_html = String::new();
-                    if !message.resources.is_empty() {
+                    if !resources.is_empty() {
                         resources_html
                             .push_str("<p><small><strong>Resources:</strong></small></p><ul>");
-                        for resource in &message.resources {
+                        for resource in resources {
                             let resource_text = match &resource.resource_type {
                                 ResourceType::Image => {
                                     if let Some(path) = &resource.path {
@@ -216,19 +271,21 @@ impl Conversation {
                         username, escaped_content, resources_html
                     ));
                 }
-                MessageRole::Assistant => {
+                "Assistant" => {
+                    let text_content = Self::extract_text_content(message);
                     markdown.push_str("**Assistant:** ");
-                    markdown.push_str(&message.content);
+                    markdown.push_str(&text_content);
                     markdown.push('\n');
+                }
+                _ => {
+                    // Ignore System/Tool messages in markdown output
                 }
             }
 
-            write!(
-                markdown,
+            markdown.push_str(&format!(
                 "\n*{}*\n",
-                message.timestamp.format("%Y-%m-%d %H:%M:%S UTC")
-            )
-            .unwrap();
+                Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+            ));
         }
 
         markdown
@@ -277,14 +334,15 @@ impl ConversationManager {
     pub fn save_markdown(&self, conversation: &Conversation) -> Result<()> {
         use crate::output::sanitize_prompt_for_filename;
 
+        // Find first user message to generate filename
         let prompt = conversation
             .messages
             .iter()
-            .find(|m| matches!(m.role, MessageRole::User))
-            .map(|m| m.content.as_str())
-            .unwrap_or("");
+            .find(|m| m.role == "User")
+            .map(Conversation::extract_text_content)
+            .unwrap_or_default();
 
-        let sanitized = sanitize_prompt_for_filename(prompt);
+        let sanitized = sanitize_prompt_for_filename(&prompt);
         let sanitized = if sanitized.is_empty() {
             "conversation".to_string()
         } else {
@@ -306,11 +364,11 @@ impl ConversationManager {
         let prompt = conversation
             .messages
             .iter()
-            .find(|m| matches!(m.role, MessageRole::User))
-            .map(|m| m.content.as_str())
-            .unwrap_or("");
+            .find(|m| m.role == "User")
+            .map(Conversation::extract_text_content)
+            .unwrap_or_default();
 
-        let sanitized = sanitize_prompt_for_filename(prompt);
+        let sanitized = sanitize_prompt_for_filename(&prompt);
         let sanitized = if sanitized.is_empty() {
             "conversation".to_string()
         } else {
@@ -420,13 +478,14 @@ impl ConversationSummary {
         let first_user_message = conversation
             .messages
             .iter()
-            .find(|m| matches!(m.role, MessageRole::User))
+            .find(|m| m.role == "User")
             .map(|m| {
+                let content = Conversation::extract_text_content(m);
                 // Truncate to first 50 characters for summary
-                if m.content.len() > 50 {
-                    format!("{}...", &m.content[..47])
+                if content.len() > 50 {
+                    format!("{}...", &content[..47])
                 } else {
-                    m.content.clone()
+                    content
                 }
             });
 
@@ -470,36 +529,70 @@ mod tests {
 
     #[test]
     fn test_conversation_creation() {
-        let conversation = Conversation::new();
+        let conversation = Conversation::new("test-model".to_string());
         assert!(!conversation.id.is_empty());
         assert_eq!(conversation.messages.len(), 0);
+        assert_eq!(conversation.metadata.model_used, "test-model");
     }
 
     #[test]
     fn test_add_message() {
-        let mut conversation = Conversation::new();
-        conversation.add_message(MessageRole::User, "Hello".to_string(), Vec::new());
+        use crate::content_part_wrapper::{ChatMessageWrapper, MessageContentWrapper};
+        
+        let mut conversation = Conversation::new("test-model".to_string());
+        let message = ChatMessageWrapper {
+            role: "User".to_string(),
+            content: MessageContentWrapper::Text { text: "Hello".to_string() },
+        };
+        conversation.add_message(message, Vec::new());
 
         assert_eq!(conversation.messages.len(), 1);
-        assert!(matches!(conversation.messages[0].role, MessageRole::User));
-        assert_eq!(conversation.messages[0].content, "Hello");
+        assert_eq!(conversation.messages[0].role, "User");
+        assert_eq!(conversation.metadata.resources_per_message.len(), 1);
+    }
+
+    #[test]
+    fn test_extract_text_content() {
+        use crate::content_part_wrapper::{ChatMessageWrapper, MessageContentWrapper};
+        
+        let message = ChatMessageWrapper {
+            role: "User".to_string(),
+            content: MessageContentWrapper::Text { text: "Hello world".to_string() },
+        };
+        let text = Conversation::extract_text_content(&message);
+        assert_eq!(text, "Hello world");
+    }
+
+    #[test]
+    fn test_extract_prompt_section() {
+        use crate::content_part_wrapper::{ChatMessageWrapper, MessageContentWrapper, ContentPartWrapper};
+        
+        let message = ChatMessageWrapper {
+            role: "User".to_string(),
+            content: MessageContentWrapper::Parts {
+                parts: vec![ContentPartWrapper::Prompt("My prompt".to_string())],
+            },
+        };
+        let prompt = Conversation::extract_prompt_section(&message);
+        assert_eq!(prompt, "My prompt");
     }
 
     #[test]
     fn test_truncate_if_needed() {
-        let mut conversation = Conversation::new();
+        use crate::content_part_wrapper::{ChatMessageWrapper, MessageContentWrapper};
+        
+        let mut conversation = Conversation::new("test-model".to_string());
 
         // Add more than CONVERSATION_TRUNCATION_KEEP_MESSAGES (20) to test truncation
         for i in 0..25 {
-            conversation.add_message(
-                if i % 2 == 0 {
-                    MessageRole::User
-                } else {
-                    MessageRole::Assistant
+            let role = if i % 2 == 0 { "User" } else { "Assistant" };
+            let message = ChatMessageWrapper {
+                role: role.to_string(),
+                content: MessageContentWrapper::Text {
+                    text: format!("Message {}", i).repeat(100),
                 },
-                format!("Message {}", i).repeat(100),
-                Vec::new(),
-            );
+            };
+            conversation.add_message(message, Vec::new());
         }
 
         let initial_count = conversation.messages.len();
