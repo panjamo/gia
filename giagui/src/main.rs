@@ -316,79 +316,107 @@ impl eframe::App for GiaApp {
                         ui.horizontal(|ui| {
                             // Left column: Model and TTS Language
                             ui.vertical(|ui| {
-                                egui::ComboBox::from_id_salt("model_selector")
-                                    .selected_text(&self.model)
-                                    .show_ui(ui, |ui| {
-                                        ui.selectable_value(
-                                            &mut self.model,
-                                            "gemini-2.5-pro".to_string(),
-                                            "Gemini 2.5 Pro",
-                                        );
-                                        ui.selectable_value(
-                                            &mut self.model,
-                                            "gemini-2.5-flash".to_string(),
-                                            "Gemini 2.5 Flash",
-                                        );
-                                        ui.selectable_value(
-                                            &mut self.model,
-                                            "gemini-2.5-flash-lite".to_string(),
-                                            "Gemini 2.5 Flash-Lite",
-                                        );
-                                        ui.selectable_value(
-                                            &mut self.model,
-                                            "gemini-2.0-flash".to_string(),
-                                            "Gemini 2.0 Flash",
-                                        );
-                                        ui.selectable_value(
-                                            &mut self.model,
-                                            "gemini-2.0-flash-lite".to_string(),
-                                            "Gemini 2.0 Flash-Lite",
-                                        );
-                                    });
+                                ui.horizontal(|ui| {
+                                    ui.label("💡");
+                                    egui::ComboBox::from_id_salt("model_selector")
+                                        .selected_text(&self.model)
+                                        .show_ui(ui, |ui| {
+                                            ui.selectable_value(
+                                                &mut self.model,
+                                                "gemini-2.5-pro".to_string(),
+                                                "Gemini 2.5 Pro",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.model,
+                                                "gemini-2.5-flash".to_string(),
+                                                "Gemini 2.5 Flash",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.model,
+                                                "gemini-2.5-flash-lite".to_string(),
+                                                "Gemini 2.5 Flash-Lite",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.model,
+                                                "gemini-2.0-flash".to_string(),
+                                                "Gemini 2.0 Flash",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.model,
+                                                "gemini-2.0-flash-lite".to_string(),
+                                                "Gemini 2.0 Flash-Lite",
+                                            );
+                                        });
+                                });
 
-                                egui::ComboBox::from_id_salt("tts_language_selector")
-                                    .selected_text(&self.tts_language)
-                                    .show_ui(ui, |ui| {
-                                        ui.selectable_value(
-                                            &mut self.tts_language,
-                                            "de-DE".to_string(),
-                                            "de-DE",
-                                        );
-                                        ui.selectable_value(
-                                            &mut self.tts_language,
-                                            "en-US".to_string(),
-                                            "en-US",
-                                        );
-                                    });
+                                ui.horizontal(|ui| {
+                                    ui.label("💬");
+                                    egui::ComboBox::from_id_salt("tts_language_selector")
+                                        .selected_text(&self.tts_language)
+                                        .show_ui(ui, |ui| {
+                                            ui.selectable_value(
+                                                &mut self.tts_language,
+                                                "de-DE".to_string(),
+                                                "de-DE",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.tts_language,
+                                                "en-US".to_string(),
+                                                "en-US",
+                                            );
+                                        });
+                                });
                             });
 
                             // Right column: Task and Role
                             ui.vertical(|ui| {
-                                egui::ComboBox::from_id_salt("task_selector")
-                                    .selected_text(if self.task.is_empty() {
-                                        "Select Task"
-                                    } else {
-                                        &self.task
-                                    })
-                                    .show_ui(ui, |ui| {
-                                        ui.selectable_value(&mut self.task, String::new(), "None");
-                                        for task in &self.tasks {
-                                            ui.selectable_value(&mut self.task, task.clone(), task);
-                                        }
-                                    });
+                                ui.horizontal(|ui| {
+                                    ui.label("📋");
+                                    egui::ComboBox::from_id_salt("task_selector")
+                                        .selected_text(if self.task.is_empty() {
+                                            "Select Task"
+                                        } else {
+                                            &self.task
+                                        })
+                                        .show_ui(ui, |ui| {
+                                            ui.selectable_value(
+                                                &mut self.task,
+                                                String::new(),
+                                                "None",
+                                            );
+                                            for task in &self.tasks {
+                                                ui.selectable_value(
+                                                    &mut self.task,
+                                                    task.clone(),
+                                                    task,
+                                                );
+                                            }
+                                        });
+                                });
 
-                                egui::ComboBox::from_id_salt("role_selector")
-                                    .selected_text(if self.role.is_empty() {
-                                        "Select Role"
-                                    } else {
-                                        &self.role
-                                    })
-                                    .show_ui(ui, |ui| {
-                                        ui.selectable_value(&mut self.role, String::new(), "None");
-                                        for role in &self.roles {
-                                            ui.selectable_value(&mut self.role, role.clone(), role);
-                                        }
-                                    });
+                                ui.horizontal(|ui| {
+                                    ui.label("👤");
+                                    egui::ComboBox::from_id_salt("role_selector")
+                                        .selected_text(if self.role.is_empty() {
+                                            "Select Role"
+                                        } else {
+                                            &self.role
+                                        })
+                                        .show_ui(ui, |ui| {
+                                            ui.selectable_value(
+                                                &mut self.role,
+                                                String::new(),
+                                                "None",
+                                            );
+                                            for role in &self.roles {
+                                                ui.selectable_value(
+                                                    &mut self.role,
+                                                    role.clone(),
+                                                    role,
+                                                );
+                                            }
+                                        });
+                                });
                             });
                         });
                     });
@@ -398,22 +426,22 @@ impl eframe::App for GiaApp {
 
                 // Buttons
                 ui.horizontal(|ui| {
-                    if ui.button("Send (Ctrl+Enter)").clicked() {
+                    if ui.button("📨 Send (Ctrl+Enter)").clicked() {
                         self.send_prompt();
                     }
-                    if ui.button("Record (Ctrl+R)").clicked() {
+                    if ui.button("🔴 Record (Ctrl+R)").clicked() {
                         self.send_prompt_with_audio();
                     }
-                    if ui.button("Clear (Ctrl+L)").clicked() {
+                    if ui.button("❌ Clear (Ctrl+L)").clicked() {
                         self.clear_form();
                     }
-                    if ui.button("Copy (Ctrl+Shift+C)").clicked() {
+                    if ui.button("📋 Copy (Ctrl+Shift+C)").clicked() {
                         self.copy_response();
                     }
-                    if ui.button("Conversation (Ctrl+O)").clicked() {
+                    if ui.button("💬 Conversation (Ctrl+O)").clicked() {
                         self.show_conversation();
                     }
-                    if ui.button("Help (F1)").clicked() {
+                    if ui.button("❓ Help (F1)").clicked() {
                         self.show_help();
                     }
                 });
