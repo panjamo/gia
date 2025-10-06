@@ -52,10 +52,11 @@ cargo run -- "Analyze this code and documentation" -f README.md -f main.rs -i di
 cargo run -- "What do you see in this image?" -c
 
 # Text-to-speech output
-cargo run -- "Tell me a short story" --tts
-cargo run -- "What is the weather today?" -T
-cargo run -- "Erzähl mir eine Geschichte" --tts --tts-language de-DE
-cargo run -- "Tell me a joke" -T -L en-US
+cargo run -- "Tell me a short story" --tts en-US
+cargo run -- "What is the weather today?" -T en-US
+cargo run -- "Erzähl mir eine Geschichte" --tts de-DE
+cargo run -- "Erzähl mir eine Geschichte" --tts          # Uses default: de-DE
+cargo run -- "Tell me a joke" -T                         # Uses default: de-DE
 ```
 
 ### Environment Setup

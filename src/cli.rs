@@ -65,11 +65,7 @@ impl Config {
             OutputMode::TempFileWithPreview
         } else if matches.get_flag("clipboard-output") {
             OutputMode::Clipboard
-        } else if matches.get_flag("tts-output") {
-            let lang = matches
-                .get_one::<String>("tts-language")
-                .cloned()
-                .unwrap_or_else(|| "de-DE".to_string());
+        } else if let Some(lang) = matches.get_one::<String>("tts-output").cloned() {
             OutputMode::Tts(lang)
         } else {
             OutputMode::Stdout
@@ -169,16 +165,10 @@ impl Config {
                 Arg::new("tts-output")
                     .short('T')
                     .long("tts")
-                    .help("Use text-to-speech for output instead of stdout")
-                    .action(clap::ArgAction::SetTrue),
-            )
-            .arg(
-                Arg::new("tts-language")
-                    .short('L')
-                    .long("tts-language")
-                    .help("TTS language (e.g., 'en-US', 'de-DE'). Default: de-DE")
+                    .help("Use text-to-speech for output with optional language (e.g., 'de-DE', 'en-US'). Default: de-DE")
                     .value_name("LANG")
-                    .requires("tts-output")
+                    .num_args(0..=1)
+                    .default_missing_value("de-DE")
                     .action(clap::ArgAction::Set),
             )
             .arg(

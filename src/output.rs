@@ -7,6 +7,7 @@ use tts::Tts;
 use crate::browser_preview::{open_markdown_preview, FooterMetadata};
 use crate::cli::{Config, ContentSource, OutputMode};
 use crate::clipboard::write_clipboard;
+use crate::conversation::{Conversation, MessageRole};
 use crate::logging::{log_error, log_info};
 
 fn wrap_text(text: &str, width: usize) -> String {
@@ -254,31 +255,7 @@ pub fn output_text(text: &str, config: &Config) -> Result<()> {
 
             // Then start TTS
             let mut tts = Tts::default()?;
-
-            // Get available voices for the specified language
-            let voices = tts.voices()?;
-            let target_voice = voices.iter().find(|v| {
-                v.language()
-                    .to_lowercase()
-                    .starts_with(&lang.to_lowercase())
-                    || v.language()
-                        .to_lowercase()
-                        .starts_with(&lang[..2].to_lowercase())
-            });
-
-            if let Some(voice) = target_voice {
-                tts.set_voice(voice)?;
-                log_info(&format!(
-                    "Using voice: {} ({})",
-                    voice.name(),
-                    voice.language()
-                ));
-            } else {
-                log_info(&format!(
-                    "No voice found for language {lang}, using default"
-                ));
-            }
-
+            setup_tts_voice(&mut tts, lang)?;
             tts.speak(&plain_text, true)?;
 
             // Wait for speech to complete
@@ -289,6 +266,102 @@ pub fn output_text(text: &str, config: &Config) -> Result<()> {
             Ok(())
         }
     }
+}
+
+fn extract_prompt_section(content: &str) -> String {
+    // Look for "=== Prompt ===" section
+    if let Some(prompt_start) = content.find("=== Prompt ===") {
+        let after_header = &content[prompt_start + 14..]; // Skip "=== Prompt ==="
+        
+        // Find the next section marker or end of content
+        if let Some(next_section) = after_header.find("\n===") {
+            after_header[..next_section].trim().to_string()
+        } else {
+            after_header.trim().to_string()
+        }
+    } else {
+        // No Prompt section found, return the whole content
+        content.trim().to_string()
+    }
+}
+
+fn setup_tts_voice(tts: &mut Tts, lang: &str) -> Result<()> {
+    let voices = tts.voices()?;
+    let target_voice = voices.iter().find(|v| {
+        v.language()
+            .to_lowercase()
+            .starts_with(&lang.to_lowercase())
+            || v.language()
+                .to_lowercase()
+                .starts_with(&lang[..2].to_lowercase())
+    });
+
+    if let Some(voice) = target_voice {
+        tts.set_voice(voice)?;
+        log_info(&format!(
+            "Using voice: {} ({})",
+            voice.name(),
+            voice.language()
+        ));
+    } else {
+        log_info(&format!(
+            "No voice found for language {lang}, using default"
+        ));
+    }
+
+    Ok(())
+}
+
+pub fn speak_conversation(conversation: &Conversation, lang: &str) -> Result<()> {
+    log_info("Extracting conversation content for TTS");
+
+    let mut content_to_speak = String::new();
+
+    for message in &conversation.messages {
+        match message.role {
+            MessageRole::User => {
+                // Only include command line prompts (skip resources)
+                if !message.content.is_empty() {
+                    // Extract only the Prompt section
+                    let prompt_text = extract_prompt_section(&message.content);
+                    if !prompt_text.is_empty() {
+                        content_to_speak.push_str("User: ");
+                        content_to_speak.push_str(&prompt_text);
+                        content_to_speak.push_str("\n\n");
+                    }
+                }
+            }
+            MessageRole::Assistant => {
+                // Convert markdown to plain text and add to content
+                let plain_text = markdown_to_text::convert(&message.content);
+                let plain_text = plain_text.replace('\t', "  ");
+                content_to_speak.push_str("Assistant: ");
+                content_to_speak.push_str(&plain_text);
+                content_to_speak.push_str("\n\n");
+            }
+        }
+    }
+
+    if content_to_speak.is_empty() {
+        log_info("No content to speak");
+        return Ok(());
+    }
+
+    // Output to stdout first
+    let wrapped_text = wrap_text(&content_to_speak, 100);
+    println!("{wrapped_text}");
+
+    // Then speak
+    let mut tts = Tts::default()?;
+    setup_tts_voice(&mut tts, lang)?;
+    tts.speak(&content_to_speak, true)?;
+
+    // Wait for speech to complete
+    while tts.is_speaking()? {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

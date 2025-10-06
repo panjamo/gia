@@ -241,7 +241,7 @@ fn handle_list_conversations(
 fn handle_show_conversation(
     conversation_manager: &ConversationManager,
     conversation_id: &str,
-    _config: &Config,
+    config: &Config,
 ) -> Result<()> {
     let conversation = if conversation_id.is_empty() {
         // Load the latest conversation
@@ -282,6 +282,12 @@ fn handle_show_conversation(
         log_error(&format!("Failed to open browser preview: {e}"));
     } else {
         log_info("Opened browser preview");
+    }
+
+    // If TTS is enabled, extract and speak the conversation
+    if let crate::cli::OutputMode::Tts(lang) = &config.output_mode {
+        use crate::output::speak_conversation;
+        speak_conversation(&conversation, lang)?;
     }
 
     Ok(())
