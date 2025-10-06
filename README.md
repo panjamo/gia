@@ -23,6 +23,8 @@ This workspace contains two binaries:
 - Comprehensive logging to stderr
 - Simple and fast CLI interface
 
+📊 **[View Input/Output Flow Diagram](gia-flow-diagram.md)** - Visual overview of all input sources and output destinations
+
 ## Installation
 
 1. Clone this repository
