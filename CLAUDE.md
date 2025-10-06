@@ -50,6 +50,12 @@ cargo run -- "Analyze this code and documentation" -f README.md -f main.rs -i di
 
 # Clipboard image analysis (copy an image to clipboard first)
 cargo run -- "What do you see in this image?" -c
+
+# Text-to-speech output
+cargo run -- "Tell me a short story" --tts
+cargo run -- "What is the weather today?" -T
+cargo run -- "Erzähl mir eine Geschichte" --tts --tts-language de-DE
+cargo run -- "Tell me a joke" -T -L en-US
 ```
 
 ### Environment Setup
@@ -95,9 +101,11 @@ RUST_LOG=error cargo run -- "test"  # Error logging only
 3. Stdin content (automatically detected when available)
 4. Text file content (with `-f` flag) - can be used multiple times
 
-**Output Destinations**: Two output options:
+**Output Destinations**: Four output options:
 1. Stdout (default)
 2. Clipboard (with `-o` flag)
+3. Browser preview (with `-b` flag)
+4. Text-to-speech (with `-T` or `--tts` flag)
 
 **Conversation Management**: Persistent conversation storage allowing users to resume previous conversations:
 - Local JSON-based storage in `~/.gia/conversations/`

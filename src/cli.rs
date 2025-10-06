@@ -5,6 +5,7 @@ pub enum OutputMode {
     Stdout,
     Clipboard,
     TempFileWithPreview,
+    Tts(String), // language code (e.g., "de-DE", "en-US")
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +65,12 @@ impl Config {
             OutputMode::TempFileWithPreview
         } else if matches.get_flag("clipboard-output") {
             OutputMode::Clipboard
+        } else if matches.get_flag("tts-output") {
+            let lang = matches
+                .get_one::<String>("tts-language")
+                .cloned()
+                .unwrap_or_else(|| "de-DE".to_string());
+            OutputMode::Tts(lang)
         } else {
             OutputMode::Stdout
         };
@@ -157,6 +164,22 @@ impl Config {
                     .long("browser-output")
                     .help("Write output to temp file, copy file path to clipboard, and open browser preview")
                     .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("tts-output")
+                    .short('T')
+                    .long("tts")
+                    .help("Use text-to-speech for output instead of stdout")
+                    .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("tts-language")
+                    .short('L')
+                    .long("tts-language")
+                    .help("TTS language (e.g., 'en-US', 'de-DE'). Default: de-DE")
+                    .value_name("LANG")
+                    .requires("tts-output")
+                    .action(clap::ArgAction::Set),
             )
             .arg(
                 Arg::new("resume")

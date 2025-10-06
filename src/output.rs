@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use chrono::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
+use tts::Tts;
 
 use crate::browser_preview::{open_markdown_preview, FooterMetadata};
 use crate::cli::{Config, ContentSource, OutputMode};
@@ -191,7 +192,7 @@ fn build_footer_metadata(config: &Config) -> FooterMetadata {
 }
 
 pub fn output_text(text: &str, config: &Config) -> Result<()> {
-    match config.output_mode {
+    match &config.output_mode {
         OutputMode::TempFileWithPreview => {
             log_info("Writing response to output file, copying file path to clipboard, and opening browser preview");
 
@@ -238,6 +239,53 @@ pub fn output_text(text: &str, config: &Config) -> Result<()> {
             let plain_text = plain_text.replace('\t', "  ");
             let wrapped_text = wrap_text(&plain_text, 100);
             println!("{wrapped_text}");
+            Ok(())
+        }
+        OutputMode::Tts(lang) => {
+            log_info(&format!(
+                "Speaking response using TTS with language: {lang}"
+            ));
+            let plain_text = markdown_to_text::convert(text);
+            let plain_text = plain_text.replace('\t', "  ");
+
+            // First output to stdout
+            let wrapped_text = wrap_text(&plain_text, 100);
+            println!("{wrapped_text}");
+
+            // Then start TTS
+            let mut tts = Tts::default()?;
+
+            // Get available voices for the specified language
+            let voices = tts.voices()?;
+            let target_voice = voices.iter().find(|v| {
+                v.language()
+                    .to_lowercase()
+                    .starts_with(&lang.to_lowercase())
+                    || v.language()
+                        .to_lowercase()
+                        .starts_with(&lang[..2].to_lowercase())
+            });
+
+            if let Some(voice) = target_voice {
+                tts.set_voice(voice)?;
+                log_info(&format!(
+                    "Using voice: {} ({})",
+                    voice.name(),
+                    voice.language()
+                ));
+            } else {
+                log_info(&format!(
+                    "No voice found for language {lang}, using default"
+                ));
+            }
+
+            tts.speak(&plain_text, true)?;
+
+            // Wait for speech to complete
+            while tts.is_speaking()? {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+
             Ok(())
         }
     }
