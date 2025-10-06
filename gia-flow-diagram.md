@@ -42,10 +42,10 @@ flowchart TD
 
 
     %% Styling
-    classDef inputSource fill:#e1f5fe,stroke:#01579b,stroke-width:2px
-    classDef outputDest fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
-    classDef core fill:#fff3e0,stroke:#e65100,stroke-width:3px
-    classDef storage fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef inputSource fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#000000
+    classDef outputDest fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000000
+    classDef core fill:#fff3e0,stroke:#e65100,stroke-width:3px,color:#000000
+    classDef storage fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px,color:#000000
 
     class CMD,AUDIO,CLIPBOARD,STDIN,TEXTFILES,MEDIAFILES,ROLES,RESUME inputSource
     class STDOUT,CLIPOUT,BROWSER,TTS outputDest
