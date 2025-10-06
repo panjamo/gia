@@ -4,14 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-GIA (Google Intelligence Assistant) is a command-line tool that sends prompts to Google's Gemini API and returns AI responses. It supports multiple input sources (command line, clipboard, stdin, images) and output destinations (stdout, clipboard). The tool now supports multimodal interactions with images (JPEG, PNG, WebP, HEIC, PDF).
+This is a Cargo workspace containing two binaries:
+
+1. **gia** - Command-line tool that sends prompts to Google's Gemini API and returns AI responses. Supports multiple input sources (command line, clipboard, stdin, images) and output destinations (stdout, clipboard). Supports multimodal interactions with images (JPEG, PNG, WebP, HEIC, PDF).
+
+2. **giagui** - GUI wrapper for gia using the egui framework. Must have gia installed and available in PATH.
 
 ## Development Commands
 
 ### Build and Test
 ```bash
+# Build both binaries
 cargo build --release      # Production build
-cargo build                # Development build  
+cargo build                # Development build
+
+# Build specific binaries
+cargo build --release -p gia      # CLI only
+cargo build --release -p giagui   # GUI only
+
+# Test
 cargo test                 # Run tests
 cargo test -- --nocapture  # Run tests with output
 ```
@@ -25,12 +36,15 @@ cargo check                      # Check compilation without building
 
 ### Running
 ```bash
-# Development
-cargo run -- "your prompt here"
+# CLI Development
+cargo run -p gia -- "your prompt here"
+
+# GUI Development
+cargo run -p giagui
 
 # After building
 ./target/release/gia "your prompt here"
-./target/debug/gia "your prompt here"
+./target/release/giagui
 
 # Resume conversations
 cargo run -- --resume "continue previous conversation"
@@ -84,13 +98,27 @@ RUST_LOG=error cargo run -- "test"  # Error logging only
 
 ## Architecture
 
-### Module Structure
-- `main.rs` - CLI argument parsing, main application flow
-- `gemini.rs` - Gemini API client with rate limit fallback logic  
-- `api_key.rs` - API key management (multiple keys, validation, fallback)
-- `clipboard.rs` - Clipboard operations using arboard
-- `conversation.rs` - Conversation management with persistent storage
-- `logging.rs` - Structured logging to stderr
+### Workspace Structure
+This is a Cargo workspace with shared dependencies and build configuration:
+- **Workspace root**: Contains workspace `Cargo.toml` and shared resources (`icons/`)
+- **gia/**: CLI binary crate
+- **giagui/**: GUI binary crate
+- Both crates share the same `build.rs` for git-based versioning
+- Shared resources: `~/.gia/roles` and `~/.gia/tasks` (runtime, not in repo)
+
+### Module Structure (gia CLI)
+- `gia/src/main.rs` - CLI argument parsing, main application flow
+- `gia/src/gemini.rs` - Gemini API client with rate limit fallback logic  
+- `gia/src/api_key.rs` - API key management (multiple keys, validation, fallback)
+- `gia/src/clipboard.rs` - Clipboard operations using arboard
+- `gia/src/conversation.rs` - Conversation management with persistent storage
+- `gia/src/logging.rs` - Structured logging to stderr
+
+### Module Structure (giagui GUI)
+- `giagui/src/main.rs` - Single-file egui application
+- **GiaApp struct**: Main application state
+- **Command execution**: Spawns `gia` CLI process
+- **Icons**: References `../icons/gia.png` from workspace root
 
 ### Key Design Patterns
 
@@ -142,9 +170,25 @@ Tests use the `serial_test` crate to prevent environment variable conflicts when
 
 ## Important Notes
 
+### CLI (gia)
 - All logging goes to stderr, leaving stdout clean for piping
 - The tool validates API key format but continues with warnings if invalid
 - Rate limit handling automatically tries alternative keys if available
 - Windows-specific registry support was removed in favor of environment variables only
 - Clipboard input automatically detects and handles both text and images
 - When using `-c` flag, if an image is in the clipboard, it will be treated as an image input rather than text
+
+### GUI (giagui)
+- The `show_conversation()` method (Ctrl+O) spawns the GIA command without clearing or modifying the response box - do not change this behavior
+- Focus management: Prompt input automatically receives focus on application start
+- Icon handling: Application icon and logo are embedded from `../../icons/gia.png` (workspace root)
+- Requires `gia` binary in PATH
+
+### Build System
+- Both `gia/build.rs` and `giagui/build.rs` are identical copies that generate version info from git commit count
+- Git commands traverse up to find `.git` directory at workspace root
+- Environment variables set: `GIA_VERSION`, `GIA_COMMIT_COUNT`, `GIA_IS_DIRTY`
+
+### GitHub Actions
+- Workflow builds both `gia` and `giagui` for three platforms (Windows x64, macOS Intel, macOS ARM)
+- Releases 6 binaries total: `gia-{platform}` and `giagui-{platform}` for each platform

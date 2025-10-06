@@ -1,2 +1,5 @@
 /target
+/gia/target
+/giagui/target
 giagui.exe
+*.exe

@@ -2,7 +2,11 @@
 
 # GIA - Google Intelligence Assistant
 
-A command-line tool that sends text prompts to Google's Gemini API and returns AI-generated responses.
+A command-line tool (and GUI wrapper) that sends text prompts to Google's Gemini API and returns AI-generated responses.
+
+This workspace contains two binaries:
+- **gia** - Command-line interface
+- **giagui** - GUI wrapper for gia
 
 ## Features
 
@@ -28,9 +32,18 @@ A command-line tool that sends text prompts to Google's Gemini API and returns A
    - **macOS**: `brew install ffmpeg`
    - **Linux**: `sudo apt install ffmpeg` (Ubuntu/Debian) or equivalent for your distribution
 4. Build the project:
-   ```
+   ```bash
+   # Build both binaries
    cargo build --release
+   
+   # Or build specific binaries
+   cargo build --release -p gia      # CLI only
+   cargo build --release -p giagui   # GUI only
    ```
+   
+   Binaries will be located at:
+   - `target/release/gia` (or `gia.exe` on Windows)
+   - `target/release/giagui` (or `giagui.exe` on Windows)
 
 ## Setup
 
@@ -96,7 +109,39 @@ GIA automatically combines input from multiple sources:
 - **Media files**: With `-i` flag (media only) or `-f` flag (text)
 - **Output**: Response written to stdout (default)
 
-## Usage
+## GUI Usage (giagui)
+
+The GUI provides a simple interface to interact with GIA:
+
+**Features:**
+- Multi-line prompt input
+- Custom options field
+- Clipboard input toggle (`-c`)
+- Browser output toggle (`--browser-output`)
+- Auto-resume conversations after first prompt
+- Response display with copy to clipboard
+- Show conversation in browser (Ctrl+O)
+- Audio recording support (Ctrl+R)
+
+**Keyboard Shortcuts:**
+- **Ctrl+Enter**: Send prompt
+- **Ctrl+R**: Send with audio recording
+- **Ctrl+L**: Clear form
+- **Ctrl+Shift+C**: Copy response to clipboard
+- **Ctrl+O**: Show conversation in browser
+- **F1**: Show help
+
+**Requirements:**
+- `gia` must be installed and available in PATH
+
+**Running:**
+```bash
+cargo run -p giagui
+# or after building
+./target/release/giagui
+```
+
+## CLI Usage (gia)
 
 ### Basic usage (command line prompt to stdout - default)
 ```bash

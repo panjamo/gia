@@ -70,11 +70,18 @@ jobs:
     - name: Build Windows Release
       run: cargo build --release --target x86_64-pc-windows-msvc
 
-    - name: Upload Windows Binary
+    - name: Upload Windows gia Binary
       uses: actions/upload-artifact@v4
       with:
         name: gia-windows
         path: target/x86_64-pc-windows-msvc/release/gia.exe
+        retention-days: 1
+
+    - name: Upload Windows giagui Binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: giagui-windows
+        path: target/x86_64-pc-windows-msvc/release/giagui.exe
         retention-days: 1
 
   build-macos-intel:
@@ -93,11 +100,18 @@ jobs:
     - name: Build macOS Intel Release
       run: cargo build --release --target x86_64-apple-darwin
 
-    - name: Upload macOS Intel Binary
+    - name: Upload macOS Intel gia Binary
       uses: actions/upload-artifact@v4
       with:
         name: gia-macos-intel
         path: target/x86_64-apple-darwin/release/gia
+        retention-days: 1
+
+    - name: Upload macOS Intel giagui Binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: giagui-macos-intel
+        path: target/x86_64-apple-darwin/release/giagui
         retention-days: 1
 
   build-macos-arm:
@@ -116,11 +130,18 @@ jobs:
     - name: Build macOS ARM Release
       run: cargo build --release --target aarch64-apple-darwin
 
-    - name: Upload macOS ARM Binary
+    - name: Upload macOS ARM gia Binary
       uses: actions/upload-artifact@v4
       with:
         name: gia-macos-arm
         path: target/aarch64-apple-darwin/release/gia
+        retention-days: 1
+
+    - name: Upload macOS ARM giagui Binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: giagui-macos-arm
+        path: target/aarch64-apple-darwin/release/giagui
         retention-days: 1
 
   create-release:
@@ -129,22 +150,40 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Download Windows Binary
+    - name: Download Windows gia Binary
       uses: actions/download-artifact@v4
       with:
         name: gia-windows
         path: ./artifacts/windows
 
-    - name: Download macOS Intel Binary
+    - name: Download Windows giagui Binary
+      uses: actions/download-artifact@v4
+      with:
+        name: giagui-windows
+        path: ./artifacts/windows
+
+    - name: Download macOS Intel gia Binary
       uses: actions/download-artifact@v4
       with:
         name: gia-macos-intel
         path: ./artifacts/macos-intel
 
-    - name: Download macOS ARM Binary
+    - name: Download macOS Intel giagui Binary
+      uses: actions/download-artifact@v4
+      with:
+        name: giagui-macos-intel
+        path: ./artifacts/macos-intel
+
+    - name: Download macOS ARM gia Binary
       uses: actions/download-artifact@v4
       with:
         name: gia-macos-arm
+        path: ./artifacts/macos-arm
+
+    - name: Download macOS ARM giagui Binary
+      uses: actions/download-artifact@v4
+      with:
+        name: giagui-macos-arm
         path: ./artifacts/macos-arm
 
     - name: Create Release and Upload Assets
@@ -174,11 +213,17 @@ jobs:
 
         # Rename binaries with platform-specific names
         cp ./artifacts/windows/gia.exe ./gia-windows-x86_64.exe
+        cp ./artifacts/windows/giagui.exe ./giagui-windows-x86_64.exe
         cp ./artifacts/macos-intel/gia ./gia-macos-x86_64
+        cp ./artifacts/macos-intel/giagui ./giagui-macos-x86_64
         cp ./artifacts/macos-arm/gia ./gia-macos-aarch64
+        cp ./artifacts/macos-arm/giagui ./giagui-macos-aarch64
 
         # Upload binaries
         gh release upload "${{ needs.detect-version.outputs.version }}" \
           ./gia-windows-x86_64.exe \
+          ./giagui-windows-x86_64.exe \
           ./gia-macos-x86_64 \
-          ./gia-macos-aarch64
+          ./giagui-macos-x86_64 \
+          ./gia-macos-aarch64 \
+          ./giagui-macos-aarch64
