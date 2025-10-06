@@ -13,21 +13,16 @@ flowchart TD
     MEDIAFILES[Media Files<br/>-i, --image<br/>JPEG, PNG, WebP, HEIC, PDF<br/>OGG, OPUS, MP3, M4A, MP4]
     ROLES[Roles & Tasks<br/>-t, --role<br/>From ~/.gia/roles/ or ~/.gia/tasks/]
     RESUME[Resume Conversation<br/>-r, --resume<br/>Continue previous conversation]
-    
+
     %% Processing Core
     GIA[GIA Core<br/>Google Gemini API<br/>Multi-key fallback<br/>Conversation management]
-    
+
     %% Output Destinations
     STDOUT[Standard Output<br/>Default destination<br/>Clean for piping]
     CLIPOUT[Clipboard Output<br/>-o, --clipboard-output<br/>Copy response to clipboard]
     BROWSER[Browser Output<br/>-b, --browser-output<br/>File + browser preview<br/>~/.gia/outputs/]
     TTS[Text-to-Speech<br/>-T, --tts<br/>Audio output with voice]
-    
-    %% Additional Features
-    CONV[Conversation Storage<br/>~/.gia/conversations/<br/>Persistent JSON storage]
-    LIST[List Conversations<br/>-l, --list-conversations<br/>Show saved conversations]
-    SHOW[Show Conversation<br/>-s, --show-conversation<br/>Display conversation history]
-    
+
     %% Input Flow
     CMD --> GIA
     AUDIO --> GIA
@@ -36,29 +31,22 @@ flowchart TD
     TEXTFILES --> GIA
     MEDIAFILES --> GIA
     ROLES --> GIA
-    RESUME --> CONV
+    RESUME --> GIA
     CONV --> GIA
-    
+
     %% Output Flow
     GIA --> STDOUT
     GIA --> CLIPOUT
     GIA --> BROWSER
     GIA --> TTS
-    GIA --> CONV
-    
-    %% Management Flow
-    LIST --> CONV
-    SHOW --> CONV
-    CONV --> STDOUT
-    CONV --> CLIPOUT
-    CONV --> BROWSER
-    
+
+
     %% Styling
     classDef inputSource fill:#e1f5fe,stroke:#01579b,stroke-width:2px
     classDef outputDest fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
     classDef core fill:#fff3e0,stroke:#e65100,stroke-width:3px
     classDef storage fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
-    
+
     class CMD,AUDIO,CLIPBOARD,STDIN,TEXTFILES,MEDIAFILES,ROLES,RESUME inputSource
     class STDOUT,CLIPOUT,BROWSER,TTS outputDest
     class GIA core
