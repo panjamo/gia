@@ -10,40 +10,37 @@ use serde::{Deserialize, Serialize};
 pub enum ContentPartWrapper {
     /// Main user prompt
     Prompt(String),
-    
+
     /// Role or task definition
     RoleDefinition {
         name: String,
         content: String,
         is_task: bool,
     },
-    
+
     /// Text file content
-    TextFile {
-        path: String,
-        content: String,
-    },
-    
+    TextFile { path: String, content: String },
+
     /// Clipboard text
     ClipboardText(String),
-    
+
     /// Stdin text
     StdinText(String),
-    
+
     /// Image as base64
     Image {
         path: Option<String>, // Original file path if from file
         mime_type: String,
         data: String, // base64
     },
-    
+
     /// Audio as base64
     Audio {
         path: String,
         mime_type: String,
         data: String, // base64
     },
-    
+
     /// Plain text (for any other text content)
     Text(String),
 }
@@ -55,7 +52,11 @@ impl ContentPartWrapper {
             ContentPartWrapper::Prompt(text) => {
                 ContentPart::Text(format!("=== Prompt ===\n\n{}", text))
             }
-            ContentPartWrapper::RoleDefinition { name, content, is_task } => {
+            ContentPartWrapper::RoleDefinition {
+                name,
+                content,
+                is_task,
+            } => {
                 let header = if *is_task {
                     format!("=== Task: {} ===", name)
                 } else {
@@ -82,12 +83,12 @@ impl ContentPartWrapper {
             ContentPartWrapper::StdinText(text) => {
                 ContentPart::Text(format!("=== Content from: stdin ===\n{}", text))
             }
-            ContentPartWrapper::Image { mime_type, data, .. } => {
-                ContentPart::from_image_base64(mime_type.clone(), data.clone())
-            }
-            ContentPartWrapper::Audio { mime_type, data, .. } => {
-                ContentPart::from_image_base64(mime_type.clone(), data.clone())
-            }
+            ContentPartWrapper::Image {
+                mime_type, data, ..
+            } => ContentPart::from_image_base64(mime_type.clone(), data.clone()),
+            ContentPartWrapper::Audio {
+                mime_type, data, ..
+            } => ContentPart::from_image_base64(mime_type.clone(), data.clone()),
             ContentPartWrapper::Text(text) => ContentPart::Text(text.clone()),
         }
     }
@@ -128,60 +129,9 @@ impl MessageContentWrapper {
         match self {
             MessageContentWrapper::Text { text } => genai::chat::MessageContent::Text(text.clone()),
             MessageContentWrapper::Parts { parts } => {
-                let content_parts: Vec<ContentPart> = parts
-                    .iter()
-                    .map(|p| p.to_genai_content_part())
-                    .collect();
+                let content_parts: Vec<ContentPart> =
+                    parts.iter().map(|p| p.to_genai_content_part()).collect();
                 genai::chat::MessageContent::Parts(content_parts)
-            }
-        }
-    }
-
-    /// Create from genai::MessageContent
-    #[allow(dead_code)]
-    pub fn from_genai_message_content(content: &genai::chat::MessageContent) -> Self {
-        match content {
-            genai::chat::MessageContent::Text(text) => MessageContentWrapper::Text { 
-                text: text.clone() 
-            },
-            genai::chat::MessageContent::Parts(_) => {
-                // For Parts, we can't easily reverse-engineer the structure
-                // This is only used when loading existing conversations
-                // New conversations will always use our wrapper
-                MessageContentWrapper::Parts { parts: Vec::new() }
-            }
-            _ => MessageContentWrapper::Text {
-                text: String::new(),
-            },
-        }
-    }
-
-    /// Extract all text content
-    #[allow(dead_code)]
-    pub fn extract_text(&self) -> String {
-        match self {
-            MessageContentWrapper::Text { text } => text.clone(),
-            MessageContentWrapper::Parts { parts } => {
-                parts
-                    .iter()
-                    .filter_map(|p| p.extract_text())
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            }
-        }
-    }
-
-    /// Extract only prompt text
-    #[allow(dead_code)]
-    pub fn extract_prompt(&self) -> String {
-        match self {
-            MessageContentWrapper::Text { text } => text.clone(),
-            MessageContentWrapper::Parts { parts } => {
-                parts
-                    .iter()
-                    .filter_map(|p| p.extract_prompt())
-                    .collect::<Vec<_>>()
-                    .join("\n")
             }
         }
     }
@@ -198,7 +148,7 @@ impl ChatMessageWrapper {
     /// Convert to genai::ChatMessage for API requests
     pub fn to_genai_chat_message(&self) -> Result<genai::chat::ChatMessage> {
         use genai::chat::{ChatMessage, ChatRole};
-        
+
         let role = match self.role.as_str() {
             "User" => ChatRole::User,
             "Assistant" => ChatRole::Assistant,
@@ -210,14 +160,5 @@ impl ChatMessageWrapper {
         let content = self.content.to_genai_message_content();
 
         Ok(ChatMessage { role, content })
-    }
-
-    /// Create from genai::ChatMessage
-    #[allow(dead_code)]
-    pub fn from_genai_chat_message(message: &genai::chat::ChatMessage) -> Self {
-        let role = format!("{:?}", message.role); // "User", "Assistant", etc.
-        let content = MessageContentWrapper::from_genai_message_content(&message.content);
-
-        ChatMessageWrapper { role, content }
     }
 }

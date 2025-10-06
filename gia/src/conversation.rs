@@ -125,46 +125,41 @@ impl Conversation {
 
     fn estimate_message_length(message: &ChatMessageWrapper) -> usize {
         use crate::content_part_wrapper::MessageContentWrapper;
-        
+
         match &message.content {
             MessageContentWrapper::Text { text } => text.len(),
-            MessageContentWrapper::Parts { parts } => {
-                parts.iter().map(|part| {
-                    part.extract_text().map(|t| t.len()).unwrap_or(100)
-                }).sum()
-            }
+            MessageContentWrapper::Parts { parts } => parts
+                .iter()
+                .map(|part| part.extract_text().map(|t| t.len()).unwrap_or(100))
+                .sum(),
         }
     }
 
     /// Extract text content from a ChatMessageWrapper
     pub fn extract_text_content(message: &ChatMessageWrapper) -> String {
         use crate::content_part_wrapper::MessageContentWrapper;
-        
+
         match &message.content {
             MessageContentWrapper::Text { text } => text.clone(),
-            MessageContentWrapper::Parts { parts } => {
-                parts
-                    .iter()
-                    .filter_map(|part| part.extract_text())
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            }
+            MessageContentWrapper::Parts { parts } => parts
+                .iter()
+                .filter_map(|part| part.extract_text())
+                .collect::<Vec<_>>()
+                .join("\n"),
         }
     }
 
     /// Extract only the Prompt section from a message (for TTS)
     pub fn extract_prompt_section(message: &ChatMessageWrapper) -> String {
         use crate::content_part_wrapper::MessageContentWrapper;
-        
+
         match &message.content {
             MessageContentWrapper::Text { text } => text.clone(),
-            MessageContentWrapper::Parts { parts } => {
-                parts
-                    .iter()
-                    .filter_map(|part| part.extract_prompt())
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            }
+            MessageContentWrapper::Parts { parts } => parts
+                .iter()
+                .filter_map(|part| part.extract_prompt())
+                .collect::<Vec<_>>()
+                .join("\n"),
         }
     }
 
@@ -538,11 +533,13 @@ mod tests {
     #[test]
     fn test_add_message() {
         use crate::content_part_wrapper::{ChatMessageWrapper, MessageContentWrapper};
-        
+
         let mut conversation = Conversation::new("test-model".to_string());
         let message = ChatMessageWrapper {
             role: "User".to_string(),
-            content: MessageContentWrapper::Text { text: "Hello".to_string() },
+            content: MessageContentWrapper::Text {
+                text: "Hello".to_string(),
+            },
         };
         conversation.add_message(message, Vec::new());
 
@@ -554,10 +551,12 @@ mod tests {
     #[test]
     fn test_extract_text_content() {
         use crate::content_part_wrapper::{ChatMessageWrapper, MessageContentWrapper};
-        
+
         let message = ChatMessageWrapper {
             role: "User".to_string(),
-            content: MessageContentWrapper::Text { text: "Hello world".to_string() },
+            content: MessageContentWrapper::Text {
+                text: "Hello world".to_string(),
+            },
         };
         let text = Conversation::extract_text_content(&message);
         assert_eq!(text, "Hello world");
@@ -565,8 +564,10 @@ mod tests {
 
     #[test]
     fn test_extract_prompt_section() {
-        use crate::content_part_wrapper::{ChatMessageWrapper, MessageContentWrapper, ContentPartWrapper};
-        
+        use crate::content_part_wrapper::{
+            ChatMessageWrapper, ContentPartWrapper, MessageContentWrapper,
+        };
+
         let message = ChatMessageWrapper {
             role: "User".to_string(),
             content: MessageContentWrapper::Parts {
@@ -580,7 +581,7 @@ mod tests {
     #[test]
     fn test_truncate_if_needed() {
         use crate::content_part_wrapper::{ChatMessageWrapper, MessageContentWrapper};
-        
+
         let mut conversation = Conversation::new("test-model".to_string());
 
         // Add more than CONVERSATION_TRUNCATION_KEEP_MESSAGES (20) to test truncation

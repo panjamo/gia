@@ -33,19 +33,18 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     let (mut conversation, final_prompt) =
         resolve_conversation(&config, &conversation_manager, &config.model)?;
 
-    // Get input text (this may modify config to add clipboard images)
-    let input_text =
-        get_input_text(&mut config, Some(&final_prompt)).context("Failed to get input text")?;
+    // Get input content (this may modify config to add clipboard images)
+    get_input_text(&mut config, Some(&final_prompt)).context("Failed to get input text")?;
 
-    if input_text.trim().is_empty() {
-        log_error("No input text provided");
-        eprintln!("Error: No input text provided. Provide prompt as command line arguments or use -c/-f/-i for additional input.");
+    if config.ordered_content.is_empty() {
+        log_error("No input content provided");
+        eprintln!("Error: No input content provided. Provide prompt as command line arguments or use -c/-f/-i for additional input.");
         std::process::exit(1);
     }
 
     log_info(&format!(
-        "Processing prompt with {} characters",
-        input_text.len()
+        "Processing prompt with {} content source(s)",
+        config.ordered_content.len()
     ));
 
     // Truncate conversation if it's getting too long
@@ -66,6 +65,11 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     // 1. Build new user message wrapper from ordered content
     let content_part_wrappers = build_content_part_wrappers(&config.ordered_content)?;
 
+    log_info(&format!(
+        "Created user message with {} content part(s)",
+        content_part_wrappers.len()
+    ));
+
     let new_user_message_wrapper = ChatMessageWrapper {
         role: "User".to_string(),
         content: MessageContentWrapper::Parts {
@@ -75,14 +79,20 @@ pub async fn run_app(mut config: Config) -> Result<()> {
 
     // 2. Convert conversation history + new message to genai ChatMessages for API
     let mut all_genai_messages = conversation.to_genai_messages()?;
+    let history_message_count = all_genai_messages.len();
     all_genai_messages.push(new_user_message_wrapper.to_genai_chat_message()?);
+
+    log_info(&format!(
+        "Total messages for API: {} ({} from history + 1 new)",
+        all_genai_messages.len(),
+        history_message_count
+    ));
 
     // 3. Generate content using chat messages
     log_info(&format!(
-        "Sending chat request to {} API using model: {} with {} message(s)",
+        "Sending chat request to {} API using model: {}",
         provider.provider_name(),
-        provider.model_name(),
-        all_genai_messages.len()
+        provider.model_name()
     ));
 
     let response = provider
@@ -126,7 +136,7 @@ pub async fn run_app(mut config: Config) -> Result<()> {
                 },
                 path: Some(name.clone()),
             }),
-            _ => None, // Skip CommandLinePrompt and ConversationHistory
+            _ => None, // Skip CommandLinePrompt
         };
 
         if let Some(res) = resource {
@@ -163,15 +173,35 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     Ok(())
 }
 
-fn build_content_part_wrappers(ordered_content: &[ContentSource]) -> Result<Vec<ContentPartWrapper>> {
+fn build_content_part_wrappers(
+    ordered_content: &[ContentSource],
+) -> Result<Vec<ContentPartWrapper>> {
+    log_info(&format!(
+        "=== Building multimodal content from {} source(s) ===",
+        ordered_content.len()
+    ));
+
     let mut wrappers = Vec::new();
 
-    for content_source in ordered_content {
+    for (index, content_source) in ordered_content.iter().enumerate() {
         match content_source {
             ContentSource::CommandLinePrompt(prompt) => {
+                log_info(&format!(
+                    "[{}] Prompt: {} characters",
+                    index + 1,
+                    prompt.len()
+                ));
                 wrappers.push(ContentPartWrapper::Prompt(prompt.clone()));
             }
             ContentSource::RoleDefinition(name, content, is_task) => {
+                let item_type = if *is_task { "Task" } else { "Role" };
+                log_info(&format!(
+                    "[{}] {}: '{}' ({} characters)",
+                    index + 1,
+                    item_type,
+                    name,
+                    content.len()
+                ));
                 wrappers.push(ContentPartWrapper::RoleDefinition {
                     name: name.clone(),
                     content: content.clone(),
@@ -179,20 +209,43 @@ fn build_content_part_wrappers(ordered_content: &[ContentSource]) -> Result<Vec<
                 });
             }
             ContentSource::TextFile(path, content) => {
+                log_info(&format!(
+                    "[{}] Text file: {} ({} characters)",
+                    index + 1,
+                    path,
+                    content.len()
+                ));
                 wrappers.push(ContentPartWrapper::TextFile {
                     path: path.clone(),
                     content: content.clone(),
                 });
             }
             ContentSource::ClipboardText(text) => {
+                log_info(&format!(
+                    "[{}] Clipboard text: {} characters",
+                    index + 1,
+                    text.len()
+                ));
                 wrappers.push(ContentPartWrapper::ClipboardText(text.clone()));
             }
             ContentSource::StdinText(text) => {
+                log_info(&format!(
+                    "[{}] Stdin text: {} characters",
+                    index + 1,
+                    text.len()
+                ));
                 wrappers.push(ContentPartWrapper::StdinText(text.clone()));
             }
             ContentSource::ImageFile(path) => {
                 let mime_type = crate::image::get_mime_type(std::path::Path::new(path))?;
                 let data = crate::image::read_media_as_base64(path)?;
+                log_info(&format!(
+                    "[{}] Image file: {} (type: {}, {} base64 chars)",
+                    index + 1,
+                    path,
+                    mime_type,
+                    data.len()
+                ));
                 wrappers.push(ContentPartWrapper::Image {
                     path: Some(path.clone()),
                     mime_type,
@@ -203,6 +256,12 @@ fn build_content_part_wrappers(ordered_content: &[ContentSource]) -> Result<Vec<
                 let image_data = crate::clipboard::read_clipboard_image()?;
                 let data = crate::clipboard::convert_image_data_to_base64(&image_data)?;
                 let mime_type = "image/png".to_string(); // Clipboard images are typically PNG
+                log_info(&format!(
+                    "[{}] Clipboard image (type: {}, {} base64 chars)",
+                    index + 1,
+                    mime_type,
+                    data.len()
+                ));
                 wrappers.push(ContentPartWrapper::Image {
                     path: None,
                     mime_type,
@@ -213,17 +272,26 @@ fn build_content_part_wrappers(ordered_content: &[ContentSource]) -> Result<Vec<
                 // Audio files use the same image MIME type detection for now
                 let mime_type = crate::image::get_mime_type(std::path::Path::new(path))?;
                 let data = crate::image::read_media_as_base64(path)?;
+                log_info(&format!(
+                    "[{}] Audio recording: {} (type: {}, {} base64 chars)",
+                    index + 1,
+                    path,
+                    mime_type,
+                    data.len()
+                ));
                 wrappers.push(ContentPartWrapper::Audio {
                     path: path.clone(),
                     mime_type,
                     data,
                 });
             }
-            ContentSource::ConversationHistory(_) => {
-                // Skip - conversation history is handled separately via conversation.to_genai_messages()
-            }
         }
     }
+
+    log_info(&format!(
+        "=== Built {} content part(s) for API request ===",
+        wrappers.len()
+    ));
 
     Ok(wrappers)
 }

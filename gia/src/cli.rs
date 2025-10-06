@@ -22,8 +22,6 @@ pub enum ContentSource {
     TextFile(String, String), // (file_path, content)
     ImageFile(String),        // file path
     ClipboardImage,
-    #[allow(dead_code)]
-    ConversationHistory(String), // conversation history text (legacy, not used in new format)
     RoleDefinition(String, String, bool), // (name, content, is_task)
 }
 

@@ -420,6 +420,7 @@ fn get_default_audio_device() -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn test_validate_audio_device_valid() {
@@ -495,6 +496,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_get_audio_device_with_env_var() {
         std::env::set_var("GIA_AUDIO_DEVICE", "Test Microphone");
 
@@ -507,6 +509,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_get_audio_device_without_env_var() {
         std::env::remove_var("GIA_AUDIO_DEVICE");
 

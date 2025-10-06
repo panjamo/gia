@@ -17,3 +17,8 @@ pub const CONVERSATION_TRUNCATION_KEEP_MESSAGES: usize = 20;
 /// URLs for user guidance
 pub const GEMINI_API_KEY_URL: &str = "https://makersuite.google.com/app/apikey";
 pub const GEMINI_DOCS_URL: &str = "https://ai.google.dev/gemini-api/docs/api-key";
+
+/// Supported media file extensions
+pub const MEDIA_EXTENSIONS: &[&str] = &[
+    "jpg", "jpeg", "png", "webp", "heic", "pdf", "ogg", "opus", "mp3", "m4a", "mp4",
+];

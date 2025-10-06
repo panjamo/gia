@@ -118,24 +118,24 @@ pub fn load_all_roles(names: &[String]) -> Result<Vec<(String, String, bool)>> {
     Ok(items)
 }
 
-/// Get the path to a role definition file
-fn get_role_path(role_name: &str) -> Result<PathBuf> {
+/// Get the path to a role or task definition file
+fn get_definition_path(name: &str, subdir: &str) -> Result<PathBuf> {
     let home_dir =
         dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
 
-    let roles_dir = home_dir.join(".gia").join("roles");
-    let role_file = format!("{}.md", role_name);
-    Ok(roles_dir.join(role_file))
+    let definition_dir = home_dir.join(".gia").join(subdir);
+    let definition_file = format!("{}.md", name);
+    Ok(definition_dir.join(definition_file))
+}
+
+/// Get the path to a role definition file
+fn get_role_path(role_name: &str) -> Result<PathBuf> {
+    get_definition_path(role_name, "roles")
 }
 
 /// Get the path to a task definition file
 fn get_task_path(task_name: &str) -> Result<PathBuf> {
-    let home_dir =
-        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
-
-    let tasks_dir = home_dir.join(".gia").join("tasks");
-    let task_file = format!("{}.md", task_name);
-    Ok(tasks_dir.join(task_file))
+    get_definition_path(task_name, "tasks")
 }
 
 #[cfg(test)]

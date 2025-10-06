@@ -3,12 +3,8 @@ use base64::Engine;
 use std::fs;
 use std::path::Path;
 
+use crate::constants::MEDIA_EXTENSIONS;
 use crate::logging::{log_debug, log_info};
-
-/// Supported file formats for Gemini API
-const SUPPORTED_EXTENSIONS: &[&str] = &[
-    "jpg", "jpeg", "png", "webp", "heic", "pdf", "ogg", "opus", "mp3", "m4a", "mp4",
-];
 
 /// Get MIME type from file extension
 pub fn get_mime_type(file_path: &Path) -> Result<String> {
@@ -32,7 +28,7 @@ pub fn get_mime_type(file_path: &Path) -> Result<String> {
             return Err(anyhow::anyhow!(
                 "Unsupported file format: {}. Supported formats: {}",
                 extension,
-                SUPPORTED_EXTENSIONS.join(", ")
+                MEDIA_EXTENSIONS.join(", ")
             ));
         }
     };

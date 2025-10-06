@@ -112,6 +112,7 @@ fn load_md_files(subdir: &str) -> Vec<String> {
 }
 
 fn is_media_file(path: &Path) -> bool {
+    // Keep in sync with gia/src/constants.rs::MEDIA_EXTENSIONS
     const MEDIA_EXTENSIONS: &[&str] = &[
         "jpg", "jpeg", "png", "webp", "heic", "pdf", "ogg", "opus", "mp3", "m4a", "mp4",
     ];

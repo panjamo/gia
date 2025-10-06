@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use chardetng::EncodingDetector;
-use std::fmt::Write;
 use std::fs;
 use std::io::{self, Read};
 
@@ -63,7 +62,7 @@ pub fn read_text_file(file_path: &str) -> Result<String> {
     }
 }
 
-pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Result<String> {
+pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Result<()> {
     // Clear any existing ordered content
     config.ordered_content.clear();
 
@@ -222,77 +221,7 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
         }
     }
 
-    // Build final text for backwards compatibility
-    Ok(build_legacy_input_text(&config.ordered_content))
-}
-
-fn build_legacy_input_text(ordered_content: &[ContentSource]) -> String {
-    let mut input_text = String::new();
-
-    for content in ordered_content {
-        match content {
-            ContentSource::CommandLinePrompt(prompt) => {
-                if !input_text.is_empty() {
-                    input_text.push_str("\n\n");
-                }
-                writeln!(input_text, "=== Prompt ===").unwrap();
-                input_text.push_str(prompt);
-            }
-            ContentSource::ClipboardText(text) => {
-                if !input_text.is_empty() {
-                    input_text.push_str("\n\n");
-                }
-                writeln!(input_text, "=== Content from: clipboard ===").unwrap();
-                input_text.push_str(text);
-            }
-            ContentSource::StdinText(text) => {
-                if !input_text.is_empty() {
-                    input_text.push_str("\n\n");
-                }
-                writeln!(input_text, "=== Content from: stdin ===").unwrap();
-                input_text.push_str(text);
-            }
-            ContentSource::TextFile(file_path, content) => {
-                if !input_text.is_empty() {
-                    input_text.push_str("\n\n");
-                }
-                writeln!(input_text, "=== Content from: {file_path} ===").unwrap();
-                input_text.push_str(content);
-                if !content.ends_with('\n') {
-                    input_text.push('\n');
-                }
-            }
-            ContentSource::ConversationHistory(history) => {
-                if !input_text.is_empty() {
-                    input_text.push_str("\n\n");
-                }
-                writeln!(input_text, "=== Previous conversation ===").unwrap();
-                input_text.push_str(history);
-            }
-            ContentSource::RoleDefinition(name, content, is_task) => {
-                if !input_text.is_empty() {
-                    input_text.push_str("\n\n");
-                }
-                if *is_task {
-                    writeln!(input_text, "=== Task: {name} ===").unwrap();
-                } else {
-                    writeln!(input_text, "=== Role: {name} ===").unwrap();
-                }
-                input_text.push_str(content);
-                if !content.ends_with('\n') {
-                    input_text.push('\n');
-                }
-            }
-            // Audio, image files, and clipboard images are handled in multimodal request
-            ContentSource::AudioRecording(_)
-            | ContentSource::ImageFile(_)
-            | ContentSource::ClipboardImage => {
-                // These don't contribute to text content
-            }
-        }
-    }
-
-    input_text
+    Ok(())
 }
 
 pub fn validate_image_sources(config: &Config) -> Result<()> {
@@ -375,12 +304,22 @@ mod tests {
             ordered_content: Vec::new(),
         };
 
-        let result = get_input_text(&mut config, None).unwrap();
+        get_input_text(&mut config, None).unwrap();
 
-        assert!(result.contains("Test prompt"));
-        assert!(result.contains("=== Content from:"));
-        assert!(result.contains(content1));
-        assert!(result.contains(content2));
+        // Verify ordered_content has the expected items
+        assert_eq!(config.ordered_content.len(), 3); // prompt + 2 files
+        match &config.ordered_content[0] {
+            ContentSource::CommandLinePrompt(p) => assert_eq!(p, "Test prompt"),
+            _ => panic!("Expected CommandLinePrompt"),
+        }
+        match &config.ordered_content[1] {
+            ContentSource::TextFile(_, c) => assert_eq!(c, content1),
+            _ => panic!("Expected TextFile"),
+        }
+        match &config.ordered_content[2] {
+            ContentSource::TextFile(_, c) => assert_eq!(c, content2),
+            _ => panic!("Expected TextFile"),
+        }
     }
 
     #[test]
@@ -401,8 +340,14 @@ mod tests {
             ordered_content: Vec::new(),
         };
 
-        let result = get_input_text(&mut config, None).unwrap();
-        assert_eq!(result, "=== Prompt ===\nTest prompt");
+        get_input_text(&mut config, None).unwrap();
+
+        // Verify ordered_content has just the prompt
+        assert_eq!(config.ordered_content.len(), 1);
+        match &config.ordered_content[0] {
+            ContentSource::CommandLinePrompt(p) => assert_eq!(p, "Test prompt"),
+            _ => panic!("Expected CommandLinePrompt"),
+        }
     }
 
     #[test]
@@ -423,63 +368,14 @@ mod tests {
             ordered_content: Vec::new(),
         };
 
-        let result = get_input_text(&mut config, Some("Override prompt")).unwrap();
-        assert_eq!(result, "=== Prompt ===\nOverride prompt");
+        get_input_text(&mut config, Some("Override prompt")).unwrap();
+
+        // Verify override was used instead of original prompt
         assert_eq!(config.ordered_content.len(), 1);
-    }
-
-    #[test]
-    fn test_build_legacy_input_text_multiple_sources() {
-        let ordered_content = vec![
-            ContentSource::CommandLinePrompt("Main prompt".to_string()),
-            ContentSource::ClipboardText("Clipboard content".to_string()),
-            ContentSource::StdinText("Stdin content".to_string()),
-        ];
-
-        let result = build_legacy_input_text(&ordered_content);
-
-        assert!(result.contains("Main prompt"));
-        assert!(result.contains("=== Content from: clipboard ==="));
-        assert!(result.contains("Clipboard content"));
-        assert!(result.contains("=== Content from: stdin ==="));
-        assert!(result.contains("Stdin content"));
-    }
-
-    #[test]
-    fn test_build_legacy_input_text_with_images_excluded() {
-        let ordered_content = vec![
-            ContentSource::CommandLinePrompt("Text prompt".to_string()),
-            ContentSource::ImageFile("image.jpg".to_string()),
-            ContentSource::ClipboardImage,
-        ];
-
-        let result = build_legacy_input_text(&ordered_content);
-
-        assert!(result.contains("Text prompt"));
-        assert!(!result.contains("image.jpg"));
-        assert!(!result.contains("clipboard"));
-    }
-
-    #[test]
-    fn test_build_legacy_input_text_text_file_with_newline() {
-        let content_with_newline = "File content\n";
-        let content_without_newline = "File content";
-
-        let ordered_with = vec![ContentSource::TextFile(
-            "file1.txt".to_string(),
-            content_with_newline.to_string(),
-        )];
-        let ordered_without = vec![ContentSource::TextFile(
-            "file2.txt".to_string(),
-            content_without_newline.to_string(),
-        )];
-
-        let result_with = build_legacy_input_text(&ordered_with);
-        let result_without = build_legacy_input_text(&ordered_without);
-
-        // Both should end with newline
-        assert!(result_with.contains("File content\n"));
-        assert!(result_without.contains("File content\n"));
+        match &config.ordered_content[0] {
+            ContentSource::CommandLinePrompt(p) => assert_eq!(p, "Override prompt"),
+            _ => panic!("Expected CommandLinePrompt"),
+        }
     }
 
     #[test]
