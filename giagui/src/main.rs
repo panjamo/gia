@@ -7,6 +7,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 fn main() -> eframe::Result<()> {
+    let version = env!("GIA_VERSION");
+    let title = format!("GIA GUI - v{}", version);
+    
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([800.0, 600.0])
@@ -15,7 +18,7 @@ fn main() -> eframe::Result<()> {
     };
 
     eframe::run_native(
-        "GIA GUI",
+        &title,
         options,
         Box::new(|_cc| Ok(Box::new(GiaApp::default()))),
     )
