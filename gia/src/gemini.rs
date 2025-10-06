@@ -1,6 +1,6 @@
 use crate::api_key::validate_api_key_format;
 use crate::constants::GEMINI_API_KEY_URL;
-use crate::logging::{log_debug, log_error, log_info, log_warn};
+use crate::logging::{log_debug, log_error, log_info, log_trace, log_warn};
 use crate::provider::AiProvider;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -118,12 +118,17 @@ impl GeminiClient {
             match &msg.content {
                 MessageContent::Text(text) => {
                     log_info(&format!("  Type: Text ({} chars)", text.len()));
+                    log_trace(&format!("  Content: {}", text));
                 }
                 MessageContent::Parts(parts) => {
                     log_info(&format!("  Type: Multimodal ({} parts)", parts.len()));
+                    for (j, part) in parts.iter().enumerate() {
+                        log_trace(&format!("  Part {}: {:?}", j + 1, part));
+                    }
                 }
                 _ => {
                     log_info("  Type: Other");
+                    log_trace(&format!("  Content: {:?}", msg.content));
                 }
             }
         }
@@ -149,6 +154,10 @@ impl GeminiClient {
 
         // Create the chat request
         let chat_request = ChatRequest::new(messages);
+        log_trace(&format!("=== Full Chat Request ==="));
+        log_trace(&format!("Model: {}", self.model));
+        log_trace(&format!("Request Debug: {:?}", chat_request));
+        log_trace(&format!("=== End Full Chat Request ==="));
 
         // Send the request using genai
         let chat_response = self
@@ -156,6 +165,14 @@ impl GeminiClient {
             .exec_chat(&self.model, chat_request, None)
             .await
             .context("Failed to send chat request to Gemini API")?;
+
+        log_trace(&format!("=== Full Chat Response ==="));
+        log_trace(&format!("Content: {:?}", chat_response.content));
+        log_trace(&format!("Reasoning Content: {:?}", chat_response.reasoning_content));
+        log_trace(&format!("Model Iden: {:?}", chat_response.model_iden));
+        log_trace(&format!("Usage: {:?}", chat_response.usage));
+        log_trace(&format!("Response Debug: {:?}", chat_response));
+        log_trace(&format!("=== End Full Chat Response ==="));
 
         // Extract the response text
         let generated_text = chat_response

@@ -34,7 +34,6 @@ pub fn log_debug(msg: &str) {
     debug!("{msg}");
 }
 
-#[allow(dead_code)]
 pub fn log_trace(msg: &str) {
     trace!("{msg}");
 }
