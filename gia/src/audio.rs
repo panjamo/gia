@@ -58,9 +58,6 @@ pub fn record_audio() -> Result<String> {
         let _ = Command::new("pkill").args(["-f", "ffmpeg"]).output();
     }
 
-    // Give processes time to terminate
-    thread::sleep(Duration::from_millis(500));
-
     // Generate unique filename for the recording
     let temp_dir = std::env::temp_dir();
     let timestamp = std::time::SystemTime::now()

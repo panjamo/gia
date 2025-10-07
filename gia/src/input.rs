@@ -4,8 +4,8 @@ use std::fs;
 use std::io::{self, Read};
 
 use crate::audio::record_audio;
-use crate::cli::{Config, ContentSource, ImageSource};
-use crate::clipboard::{has_clipboard_image, read_clipboard};
+use crate::cli::{Config, ContentSource, ImageSource, OutputMode};
+use crate::clipboard::{has_clipboard_image, read_clipboard, write_clipboard};
 use crate::image::validate_media_file;
 use crate::logging::{log_debug, log_info};
 use crate::role::load_all_roles;
@@ -119,7 +119,17 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
             }
             Err(e) => {
                 log_debug(&format!("Audio recording failed: {e}"));
-                eprintln!("Warning: Audio recording failed: {e}");
+
+                // Clear clipboard if output mode is clipboard
+                if matches!(config.output_mode, OutputMode::Clipboard) {
+                    log_info("Clearing clipboard due to cancelled audio recording");
+                    if let Err(clear_err) = write_clipboard("") {
+                        log_debug(&format!("Failed to clear clipboard: {clear_err}"));
+                    }
+                }
+                
+                // Return error to stop execution
+                return Err(e);
             }
         }
     }
