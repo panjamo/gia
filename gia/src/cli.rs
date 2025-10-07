@@ -1,4 +1,6 @@
 use clap::{Arg, Command};
+use clap_complete::{generate, shells};
+use clap_complete_nushell::Nushell;
 
 #[derive(Debug, Clone)]
 pub enum OutputMode {
@@ -45,6 +47,12 @@ pub struct Config {
 impl Config {
     pub fn from_args() -> Self {
         let matches = Self::build_cli().get_matches();
+
+        // Handle completions generation immediately
+        if let Some(shell) = matches.get_one::<String>("completions") {
+            Self::handle_completions(shell);
+            std::process::exit(0);
+        }
 
         // Handle verbose help immediately
         if matches.get_flag("verbose-help") {
@@ -236,6 +244,33 @@ impl Config {
                     .value_name("NAME")
                     .action(clap::ArgAction::Append),
             )
+            .arg(
+                Arg::new("completions")
+                    .long("completions")
+                    .help("Generate shell completion script")
+                    .value_name("SHELL")
+                    .value_parser(["bash", "zsh", "fish", "powershell", "nushell"])
+                    .action(clap::ArgAction::Set),
+            )
+    }
+
+    fn handle_completions(shell: &str) {
+        let mut cmd = Self::build_cli();
+        let bin_name = "gia";
+
+        match shell {
+            "bash" => generate(shells::Bash, &mut cmd, bin_name, &mut std::io::stdout()),
+            "zsh" => generate(shells::Zsh, &mut cmd, bin_name, &mut std::io::stdout()),
+            "fish" => generate(shells::Fish, &mut cmd, bin_name, &mut std::io::stdout()),
+            "powershell" => generate(
+                shells::PowerShell,
+                &mut cmd,
+                bin_name,
+                &mut std::io::stdout(),
+            ),
+            "nushell" => generate(Nushell, &mut cmd, bin_name, &mut std::io::stdout()),
+            _ => eprintln!("Unsupported shell: {}", shell),
+        }
     }
 
     fn handle_verbose_help() {
