@@ -153,6 +153,22 @@ The `api_key.rs` module handles:
 - Alternative key selection for fallback scenarios
 - User guidance when keys are missing or invalid
 
+**API Key Fallback Algorithm** (implemented in `gemini.rs`):
+1. **Initialization**: Read all API keys from `GEMINI_API_KEY` environment variable (pipe-separated: `key1|key2|key3`)
+2. **Random Start**: Randomly select one key as the starting key
+3. **API Request**: Make request using current key
+4. **On 429 Rate Limit Error**: 
+   - Log the rate limit hit
+   - Show user message: `⚠️  Rate limit hit on API key. Trying next key... (X/Y)`
+   - Move to next key using round-robin (modulo wrap-around)
+   - Retry the request with the new key
+5. **Cycle Detection**: Track the starting key index; if we cycle back to it, all keys have been tried
+6. **All Keys Failed**: 
+   - Log error with total attempts
+   - Show user message: `❌ All X API keys exhausted. All keys have hit rate limits.`
+   - Return error and stop processing
+7. **Important**: The `GEMINI_API_KEY` environment variable is **never modified** at runtime; keys are passed directly to the API client via `AuthResolver`
+
 ### Conversation Management
 The `conversation.rs` module handles:
 - Persistent conversation storage in JSON format
