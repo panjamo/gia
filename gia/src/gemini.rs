@@ -1,7 +1,8 @@
 use crate::api_key::validate_api_key_format;
 use crate::constants::GEMINI_API_KEY_URL;
+use crate::conversation::TokenUsage;
 use crate::logging::{log_debug, log_error, log_info, log_trace, log_warn};
-use crate::provider::AiProvider;
+use crate::provider::{AiProvider, AiResponse};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use genai::chat::{ChatMessage, ChatRequest, MessageContent};
@@ -140,7 +141,7 @@ impl GeminiClient {
         &self,
         messages: Vec<ChatMessage>,
         api_key: &str,
-    ) -> Result<String> {
+    ) -> Result<AiResponse> {
         log_debug(&format!(
             "Sending chat request with {} message(s)",
             messages.len()
@@ -154,10 +155,10 @@ impl GeminiClient {
 
         // Create the chat request
         let chat_request = ChatRequest::new(messages);
-        log_trace(&format!("=== Full Chat Request ==="));
+        log_trace("=== Full Chat Request ===");
         log_trace(&format!("Model: {}", self.model));
         log_trace(&format!("Request Debug: {:?}", chat_request));
-        log_trace(&format!("=== End Full Chat Request ==="));
+        log_trace("=== End Full Chat Request ===");
 
         // Send the request using genai
         let chat_response = self
@@ -166,13 +167,23 @@ impl GeminiClient {
             .await
             .context("Failed to send chat request to Gemini API")?;
 
-        log_trace(&format!("=== Full Chat Response ==="));
+        log_trace("=== Full Chat Response ===");
         log_trace(&format!("Content: {:?}", chat_response.content));
-        log_trace(&format!("Reasoning Content: {:?}", chat_response.reasoning_content));
+        log_trace(&format!(
+            "Reasoning Content: {:?}",
+            chat_response.reasoning_content
+        ));
         log_trace(&format!("Model Iden: {:?}", chat_response.model_iden));
         log_trace(&format!("Usage: {:?}", chat_response.usage));
         log_trace(&format!("Response Debug: {:?}", chat_response));
-        log_trace(&format!("=== End Full Chat Response ==="));
+        log_trace("=== End Full Chat Response ===");
+
+        // Extract usage information if available
+        let usage = TokenUsage {
+            prompt_tokens: chat_response.usage.prompt_tokens.map(|t| t as u32),
+            completion_tokens: chat_response.usage.completion_tokens.map(|t| t as u32),
+            total_tokens: chat_response.usage.total_tokens.map(|t| t as u32),
+        };
 
         // Extract the response text
         let generated_text = chat_response
@@ -192,7 +203,10 @@ impl GeminiClient {
             generated_text.len()
         ));
 
-        Ok(generated_text.to_string())
+        Ok(AiResponse {
+            content: generated_text.to_string(),
+            usage,
+        })
     }
 }
 
@@ -201,7 +215,7 @@ impl AiProvider for GeminiClient {
     async fn generate_content_with_chat_messages(
         &mut self,
         chat_messages: Vec<ChatMessage>,
-    ) -> Result<String> {
+    ) -> Result<AiResponse> {
         log_debug(&format!(
             "Sending chat request to Gemini API with {} message(s)",
             chat_messages.len()
@@ -214,7 +228,7 @@ impl AiProvider for GeminiClient {
             .try_chat_request_with_messages(chat_messages.clone(), &current_key)
             .await
         {
-            Ok(result) => Ok(result),
+            Ok(response) => Ok(response),
             Err(e) => {
                 let error_string = e.to_string();
 
@@ -229,9 +243,9 @@ impl AiProvider for GeminiClient {
                             .try_chat_request_with_messages(chat_messages, &next_key)
                             .await
                         {
-                            Ok(result) => {
+                            Ok(response) => {
                                 log_info("Successfully used alternative API key for chat request");
-                                Ok(result)
+                                Ok(response)
                             }
                             Err(fallback_error) => {
                                 log_error("Alternative API key also failed for chat request");
@@ -256,7 +270,8 @@ impl AiProvider for GeminiClient {
                         || error_string.contains("authentication")
                         || error_string.contains("permission")
                     {
-                        return Self::handle_auth_error(&error_string);
+                        Self::handle_auth_error(&error_string)?;
+                        return Err(anyhow::anyhow!("Authentication failed"));
                     }
                     Err(e)
                 }

@@ -131,6 +131,8 @@ hr {
 }
 "#;
 
+use crate::conversation::TokenUsage;
+
 pub struct FooterMetadata {
     pub model_name: String,
     pub provider_name: String,
@@ -143,6 +145,7 @@ pub struct FooterMetadata {
     pub roles: Vec<String>,
     pub tasks: Vec<String>,
     pub prompt: String,
+    pub token_usage: Option<TokenUsage>,
 }
 
 pub fn open_markdown_preview(
@@ -180,6 +183,19 @@ fn build_footer_html(metadata: &FooterMetadata) -> String {
         "<p><strong>Model:</strong> {}::{}</p>",
         metadata.provider_name, metadata.model_name
     ));
+
+    // Token usage
+    if let Some(usage) = &metadata.token_usage {
+        if usage.prompt_tokens.is_some()
+            || usage.completion_tokens.is_some()
+            || usage.total_tokens.is_some()
+        {
+            footer.push_str(&format!(
+                "<p><strong>Tokens:</strong> {}</p>",
+                usage.format_short()
+            ));
+        }
+    }
 
     // Inputs section
     if !metadata.image_files.is_empty()
@@ -298,6 +314,7 @@ mod tests {
             roles: vec![],
             tasks: vec![],
             prompt: "Test prompt".to_string(),
+            token_usage: None,
         };
 
         let footer = build_footer_html(&metadata);
@@ -320,6 +337,7 @@ mod tests {
             roles: vec![],
             tasks: vec![],
             prompt: "Test".to_string(),
+            token_usage: None,
         };
 
         let footer = build_footer_html(&metadata);
@@ -346,6 +364,7 @@ mod tests {
             roles: vec![],
             tasks: vec![],
             prompt: "What is AI?".to_string(),
+            token_usage: None,
         };
 
         let header = build_prompt_header(&metadata);
@@ -368,6 +387,7 @@ mod tests {
             roles: vec![],
             tasks: vec![],
             prompt: "".to_string(),
+            token_usage: None,
         };
 
         let header = build_prompt_header(&metadata);
@@ -389,6 +409,7 @@ mod tests {
             roles: vec![],
             tasks: vec![],
             prompt: "<script>alert('xss')</script>".to_string(),
+            token_usage: None,
         };
 
         let header = build_prompt_header(&metadata);
@@ -423,6 +444,7 @@ mod tests {
             roles: vec![],
             tasks: vec![],
             prompt: "Test prompt".to_string(),
+            token_usage: None,
         };
 
         let html = create_markdown_html(markdown, Some(&metadata));

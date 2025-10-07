@@ -23,6 +23,28 @@ pub enum ResourceType {
     Task,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+pub struct TokenUsage {
+    pub prompt_tokens: Option<u32>,
+    pub completion_tokens: Option<u32>,
+    pub total_tokens: Option<u32>,
+}
+
+impl TokenUsage {
+    pub fn format_short(&self) -> String {
+        match (
+            self.prompt_tokens,
+            self.completion_tokens,
+            self.total_tokens,
+        ) {
+            (Some(p), Some(c), Some(t)) => format!("{}+{}={}", p, c, t),
+            (Some(p), Some(c), None) => format!("{}+{}", p, c),
+            (None, None, Some(t)) => format!("{}", t),
+            _ => "N/A".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceInfo {
     pub resource_type: ResourceType,
@@ -33,6 +55,8 @@ pub struct ResourceInfo {
 pub struct ConversationMetadata {
     pub resources_per_message: Vec<Vec<ResourceInfo>>,
     pub model_used: String,
+    #[serde(default)]
+    pub token_usage_per_message: Vec<TokenUsage>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,13 +79,20 @@ impl Conversation {
             metadata: ConversationMetadata {
                 resources_per_message: Vec::new(),
                 model_used: model_name,
+                token_usage_per_message: Vec::new(),
             },
         }
     }
 
-    pub fn add_message(&mut self, message: ChatMessageWrapper, resources: Vec<ResourceInfo>) {
+    pub fn add_message_with_usage(
+        &mut self,
+        message: ChatMessageWrapper,
+        resources: Vec<ResourceInfo>,
+        usage: TokenUsage,
+    ) {
         self.messages.push(message);
         self.metadata.resources_per_message.push(resources);
+        self.metadata.token_usage_per_message.push(usage);
         self.updated_at = Utc::now();
     }
 
@@ -89,6 +120,7 @@ impl Conversation {
         {
             self.messages.remove(0);
             self.metadata.resources_per_message.remove(0);
+            self.metadata.token_usage_per_message.remove(0);
             log_debug("Removed oldest message to fit context window");
         }
 
@@ -103,9 +135,14 @@ impl Conversation {
                 .metadata
                 .resources_per_message
                 .split_off(self.messages.len());
+            let last_token_usage = self
+                .metadata
+                .token_usage_per_message
+                .split_off(self.messages.len());
 
             self.messages = last_messages;
             self.metadata.resources_per_message = last_resources;
+            self.metadata.token_usage_per_message = last_token_usage;
 
             log_warn(&format!(
                 "Had to truncate conversation to only the last {CONVERSATION_TRUNCATION_KEEP_MESSAGES} messages"
@@ -186,10 +223,11 @@ impl Conversation {
         markdown.push_str("---\n\n");
 
         // Add messages with metadata
-        for (i, (message, resources)) in self
+        for (i, ((message, resources), usage)) in self
             .messages
             .iter()
             .zip(self.metadata.resources_per_message.iter())
+            .zip(self.metadata.token_usage_per_message.iter())
             .enumerate()
         {
             if i > 0 {
@@ -270,6 +308,18 @@ impl Conversation {
                     let text_content = Self::extract_text_content(message);
                     markdown.push_str("**Assistant:** ");
                     markdown.push_str(&text_content);
+
+                    // Add token usage information for assistant responses
+                    if usage.prompt_tokens.is_some()
+                        || usage.completion_tokens.is_some()
+                        || usage.total_tokens.is_some()
+                    {
+                        markdown.push_str(&format!(
+                            "\n\n<small>📊 **Tokens:** {}</small>",
+                            usage.format_short()
+                        ));
+                    }
+
                     markdown.push('\n');
                 }
                 _ => {
@@ -541,11 +591,12 @@ mod tests {
                 text: "Hello".to_string(),
             },
         };
-        conversation.add_message(message, Vec::new());
+        conversation.add_message_with_usage(message, Vec::new(), TokenUsage::default());
 
         assert_eq!(conversation.messages.len(), 1);
         assert_eq!(conversation.messages[0].role, "User");
         assert_eq!(conversation.metadata.resources_per_message.len(), 1);
+        assert_eq!(conversation.metadata.token_usage_per_message.len(), 1);
     }
 
     #[test]
@@ -593,7 +644,7 @@ mod tests {
                     text: format!("Message {}", i).repeat(100),
                 },
             };
-            conversation.add_message(message, Vec::new());
+            conversation.add_message_with_usage(message, Vec::new(), TokenUsage::default());
         }
 
         let initial_count = conversation.messages.len();

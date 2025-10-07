@@ -7,7 +7,7 @@ use tts::Tts;
 use crate::browser_preview::{open_markdown_preview, FooterMetadata};
 use crate::cli::{Config, ContentSource, OutputMode};
 use crate::clipboard::write_clipboard;
-use crate::conversation::Conversation;
+use crate::conversation::{Conversation, TokenUsage};
 use crate::logging::{log_error, log_info};
 
 fn wrap_text(text: &str, width: usize) -> String {
@@ -127,7 +127,7 @@ pub fn generate_filename_from_prompt(prompt: &str) -> String {
     }
 }
 
-fn build_footer_metadata(config: &Config) -> FooterMetadata {
+fn build_footer_metadata(config: &Config, token_usage: Option<TokenUsage>) -> FooterMetadata {
     // Parse provider and model from config.model
     let (provider_name, model_name) = if config.model.contains("::") {
         let parts: Vec<&str> = config.model.splitn(2, "::").collect();
@@ -189,10 +189,15 @@ fn build_footer_metadata(config: &Config) -> FooterMetadata {
         roles,
         tasks,
         prompt: config.prompt.clone(),
+        token_usage,
     }
 }
 
-pub fn output_text(text: &str, config: &Config) -> Result<()> {
+pub fn output_text_with_usage(
+    text: &str,
+    config: &Config,
+    token_usage: Option<TokenUsage>,
+) -> Result<()> {
     match &config.output_mode {
         OutputMode::TempFileWithPreview => {
             log_info("Writing response to output file, copying file path to clipboard, and opening browser preview");
@@ -216,7 +221,7 @@ pub fn output_text(text: &str, config: &Config) -> Result<()> {
             write_clipboard(&file_path_str)?;
 
             // Build footer metadata
-            let metadata = build_footer_metadata(config);
+            let metadata = build_footer_metadata(config, token_usage);
 
             // Open browser preview with metadata
             if let Err(e) = open_markdown_preview(text, &output_path, Some(&metadata)) {
@@ -481,7 +486,7 @@ mod tests {
             ],
         };
 
-        let metadata = build_footer_metadata(&config);
+        let metadata = build_footer_metadata(&config, None);
 
         assert_eq!(metadata.provider_name, "gemini");
         assert_eq!(metadata.model_name, "gemini-2.5-flash-lite");
@@ -509,7 +514,7 @@ mod tests {
             ordered_content: vec![],
         };
 
-        let metadata = build_footer_metadata(&config);
+        let metadata = build_footer_metadata(&config, None);
 
         assert_eq!(metadata.provider_name, "openai");
         assert_eq!(metadata.model_name, "gpt-4");

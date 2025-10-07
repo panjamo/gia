@@ -5,10 +5,11 @@ use tabwriter::TabWriter;
 use crate::cli::{Config, ContentSource};
 use crate::constants::get_context_window_limit;
 use crate::content_part_wrapper::{ChatMessageWrapper, ContentPartWrapper, MessageContentWrapper};
+use crate::conversation::TokenUsage;
 use crate::conversation::{Conversation, ConversationManager, ResourceInfo, ResourceType};
 use crate::input::{get_input_text, validate_image_sources};
 use crate::logging::{log_error, log_info};
-use crate::output::output_text;
+use crate::output::output_text_with_usage;
 use crate::provider::{ProviderConfig, ProviderFactory};
 
 pub async fn run_app(mut config: Config) -> Result<()> {
@@ -95,10 +96,13 @@ pub async fn run_app(mut config: Config) -> Result<()> {
         provider.model_name()
     ));
 
-    let response = provider
+    let ai_response = provider
         .generate_content_with_chat_messages(all_genai_messages)
         .await
         .context("Failed to generate content")?;
+
+    let response = ai_response.content;
+    let usage = ai_response.usage;
 
     // Build resources from ordered content
     let mut resources = Vec::new();
@@ -152,9 +156,9 @@ pub async fn run_app(mut config: Config) -> Result<()> {
         },
     };
 
-    // 5. Add messages to conversation
-    conversation.add_message(new_user_message_wrapper, resources);
-    conversation.add_message(assistant_message_wrapper, Vec::new());
+    // 5. Add messages to conversation with token usage
+    conversation.add_message_with_usage(new_user_message_wrapper, resources, TokenUsage::default());
+    conversation.add_message_with_usage(assistant_message_wrapper, Vec::new(), usage);
 
     // Save conversation
     conversation_manager
@@ -167,7 +171,7 @@ pub async fn run_app(mut config: Config) -> Result<()> {
         .context("Failed to save markdown")?;
 
     // Output response
-    output_text(&response, &config).context("Failed to output response")?;
+    output_text_with_usage(&response, &config, Some(usage)).context("Failed to output response")?;
 
     log_info("Successfully completed request");
     Ok(())

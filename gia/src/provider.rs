@@ -3,14 +3,23 @@ use async_trait::async_trait;
 use genai::chat::ChatMessage;
 use std::fmt::Debug;
 
+use crate::conversation::TokenUsage;
+
+/// Response from AI provider with content and usage information
+#[derive(Debug)]
+pub struct AiResponse {
+    pub content: String,
+    pub usage: TokenUsage,
+}
+
 /// Generic AI provider trait for abstraction across different AI services
 #[async_trait]
 pub trait AiProvider: Debug + Send + Sync {
-    /// Generate content from chat messages
+    /// Generate content from chat messages with usage information
     async fn generate_content_with_chat_messages(
         &mut self,
         chat_messages: Vec<ChatMessage>,
-    ) -> Result<String>;
+    ) -> Result<AiResponse>;
 
     /// Get the model name being used
     fn model_name(&self) -> &str;
