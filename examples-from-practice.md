@@ -23,7 +23,7 @@ Send, ^v
 Return
 ```
 
-### `~\.gia\taks\transkribiere.md`
+### `~\.gia\tasks\transkribiere.md`
 ```
 - transkribiere, möglichst wenig Änderungen.
 - keine time codes mit ausgeben
