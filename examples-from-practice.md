@@ -1,6 +1,6 @@
-[alias]
 ### ~/.gitconfig
 ```
+[alias]
 cia = "!f() { \
     msg=$(git rev-parse --show-toplevel)'/.git/.gitmessage.txt'; \
     git add \"$@\";\
