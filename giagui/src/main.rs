@@ -324,43 +324,49 @@ impl eframe::App for GiaApp {
                         ui.horizontal(|ui| {
                             // Left column: Model and TTS Language
                             ui.vertical(|ui| {
-                                ui.horizontal(|ui| {
-                                    ui.label("💡");
-                                    egui::ComboBox::from_id_salt("model_selector")
-                                        .selected_text(&self.model)
-                                        .show_ui(ui, |ui| {
-                                            ui.selectable_value(
-                                                &mut self.model,
-                                                "gemini-2.5-pro".to_string(),
-                                                "Gemini 2.5 Pro",
-                                            );
-                                            ui.selectable_value(
-                                                &mut self.model,
-                                                "gemini-2.5-flash".to_string(),
-                                                "Gemini 2.5 Flash",
-                                            );
-                                            ui.selectable_value(
-                                                &mut self.model,
-                                                "gemini-2.5-flash-lite".to_string(),
-                                                "Gemini 2.5 Flash-Lite",
-                                            );
-                                            ui.selectable_value(
-                                                &mut self.model,
-                                                "gemini-2.0-flash".to_string(),
-                                                "Gemini 2.0 Flash",
-                                            );
-                                            ui.selectable_value(
-                                                &mut self.model,
-                                                "gemini-2.0-flash-lite".to_string(),
-                                                "Gemini 2.0 Flash-Lite",
-                                            );
-                                        });
-                                });
+                                let model_width = ui
+                                    .horizontal(|ui| {
+                                        ui.label("💡");
+                                        egui::ComboBox::from_id_salt("model_selector")
+                                            .selected_text(&self.model)
+                                            .show_ui(ui, |ui| {
+                                                ui.selectable_value(
+                                                    &mut self.model,
+                                                    "gemini-2.5-pro".to_string(),
+                                                    "Gemini 2.5 Pro",
+                                                );
+                                                ui.selectable_value(
+                                                    &mut self.model,
+                                                    "gemini-2.5-flash".to_string(),
+                                                    "Gemini 2.5 Flash",
+                                                );
+                                                ui.selectable_value(
+                                                    &mut self.model,
+                                                    "gemini-2.5-flash-lite".to_string(),
+                                                    "Gemini 2.5 Flash-Lite",
+                                                );
+                                                ui.selectable_value(
+                                                    &mut self.model,
+                                                    "gemini-2.0-flash".to_string(),
+                                                    "Gemini 2.0 Flash",
+                                                );
+                                                ui.selectable_value(
+                                                    &mut self.model,
+                                                    "gemini-2.0-flash-lite".to_string(),
+                                                    "Gemini 2.0 Flash-Lite",
+                                                );
+                                            })
+                                            .response
+                                            .rect
+                                            .width()
+                                    })
+                                    .inner;
 
                                 ui.horizontal(|ui| {
                                     ui.label("💬");
                                     egui::ComboBox::from_id_salt("tts_language_selector")
                                         .selected_text(&self.tts_language)
+                                        .width(model_width)
                                         .show_ui(ui, |ui| {
                                             ui.selectable_value(
                                                 &mut self.tts_language,
