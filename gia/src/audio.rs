@@ -43,9 +43,31 @@ fn validate_audio_device(device: &str) -> Result<String> {
 pub fn record_audio() -> Result<String> {
     log_info("Starting audio recording...");
 
+    // Kill any existing ffmpeg processes that might interfere with recording
+    log_debug("Checking for and terminating any existing ffmpeg processes...");
+
+    #[cfg(target_os = "windows")]
+    {
+        let _ = Command::new("taskkill")
+            .args(["/F", "/IM", "ffmpeg.exe"])
+            .output();
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        let _ = Command::new("pkill").args(["-f", "ffmpeg"]).output();
+    }
+
+    // Give processes time to terminate
+    thread::sleep(Duration::from_millis(500));
+
     // Generate unique filename for the recording
     let temp_dir = std::env::temp_dir();
-    let audio_file = temp_dir.join("prompt.opus");
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let audio_file = temp_dir.join(format!("{timestamp}-prompt.opus"));
     let audio_path = audio_file.to_string_lossy().to_string();
 
     log_debug(&format!("Recording to: {audio_path}"));
