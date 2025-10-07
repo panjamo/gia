@@ -6,13 +6,12 @@ use crate::provider::{AiProvider, AiResponse};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use genai::chat::{ChatMessage, ChatRequest, MessageContent};
+use genai::resolver::{AuthData, AuthResolver};
 use genai::Client;
 use rand::prelude::*;
-use std::env;
 
 #[derive(Debug)]
 pub struct GeminiClient {
-    client: Client,
     api_keys: Vec<String>,
     current_key_index: usize,
     model: String,
@@ -43,27 +42,21 @@ impl GeminiClient {
         let mut rng = rand::thread_rng();
         let current_key_index = (0..api_keys.len()).choose(&mut rng).unwrap_or(0);
 
-        // Set the initial API key
-        env::set_var("GEMINI_API_KEY", &api_keys[current_key_index]);
-
-        let client = Client::default();
+        log_info(&format!(
+            "Selected starting API key index: {} (random selection from {} keys)",
+            current_key_index + 1,
+            api_keys.len()
+        ));
 
         Ok(Self {
-            client,
             api_keys,
             current_key_index,
             model,
         })
     }
 
-    fn try_next_api_key(&mut self) -> Result<String> {
-        if self.api_keys.len() <= 1 {
-            return Err(anyhow::anyhow!("No alternative API keys available"));
-        }
-
-        // Find next available key (simple round-robin)
-        self.current_key_index = (self.current_key_index + 1) % self.api_keys.len();
-        Ok(self.api_keys[self.current_key_index].clone())
+    fn next_key_index(&self) -> usize {
+        (self.current_key_index + 1) % self.api_keys.len()
     }
 
     fn handle_auth_error(error_text: &str) -> Result<String> {
@@ -136,22 +129,30 @@ impl GeminiClient {
         log_info("=== End Chat Request Structure ===");
     }
 
-    /// Send chat request with the given messages
+    /// Send chat request with the given messages using specified API key
     async fn try_chat_request_with_messages(
         &self,
         messages: Vec<ChatMessage>,
         api_key: &str,
+        key_index: usize,
     ) -> Result<AiResponse> {
-        log_debug(&format!(
-            "Sending chat request with {} message(s)",
+        log_info(&format!(
+            "Trying API key {}/{} for chat request with {} message(s)",
+            key_index + 1,
+            self.api_keys.len(),
             messages.len()
         ));
 
-        // Update the API key in environment for this request
-        env::set_var("GEMINI_API_KEY", api_key);
-
         // Log request structure
         Self::log_chat_request_structure(&messages);
+
+        // Create client with explicit API key using AuthResolver
+        let api_key_clone = api_key.to_string();
+        let auth_resolver = AuthResolver::from_resolver_fn(move |_model_iden| {
+            Ok(Some(AuthData::from_single(api_key_clone.clone())))
+        });
+
+        let client = Client::builder().with_auth_resolver(auth_resolver).build();
 
         // Create the chat request
         let chat_request = ChatRequest::new(messages);
@@ -161,8 +162,7 @@ impl GeminiClient {
         log_trace("=== End Full Chat Request ===");
 
         // Send the request using genai
-        let chat_response = self
-            .client
+        let chat_response = client
             .exec_chat(&self.model, chat_request, None)
             .await
             .context("Failed to send chat request to Gemini API")?;
@@ -221,59 +221,96 @@ impl AiProvider for GeminiClient {
             chat_messages.len()
         ));
 
-        let current_key = self.api_keys[self.current_key_index].clone();
+        let starting_key_index = self.current_key_index;
+        let total_keys = self.api_keys.len();
+        let mut attempts = 0;
 
-        // Try with current API key first
-        match self
-            .try_chat_request_with_messages(chat_messages.clone(), &current_key)
-            .await
-        {
-            Ok(response) => Ok(response),
-            Err(e) => {
-                let error_string = e.to_string();
+        loop {
+            let current_key = self.api_keys[self.current_key_index].clone();
+            attempts += 1;
 
-                // Check if it's a rate limit error and we can try another key
-                if error_string.contains("429") || error_string.contains("Too Many Requests") {
-                    log_info("Rate limit hit, trying to fallback to another API key");
+            log_info(&format!(
+                "Attempt {} with API key {}/{}",
+                attempts,
+                self.current_key_index + 1,
+                total_keys
+            ));
 
-                    if let Ok(next_key) = self.try_next_api_key() {
-                        log_info("Found alternative API key, retrying chat request");
+            // Try with current API key
+            match self
+                .try_chat_request_with_messages(
+                    chat_messages.clone(),
+                    &current_key,
+                    self.current_key_index,
+                )
+                .await
+            {
+                Ok(response) => {
+                    log_info(&format!(
+                        "Successfully received response using API key {}/{}",
+                        self.current_key_index + 1,
+                        total_keys
+                    ));
+                    return Ok(response);
+                }
+                Err(e) => {
+                    let error_string = e.to_string();
 
-                        match self
-                            .try_chat_request_with_messages(chat_messages, &next_key)
-                            .await
-                        {
-                            Ok(response) => {
-                                log_info("Successfully used alternative API key for chat request");
-                                Ok(response)
-                            }
-                            Err(fallback_error) => {
-                                log_error("Alternative API key also failed for chat request");
-                                let fallback_error_string = fallback_error.to_string();
-                                if fallback_error_string.contains("429")
-                                    || fallback_error_string.contains("Too Many Requests")
-                                {
-                                    eprintln!("⚠️  Rate limit exceeded on all available API keys.");
-                                }
-                                Err(fallback_error)
-                            }
+                    // Check if it's a rate limit error
+                    if error_string.contains("429") || error_string.contains("Too Many Requests") {
+                        log_warn(&format!(
+                            "Rate limit hit on API key {}/{}",
+                            self.current_key_index + 1,
+                            total_keys
+                        ));
+
+                        // Move to next key
+                        self.current_key_index = self.next_key_index();
+
+                        // Check if we've tried all keys
+                        if self.current_key_index == starting_key_index {
+                            log_error(&format!(
+                                "All {} API keys exhausted after {} attempts",
+                                total_keys, attempts
+                            ));
+                            eprintln!();
+                            eprintln!("❌ All {} API keys exhausted", total_keys);
+                            eprintln!("   All keys have hit rate limits.");
+                            eprintln!("   Please try again later or add more API keys.");
+                            eprintln!();
+                            return Err(anyhow::anyhow!(
+                                "All {} API keys exhausted due to rate limits",
+                                total_keys
+                            ));
                         }
+
+                        // User message for fallback
+                        eprintln!(
+                            "⚠️  Rate limit hit on API key. Trying next key... ({}/{})",
+                            self.current_key_index + 1,
+                            total_keys
+                        );
+                        log_info(&format!(
+                            "Falling back to API key {}/{}",
+                            self.current_key_index + 1,
+                            total_keys
+                        ));
+
+                        // Continue to next iteration with new key
+                        continue;
                     } else {
-                        log_warn("No alternative API keys available for fallback");
-                        eprintln!("⚠️  Rate limit exceeded and no alternative API keys available.");
-                        Err(e)
+                        // Check if it's an authentication error
+                        if error_string.contains("401")
+                            || error_string.contains("403")
+                            || error_string.contains("authentication")
+                            || error_string.contains("permission")
+                        {
+                            Self::handle_auth_error(&error_string)?;
+                            return Err(anyhow::anyhow!("Authentication failed"));
+                        }
+                        // For non-rate-limit errors, return immediately
+                        return Err(e);
                     }
-                } else {
-                    // Check if it's an authentication error
-                    if error_string.contains("401")
-                        || error_string.contains("403")
-                        || error_string.contains("authentication")
-                        || error_string.contains("permission")
-                    {
-                        Self::handle_auth_error(&error_string)?;
-                        return Err(anyhow::anyhow!("Authentication failed"));
-                    }
-                    Err(e)
                 }
             }
         }
@@ -316,5 +353,76 @@ mod tests {
 
         let result = GeminiClient::new(model, empty_keys);
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_single_key_client() {
+        let test_keys = vec!["AIzaSyKey1ForTesting123456789012345".to_string()];
+        let model = "gemini-2.5-flash-lite".to_string();
+
+        let client = GeminiClient::new(model, test_keys);
+        assert!(client.is_ok());
+
+        let client = client.unwrap();
+        assert_eq!(client.api_keys.len(), 1);
+        assert_eq!(client.current_key_index, 0);
+    }
+
+    #[tokio::test]
+    async fn test_next_key_index_round_robin() {
+        let test_keys = vec![
+            "AIzaSyKey1ForTesting123456789012345".to_string(),
+            "AIzaSyKey2ForTesting123456789012345".to_string(),
+            "AIzaSyKey3ForTesting123456789012345".to_string(),
+        ];
+        let model = "gemini-2.5-flash-lite".to_string();
+
+        let mut client = GeminiClient::new(model, test_keys).unwrap();
+        client.current_key_index = 0;
+
+        // Test round-robin cycling
+        assert_eq!(client.next_key_index(), 1);
+        client.current_key_index = 1;
+        assert_eq!(client.next_key_index(), 2);
+        client.current_key_index = 2;
+        assert_eq!(client.next_key_index(), 0); // wraps around
+    }
+
+    #[tokio::test]
+    async fn test_random_starting_key_selection() {
+        let test_keys = vec![
+            "AIzaSyKey1ForTesting123456789012345".to_string(),
+            "AIzaSyKey2ForTesting123456789012345".to_string(),
+            "AIzaSyKey3ForTesting123456789012345".to_string(),
+        ];
+        let model = "gemini-2.5-flash-lite".to_string();
+
+        // Create multiple clients and verify starting index is within valid range
+        for _ in 0..10 {
+            let client = GeminiClient::new(model.clone(), test_keys.clone()).unwrap();
+            assert!(client.current_key_index < test_keys.len());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_multiple_keys_different_count() {
+        // Test with 2 keys
+        let two_keys = vec![
+            "AIzaSyKey1ForTesting123456789012345".to_string(),
+            "AIzaSyKey2ForTesting123456789012345".to_string(),
+        ];
+        let client = GeminiClient::new("gemini-2.5-flash-lite".to_string(), two_keys).unwrap();
+        assert_eq!(client.api_keys.len(), 2);
+
+        // Test with 5 keys
+        let five_keys = vec![
+            "AIzaSyKey1ForTesting123456789012345".to_string(),
+            "AIzaSyKey2ForTesting123456789012345".to_string(),
+            "AIzaSyKey3ForTesting123456789012345".to_string(),
+            "AIzaSyKey4ForTesting123456789012345".to_string(),
+            "AIzaSyKey5ForTesting123456789012345".to_string(),
+        ];
+        let client = GeminiClient::new("gemini-2.5-flash-lite".to_string(), five_keys).unwrap();
+        assert_eq!(client.api_keys.len(), 5);
     }
 }
