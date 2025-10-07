@@ -578,7 +578,7 @@ impl GiaApp {
                 Ok(output) => {
                     let mut response = String::from_utf8_lossy(&output.stdout).to_string();
                     if !output.stderr.is_empty() {
-                        response.push_str("\n\nErrors:\n");
+                        response.push_str("\n\nErrors/Logging:\n");
                         response.push_str(&String::from_utf8_lossy(&output.stderr));
                     }
                     response
@@ -621,7 +621,7 @@ impl GiaApp {
             Ok(output) => {
                 self.response = String::from_utf8_lossy(&output.stdout).to_string();
                 if !output.stderr.is_empty() {
-                    self.response.push_str("\n\nErrors:\n");
+                    self.response.push_str("\n\nErrors/Logging:\n");
                     self.response
                         .push_str(&String::from_utf8_lossy(&output.stderr));
                 }
