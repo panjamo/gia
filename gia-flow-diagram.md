@@ -91,4 +91,13 @@ gia --resume "Continue with this new data" -f data.csv
 
 # Role-based analysis with multiple sources
 gia -t code-review "Review this implementation" -f src/ -i architecture.png
+
+# Generate conventional commit message from git diff
+git diff --cached | gia 'Generate conventional commit message. Use Emojis in subject (Gitmoji). Do NOT explain your Procedure.'
+
+# Transcribe directly recorded audio to text
+gia -t transkribiere -ao
+
+# Translate text in the clipboard to English
+gia -c translate to english -o
 ```
