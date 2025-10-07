@@ -241,22 +241,31 @@ gia "Translate to Spanish" -c -o
 
 ### Conversation Management
 
+Conversations are saved in `~/.gia/conversations/` with consistent naming:
+- JSON: `conversation-slug-abc1.json`
+- Markdown: `conversation-slug-abc1.md`
+- Output files: `conversation-slug-abc1_20250107_143022.md`
+
 ```bash
 # Resume latest conversation:
 gia --resume "continue our discussion"
 gia -R "continue our discussion"  # Short option
 
-# Resume specific conversation by full ID:
-gia --resume a1b2c3d4-e5f6-7890-abcd-ef1234567890 "follow up question"
+# Resume by index (from -l list), ID, or hash:
+gia --resume 0 "continue"        # Index 0 = newest conversation
+gia --resume 2 "follow up"       # Index 2 from list
+gia --resume conversation-slug-abc1 "follow up"
+gia --resume abc1 "follow up"    # Match by 4-char hash
 
-# List all saved conversations:
+# List all saved conversations (tabular output):
 gia --list-conversations
 gia -l 5                          # List top 5 conversations
 gia -l                            # List all conversations
 
 # Display conversation (follows normal output options):
 gia -s                            # Show latest conversation (stdout)
-gia -s a1b2c3d4-e5f6-7890-abcd   # Show specific conversation (stdout)
+gia -s 0                          # Show newest (index 0)
+gia -s abc1                       # Show by hash (stdout)
 gia -s -o                         # Show latest conversation (clipboard)
 gia -s -b                         # Show latest conversation (file + browser)
 ```

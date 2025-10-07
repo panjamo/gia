@@ -1,6 +1,4 @@
 use anyhow::{Context, Result};
-use std::io::Write;
-use tabwriter::TabWriter;
 
 use crate::cli::{Config, ContentSource};
 use crate::constants::get_context_window_limit;
@@ -171,7 +169,8 @@ pub async fn run_app(mut config: Config) -> Result<()> {
         .context("Failed to save markdown")?;
 
     // Output response
-    output_text_with_usage(&response, &config, Some(usage)).context("Failed to output response")?;
+    output_text_with_usage(&response, &config, Some(usage), &conversation.id)
+        .context("Failed to output response")?;
 
     log_info("Successfully completed request");
     Ok(())
@@ -313,7 +312,7 @@ fn resolve_conversation(
             conv
         } else {
             log_info("No previous conversations found, starting new conversation");
-            Conversation::new(model.to_string())
+            Conversation::new_with_prompt(model.to_string(), &config.prompt)
         };
         return Ok((conv, config.prompt.clone()));
     }
@@ -322,7 +321,10 @@ fn resolve_conversation(
         None => {
             // New conversation
             log_info("Starting new conversation");
-            Ok((Conversation::new(model.to_string()), config.prompt.clone()))
+            Ok((
+                Conversation::new_with_prompt(model.to_string(), &config.prompt),
+                config.prompt.clone(),
+            ))
         }
         Some(id) if id.is_empty() => {
             // Resume latest conversation
@@ -332,12 +334,12 @@ fn resolve_conversation(
                 conv
             } else {
                 log_info("No previous conversations found, starting new conversation");
-                Conversation::new(model.to_string())
+                Conversation::new_with_prompt(model.to_string(), &config.prompt)
             };
             Ok((conv, config.prompt.clone()))
         }
         Some(id) => {
-            // Resume specific conversation - must be exact match
+            // Resume specific conversation - can be index, hash, or full ID
             log_info(&format!("Attempting to resume conversation: {id}"));
             let conv = conversation_manager
                 .load_conversation(id)
@@ -352,6 +354,9 @@ fn handle_list_conversations(
     conversation_manager: &ConversationManager,
     limit: usize,
 ) -> Result<()> {
+    use std::io::Write;
+    use tabwriter::TabWriter;
+
     match conversation_manager.list_conversations()? {
         conversations if conversations.is_empty() => {
             println!("No saved conversations found.");
@@ -363,14 +368,16 @@ fn handle_list_conversations(
                 conversations.into_iter().take(limit).collect()
             };
 
-            // Use TabWriter for aligned table output
             let mut tw = TabWriter::new(std::io::stdout());
-            writeln!(&mut tw, "ID\tMSGS\tUPDATED\tAGE\tPREVIEW")
-                .context("Failed to write table header")?;
 
-            for summary in limited_conversations {
-                writeln!(&mut tw, "{}", summary.format_as_table_row())
-                    .context("Failed to write table row")?;
+            // Write header
+            writeln!(tw, "index\tpreview\tid\tage").context("Failed to write header")?;
+
+            // Write data rows
+            for (index, summary) in limited_conversations.iter().enumerate() {
+                let (preview, id, age) = summary.format_as_table_columns();
+                writeln!(tw, "{}\t{}\t{}\t{}", index, preview, id, age)
+                    .context("Failed to write row")?;
             }
 
             tw.flush().context("Failed to flush table output")?;

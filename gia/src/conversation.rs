@@ -69,10 +69,59 @@ pub struct Conversation {
 }
 
 impl Conversation {
-    pub fn new(model_name: String) -> Self {
+    /// Generate a slug from the first prompt text
+    /// Takes first 3-5 significant words, max 40 chars, kebab-case
+    fn generate_slug(prompt: &str) -> String {
+        const STOPWORDS: &[&str] = &[
+            "the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "have", "has",
+            "had", "do", "does", "did", "will", "would", "should", "could", "can", "may", "might",
+            "must", "shall", "how", "what", "when", "where", "who", "why", "which", "this", "that",
+            "these", "those", "i", "you", "he", "she", "it", "we", "they", "me", "him", "her",
+            "us", "them", "my", "your", "his", "its", "our", "their",
+        ];
+
+        let lowercase = prompt.to_lowercase();
+        let words: Vec<&str> = lowercase
+            .split_whitespace()
+            .filter(|word| {
+                let cleaned = word.trim_matches(|c: char| !c.is_alphanumeric());
+                !cleaned.is_empty() && !STOPWORDS.contains(&cleaned)
+            })
+            .take(5)
+            .collect();
+
+        if words.is_empty() {
+            return "conversation".to_string();
+        }
+
+        let slug = words
+            .iter()
+            .map(|word| {
+                word.chars()
+                    .filter(|c| c.is_alphanumeric() || *c == '-')
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("-");
+
+        // Truncate to 40 chars max
+        if slug.len() > 40 {
+            slug.chars().take(40).collect()
+        } else {
+            slug
+        }
+    }
+
+    /// Create a new conversation with a slug-hash ID based on the first prompt
+    pub fn new_with_prompt(model_name: String, first_prompt: &str) -> Self {
         let now = Utc::now();
+        let uuid = Uuid::new_v4();
+        let slug = Self::generate_slug(first_prompt);
+        let hash4 = &uuid.to_string()[..4];
+        let id = format!("{}-{}", slug, hash4);
+
         Self {
-            id: Uuid::new_v4().to_string(),
+            id,
             created_at: now,
             updated_at: now,
             messages: Vec::new(),
@@ -82,6 +131,12 @@ impl Conversation {
                 token_usage_per_message: Vec::new(),
             },
         }
+    }
+
+    #[cfg(test)]
+    pub fn new(model_name: String) -> Self {
+        // Fallback for tests and cases where we don't have a prompt yet
+        Self::new_with_prompt(model_name, "conversation")
     }
 
     pub fn add_message_with_usage(
@@ -377,25 +432,7 @@ impl ConversationManager {
     }
 
     pub fn save_markdown(&self, conversation: &Conversation) -> Result<()> {
-        use crate::output::sanitize_prompt_for_filename;
-
-        // Find first user message to generate filename
-        let prompt = conversation
-            .messages
-            .iter()
-            .find(|m| m.role == "User")
-            .map(Conversation::extract_text_content)
-            .unwrap_or_default();
-
-        let sanitized = sanitize_prompt_for_filename(&prompt);
-        let sanitized = if sanitized.is_empty() {
-            "conversation".to_string()
-        } else {
-            sanitized
-        };
-
-        let conv_prefix = &conversation.id[..8];
-        let filename = format!("{}_{}.md", conv_prefix, sanitized);
+        let filename = format!("{}.md", conversation.id);
         let file_path = self.conversations_dir.join(filename);
         let markdown = conversation.format_as_chat_markdown();
         fs::write(&file_path, markdown).context("Failed to write markdown file")?;
@@ -404,39 +441,77 @@ impl ConversationManager {
     }
 
     pub fn get_markdown_path(&self, conversation: &Conversation) -> Result<PathBuf> {
-        use crate::output::sanitize_prompt_for_filename;
-
-        let prompt = conversation
-            .messages
-            .iter()
-            .find(|m| m.role == "User")
-            .map(Conversation::extract_text_content)
-            .unwrap_or_default();
-
-        let sanitized = sanitize_prompt_for_filename(&prompt);
-        let sanitized = if sanitized.is_empty() {
-            "conversation".to_string()
-        } else {
-            sanitized
-        };
-
-        let conv_prefix = &conversation.id[..8];
-        let filename = format!("{}_{}.md", conv_prefix, sanitized);
+        let filename = format!("{}.md", conversation.id);
         Ok(self.conversations_dir.join(filename))
     }
 
     pub fn load_conversation(&self, id: &str) -> Result<Conversation> {
-        let filename = format!("{id}.json");
-        let file_path = self.conversations_dir.join(filename);
-
-        if !file_path.exists() {
-            return Err(anyhow::anyhow!("Conversation with ID '{id}' not found"));
+        // Check if id is a number (relative index)
+        if let Ok(index) = id.parse::<usize>() {
+            return self.load_conversation_by_index(index);
         }
+
+        // Try exact match first
+        let filename = format!("{id}.json");
+        let file_path = self.conversations_dir.join(&filename);
+
+        if file_path.exists() {
+            let content =
+                fs::read_to_string(&file_path).context("Failed to read conversation file")?;
+            let conversation: Conversation =
+                serde_json::from_str(&content).context("Failed to deserialize conversation")?;
+            log_debug(&format!("Loaded conversation from: {file_path:?}"));
+            return Ok(conversation);
+        }
+
+        // If not found, try matching by hash suffix (last 4 chars before .json)
+        let entries = fs::read_dir(&self.conversations_dir)
+            .context("Failed to read conversations directory")?;
+
+        for entry in entries {
+            let entry = entry.context("Failed to read directory entry")?;
+            let path = entry.path();
+
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
+                    // Check if the name ends with the provided id (hash match)
+                    if name.ends_with(id) {
+                        let content = fs::read_to_string(&path)
+                            .context("Failed to read conversation file")?;
+                        let conversation: Conversation = serde_json::from_str(&content)
+                            .context("Failed to deserialize conversation")?;
+                        log_debug(&format!("Loaded conversation from: {path:?}"));
+                        return Ok(conversation);
+                    }
+                }
+            }
+        }
+
+        Err(anyhow::anyhow!("Conversation with ID '{id}' not found"))
+    }
+
+    fn load_conversation_by_index(&self, index: usize) -> Result<Conversation> {
+        let summaries = self.list_conversations()?;
+
+        if index >= summaries.len() {
+            return Err(anyhow::anyhow!(
+                "Conversation index {} out of range (have {} conversations)",
+                index,
+                summaries.len()
+            ));
+        }
+
+        let conversation_id = &summaries[index].id;
+        let filename = format!("{conversation_id}.json");
+        let file_path = self.conversations_dir.join(filename);
 
         let content = fs::read_to_string(&file_path).context("Failed to read conversation file")?;
         let conversation: Conversation =
             serde_json::from_str(&content).context("Failed to deserialize conversation")?;
-        log_debug(&format!("Loaded conversation from: {file_path:?}"));
+        log_debug(&format!(
+            "Loaded conversation [{}] from: {file_path:?}",
+            index
+        ));
         Ok(conversation)
     }
 
@@ -514,6 +589,7 @@ pub struct ConversationSummary {
     #[allow(dead_code)]
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[allow(dead_code)]
     pub message_count: usize,
     pub first_user_message: Option<String>,
 }
@@ -543,14 +619,16 @@ impl ConversationSummary {
         }
     }
 
-    pub fn format_as_table_row(&self) -> String {
+    /// Format conversation data as separate columns for tabwriter
+    /// Returns (preview, id, age) tuple
+    pub fn format_as_table_columns(&self) -> (String, String, String) {
         let age = Utc::now() - self.updated_at;
         let age_str = if age.num_days() > 0 {
-            format!("{}d ago", age.num_days())
+            format!("{}d", age.num_days())
         } else if age.num_hours() > 0 {
-            format!("{}h ago", age.num_hours())
+            format!("{}h", age.num_hours())
         } else {
-            format!("{}m ago", age.num_minutes().max(1))
+            format!("{}m", age.num_minutes().max(1))
         };
 
         let default_message = "(no messages)".to_string();
@@ -559,12 +637,7 @@ impl ConversationSummary {
         // Replace line feeds and tabs with spaces for table format
         let preview_clean = preview.replace(['\n', '\r', '\t'], " ");
 
-        let updated_str = self.updated_at.format("%Y-%m-%d %H:%M:%S").to_string();
-
-        format!(
-            "{}\t{}\t{}\t{}\t{}",
-            self.id, self.message_count, updated_str, age_str, preview_clean
-        )
+        (preview_clean, self.id.clone(), age_str)
     }
 }
 
@@ -656,5 +729,79 @@ mod tests {
         // Should have fewer messages now, but at least CONVERSATION_TRUNCATION_KEEP_MESSAGES
         assert!(conversation.messages.len() < initial_count);
         assert!(conversation.messages.len() >= 20); // At least the minimum
+    }
+
+    #[test]
+    fn test_generate_slug() {
+        // Test basic slug generation
+        let slug = Conversation::generate_slug("How does the multi-API key fallback work?");
+        assert!(slug.contains("multi"));
+        assert!(slug.contains("api"));
+        assert!(slug.contains("key"));
+
+        // Test stopword filtering (take max 5 words after filtering)
+        let slug = Conversation::generate_slug("I want to fix the bug in the clipboard");
+        assert!(slug.contains("want")); // "want" is a stopword, should be filtered
+        assert!(slug.contains("fix"));
+        assert!(slug.contains("bug"));
+        // Only takes first 5 significant words, so "clipboard" might not be included
+
+        // Test max 5 words
+        let slug = Conversation::generate_slug("one two three four five six seven eight");
+        let word_count = slug.split('-').count();
+        assert!(word_count <= 5);
+
+        // Test max 40 chars
+        let slug = Conversation::generate_slug("superlongword ".repeat(10).as_str());
+        assert!(slug.len() <= 40);
+
+        // Test empty/only stopwords
+        let slug = Conversation::generate_slug("the a an is");
+        assert_eq!(slug, "conversation");
+
+        // Test special characters removal
+        let slug = Conversation::generate_slug("Fix bug clipboard image handling now");
+        assert!(slug.contains("fix"));
+        assert!(slug.contains("bug"));
+        // Test that special chars are removed
+        assert!(!slug.contains('@'));
+        assert!(!slug.contains('#'));
+        assert!(!slug.contains('!'));
+    }
+
+    #[test]
+    fn test_new_with_prompt() {
+        let conversation =
+            Conversation::new_with_prompt("test-model".to_string(), "Debug the clipboard handling");
+
+        // Should contain slug and hash
+        assert!(conversation.id.contains("debug"));
+        assert!(conversation.id.contains("clipboard"));
+        assert!(conversation.id.contains("handling"));
+
+        // Should have a dash followed by 4-char hash at the end
+        let parts: Vec<&str> = conversation.id.rsplitn(2, '-').collect();
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0].len(), 4); // hash part
+    }
+
+    #[test]
+    fn test_conversation_id_format() {
+        let conversation =
+            Conversation::new_with_prompt("test-model".to_string(), "Fix API rate limiting");
+
+        // ID format: {slug}-{hash4}
+        // Should match pattern: word-word-word-xxxx
+        let id_parts: Vec<&str> = conversation.id.split('-').collect();
+        assert!(id_parts.len() >= 2); // At least one word + hash
+
+        // Last part should be 4 chars (the hash)
+        let hash_part = id_parts.last().unwrap();
+        assert_eq!(hash_part.len(), 4);
+
+        // All characters should be lowercase alphanumeric or dash
+        for c in conversation.id.chars() {
+            assert!(c.is_lowercase() || c.is_numeric() || c == '-');
+        }
     }
 }

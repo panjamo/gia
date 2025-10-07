@@ -85,48 +85,6 @@ pub fn get_outputs_dir() -> Result<PathBuf> {
     Ok(home_dir.join(".gia").join("outputs"))
 }
 
-pub fn sanitize_prompt_for_filename(prompt: &str) -> String {
-    let words: Vec<&str> = prompt.split_whitespace().take(4).collect();
-
-    let mut sanitized = if words.is_empty() {
-        return String::new();
-    } else {
-        words.join("_").to_lowercase()
-    };
-
-    sanitized = sanitized
-        .chars()
-        .map(|c| match c {
-            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '_',
-            c if c.is_alphanumeric() || c == '_' || c == '-' => c,
-            _ => '_',
-        })
-        .collect();
-
-    while sanitized.contains("__") {
-        sanitized = sanitized.replace("__", "_");
-    }
-    sanitized = sanitized.trim_matches('_').to_string();
-
-    if sanitized.len() > 50 {
-        sanitized.truncate(50);
-        sanitized = sanitized.trim_matches('_').to_string();
-    }
-
-    sanitized
-}
-
-pub fn generate_filename_from_prompt(prompt: &str) -> String {
-    let timestamp = Local::now().format("%Y%m%d_%H%M%S");
-    let sanitized = sanitize_prompt_for_filename(prompt);
-
-    if sanitized.is_empty() {
-        format!("gia_output_{timestamp}.md")
-    } else {
-        format!("{sanitized}_{timestamp}.md")
-    }
-}
-
 fn build_footer_metadata(config: &Config, token_usage: Option<TokenUsage>) -> FooterMetadata {
     // Parse provider and model from config.model
     let (provider_name, model_name) = if config.model.contains("::") {
@@ -197,6 +155,7 @@ pub fn output_text_with_usage(
     text: &str,
     config: &Config,
     token_usage: Option<TokenUsage>,
+    conversation_id: &str,
 ) -> Result<()> {
     match &config.output_mode {
         OutputMode::TempFileWithPreview => {
@@ -209,8 +168,9 @@ pub fn output_text_with_usage(
                 log_info(&format!("Created outputs directory: {outputs_dir:?}"));
             }
 
-            // Create output file with prompt-based name
-            let filename = generate_filename_from_prompt(&config.prompt);
+            // Create output file with conversation ID + timestamp
+            let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+            let filename = format!("{}_{}.md", conversation_id, timestamp);
             let output_path = outputs_dir.join(filename);
 
             // Write content to output file
@@ -405,53 +365,6 @@ mod tests {
         if lines.len() > 1 {
             assert!(lines[1].starts_with("    "));
         }
-    }
-
-    #[test]
-    fn test_sanitize_prompt_for_filename() {
-        assert_eq!(sanitize_prompt_for_filename("What is AI?"), "what_is_ai");
-
-        assert_eq!(
-            sanitize_prompt_for_filename("Test: <file> with/special\\chars*"),
-            "test_file_with_special_chars"
-        );
-
-        assert_eq!(
-            sanitize_prompt_for_filename("One Two Three Four Five Six"),
-            "one_two_three_four"
-        );
-
-        assert_eq!(sanitize_prompt_for_filename(""), "");
-
-        let long_prompt = "word ".repeat(30);
-        let result = sanitize_prompt_for_filename(&long_prompt);
-        assert!(result.len() <= 50);
-    }
-
-    #[test]
-    fn test_generate_filename_from_prompt() {
-        let filename = generate_filename_from_prompt("Test prompt");
-        assert!(filename.starts_with("test_prompt_"));
-        assert!(filename.ends_with(".md"));
-
-        let filename_empty = generate_filename_from_prompt("");
-        assert!(filename_empty.starts_with("gia_output_"));
-        assert!(filename_empty.ends_with(".md"));
-    }
-
-    #[test]
-    fn test_sanitize_prompt_double_underscores() {
-        let result = sanitize_prompt_for_filename("Test  __  multiple   spaces");
-        assert!(!result.contains("__"));
-        assert_eq!(result, "test_multiple_spaces");
-    }
-
-    #[test]
-    fn test_sanitize_prompt_trim_underscores() {
-        let result = sanitize_prompt_for_filename("___Test___");
-        assert!(!result.starts_with('_'));
-        assert!(!result.ends_with('_'));
-        assert_eq!(result, "test");
     }
 
     #[test]
