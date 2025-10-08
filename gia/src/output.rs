@@ -8,7 +8,7 @@ use crate::browser_preview::{open_markdown_preview, FooterMetadata};
 use crate::cli::{Config, ContentSource, OutputMode};
 use crate::clipboard::write_clipboard;
 use crate::conversation::{Conversation, TokenUsage};
-use crate::logging::{log_error, log_info};
+use crate::logging::{log_error, log_info, log_trace};
 
 #[cfg(not(target_os = "macos"))]
 use notify_rust::Notification;
@@ -315,7 +315,7 @@ fn speak_and_wait(text: &str, lang: &str) -> Result<()> {
     log_info("Waiting for speech to complete...");
     // Wait for speech to complete
     while tts.is_speaking()? {
-        log_info("Still speaking...");
+        log_trace("Still speaking...");
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
     log_info("Speech complete");
