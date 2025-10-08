@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Cargo workspace containing two binaries:
 
-1. **gia** - Command-line tool that sends prompts to Google's Gemini API and returns AI responses. Supports multiple input sources (command line, clipboard, stdin, files) and output destinations (stdout, clipboard). Supports multimodal interactions with automatic detection of media files (JPEG, PNG, WebP, HEIC, PDF, MP3, MP4, etc.).
+1. **gia** - Command-line tool that sends prompts to Google's Gemini API and returns AI responses. Supports multiple input sources (command line, clipboard, stdin, files) and output destinations (stdout, clipboard). Supports multimodal interactions with automatic detection of media files (JPEG, PNG, WebP, HEIC, PDF, MP3, MP4, etc.). Also supports local Ollama models.
 
 2. **giagui** - GUI wrapper for gia using the egui framework. Must have gia installed and available in PATH.
 
@@ -45,6 +45,9 @@ cargo run -p giagui
 # After building
 ./target/release/gia "your prompt here"
 ./target/release/giagui
+
+# Using Ollama (local, requires Ollama running on localhost:11434)
+cargo run -- -m "ollama::llama3.2" "your prompt here"
 
 # Resume conversations
 cargo run -- --resume "continue previous conversation"
@@ -89,6 +92,8 @@ set GEMINI_API_KEY=your_api_key_here
 set GEMINI_API_KEY=key1|key2|key3
 ```
 
+For Ollama: Install from https://ollama.ai and run `ollama serve`
+
 ### Logging
 ```bash
 RUST_LOG=debug cargo run -- "test"  # Debug logging
@@ -108,7 +113,9 @@ This is a Cargo workspace with shared dependencies and build configuration:
 
 ### Module Structure (gia CLI)
 - `gia/src/main.rs` - CLI argument parsing, main application flow
-- `gia/src/gemini.rs` - Gemini API client with rate limit fallback logic  
+- `gia/src/gemini.rs` - Gemini API client with rate limit fallback logic
+- `gia/src/ollama.rs` - Ollama API client for local LLM support
+- `gia/src/provider.rs` - Provider abstraction and factory
 - `gia/src/api_key.rs` - API key management (multiple keys, validation, fallback)
 - `gia/src/clipboard.rs` - Clipboard operations using arboard
 - `gia/src/conversation.rs` - Conversation management with persistent storage
