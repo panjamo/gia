@@ -109,21 +109,10 @@ impl GeminiClient {
 
         for (i, msg) in messages.iter().enumerate() {
             log_info(&format!("Message {}: {:?}", i + 1, msg.role));
-            match &msg.content {
-                MessageContent::Text(text) => {
-                    log_info(&format!("  Type: Text ({} chars)", text.len()));
-                    log_trace(&format!("  Content: {}", text));
-                }
-                MessageContent::Parts(parts) => {
-                    log_info(&format!("  Type: Multimodal ({} parts)", parts.len()));
-                    for (j, part) in parts.iter().enumerate() {
-                        log_trace(&format!("  Part {}: {:?}", j + 1, part));
-                    }
-                }
-                _ => {
-                    log_info("  Type: Other");
-                    log_trace(&format!("  Content: {:?}", msg.content));
-                }
+            let parts = msg.content.parts();
+            log_info(&format!("  Type: {} part(s)", parts.len()));
+            for (j, part) in parts.iter().enumerate() {
+                log_trace(&format!("  Part {}: {:?}", j + 1, part));
             }
         }
         log_info("=== End Chat Request Structure ===");
