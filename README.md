@@ -1,8 +1,8 @@
 <img src="icons/gia.png" alt="gia" width="128" height="128">
 
-# GIA - Google Intelligence Assistant
+# GIA - General Intelligence Assistant
 
-A command-line tool (and GUI wrapper) that sends text prompts to Google's Gemini API and returns AI-generated responses.
+A command-line tool (and GUI wrapper) that sends text prompts to Gemini API and returns AI-generated responses.
 
 This workspace contains two binaries:
 - **gia** - Command-line interface
@@ -49,7 +49,7 @@ This workspace contains two binaries:
 
 ## Setup
 
-Set your Google Gemini API key as an environment variable:
+Set your Gemini API key as an environment variable:
 
 ```bash
 export GEMINI_API_KEY="your_api_key_here"
