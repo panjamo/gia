@@ -40,22 +40,21 @@ fn validate_audio_device(device: &str) -> Result<String> {
     Ok(device.to_string())
 }
 
-/// Diagnostic function to detect and display default audio device using cpal
-/// This helps diagnose audio auto-device recognition issues
+/// Get the default audio input device using cpal
 /// Returns the device name if detected, None otherwise
-fn diagnose_cpal_audio_device() -> Option<String> {
-    log_info("Running cpal audio device diagnostics...");
+fn get_cpal_default_device() -> Option<String> {
+    log_debug("Detecting default audio device using cpal...");
 
     let host = cpal::default_host();
     if let Some(device) = host.default_input_device() {
         if let Ok(name) = device.name() {
-            log_info(&format!("cpal detected default input device: {}", name));
+            log_debug(&format!("cpal detected default input device: {}", name));
             return Some(name);
         } else {
-            log_info("cpal detected default input device but name unavailable");
+            log_debug("cpal detected default input device but name unavailable");
         }
     } else {
-        log_info("cpal found no default input device");
+        log_debug("cpal found no default input device");
     }
     None
 }
@@ -108,9 +107,10 @@ pub fn record_audio() -> Result<String> {
     #[cfg(target_os = "macos")]
     {
         // Support both numeric index (e.g., "0") and device name (e.g., "Built-in Microphone")
-        let device_arg = if audio_device.chars().all(|c| c.is_ascii_digit()) {
+        // Use validated_device to ensure we only use sanitized input
+        let device_arg = if validated_device.chars().all(|c| c.is_ascii_digit()) {
             // Numeric index: use existing :N format for backward compatibility
-            format!(":{}", audio_device)
+            format!(":{}", validated_device)
         } else {
             // Device name: use :device_name format
             format!(":{}", validated_device)
@@ -342,9 +342,6 @@ fn check_ffmpeg_available() -> Result<()> {
 
 /// Get the audio device (from environment variable or auto-detect)
 fn get_audio_device() -> Result<String> {
-    // Run cpal diagnostics first to help with Ford auto-device recognition issues
-    diagnose_cpal_audio_device();
-
     // Check for environment variable first
     if let Ok(device) = std::env::var("GIA_AUDIO_DEVICE") {
         let trimmed = device.trim();
@@ -358,17 +355,23 @@ fn get_audio_device() -> Result<String> {
 
     // Fall back to auto-detection
     log_debug("GIA_AUDIO_DEVICE not set, auto-detecting audio device");
-    get_default_audio_device()
+
+    // Get CPAL default device once, then pass to platform-specific detection
+    let cpal_device = get_cpal_default_device();
+    get_default_audio_device(cpal_device)
 }
 
 /// Get the default audio input device for the current platform
-fn get_default_audio_device() -> Result<String> {
+/// Takes an optional CPAL-detected device name to match against platform-specific devices
+fn get_default_audio_device(cpal_device: Option<String>) -> Result<String> {
     log_debug("Getting default audio device...");
 
     #[cfg(target_os = "macos")]
     {
-        // Get CPAL detected device first
-        let cpal_device = diagnose_cpal_audio_device();
+        // macOS behavior note:
+        // - Auto-detection now returns device NAME (e.g., "Built-in Microphone") instead of INDEX
+        // - Backward compatible: numeric indices (e.g., "0") still work via GIA_AUDIO_DEVICE
+        // - This matches CPAL device names for better cross-platform consistency
 
         // Try to list audio devices using ffmpeg with avfoundation
         let output = Command::new("ffmpeg")
@@ -445,9 +448,6 @@ fn get_default_audio_device() -> Result<String> {
 
     #[cfg(target_os = "windows")]
     {
-        // Get CPAL detected device first
-        let cpal_device = diagnose_cpal_audio_device();
-
         // Try to list audio devices using ffmpeg with dshow
         let output = Command::new("ffmpeg")
             .args(["-f", "dshow", "-list_devices", "true", "-i", "dummy"])
@@ -500,8 +500,8 @@ fn get_default_audio_device() -> Result<String> {
 
     #[cfg(target_os = "linux")]
     {
-        // Run CPAL diagnostics (for logging purposes)
-        let _cpal_device = diagnose_cpal_audio_device();
+        // Note: CPAL device is passed in but not used on Linux
+        // PulseAudio's "default" is more reliable than trying to match CPAL device names
 
         // Try to list audio devices using ffmpeg with pulse
         let output = Command::new("ffmpeg")
@@ -632,16 +632,26 @@ mod tests {
     }
 
     #[test]
-    fn test_diagnose_cpal_audio_device() {
-        // This test simply ensures the diagnostic function doesn't panic
-        // and can be called successfully
-        let result = diagnose_cpal_audio_device();
-        // If we reach this point, the function executed without panic
-        // The result may be Some or None depending on the system
+    fn test_get_cpal_default_device() {
+        // This test ensures the function doesn't panic and returns valid data
+        let result = get_cpal_default_device();
+
         match result {
-            Some(device) => println!("CPAL detected device: {}", device),
-            None => println!("CPAL found no default device"),
+            Some(device) => {
+                println!("CPAL detected device: {}", device);
+                // Verify the device name is not empty
+                assert!(!device.is_empty(), "Device name should not be empty");
+                // Verify the device name doesn't contain dangerous characters
+                assert!(
+                    validate_audio_device(&device).is_ok(),
+                    "Device name should pass validation: {}",
+                    device
+                );
+            }
+            None => {
+                println!("CPAL found no default device (may be expected in CI environments)");
+                // This is acceptable - some systems may not have audio devices
+            }
         }
-        assert!(true);
     }
 }
