@@ -150,8 +150,8 @@ impl Config {
                 Arg::new("file")
                     .short('f')
                     .long("file")
-                    .help("Add text file content to prompt (can be used multiple times)")
-                    .value_name("FILE")
+                    .help("Add text file content to prompt (can be used multiple times). Supports files and directories (processes all files recursively)")
+                    .value_name("FILE_OR_DIR")
                     .action(clap::ArgAction::Append),
             )
             .arg(

@@ -15,7 +15,7 @@ This workspace contains two binaries:
 - **Audio recording** - Record audio prompts using ffmpeg with `-a` flag
 - **Media file support** - Include images and audio/video files
   - `-i` flag: Media files only (JPEG, PNG, WebP, HEIC, PDF, OGG, OPUS, MP3, M4A, MP4)
-  - `-f` flag: Text files (any extension)
+  - `-f` flag: Text files (any extension) or directories (processes all files recursively)
 - Optional additional input from clipboard or stdin (auto-detects text vs images)
 - Output responses to stdout (default) or clipboard
 - Persistent conversation history with resume capability
@@ -194,6 +194,10 @@ echo "extra context" | gia "Main question about this topic" -c
 # Include text files:
 gia "Summarize these documents" -f doc1.txt -f doc2.txt
 
+# Include entire directories (processes all files recursively):
+gia "Analyze the codebase" -f src/
+gia "Review all documentation" -f docs/ -f README.md
+
 # Include audio/video files:
 gia "Transcribe this recording" -i meeting.mp3
 gia "What is discussed in this video?" -i presentation.mp4
@@ -277,7 +281,7 @@ gia -s -b                         # Show latest conversation (file + browser)
 - `-a, --record-audio` - Record audio input using ffmpeg (auto-generates prompt if no text provided)
 - `-c, --clipboard-input` - Add clipboard content to prompt (auto-detects images vs text)
 - `-i, --image <FILE>` - Add media file to prompt (can be used multiple times; JPEG, PNG, WebP, HEIC, PDF, OGG, OPUS, MP3, M4A, MP4)
-- `-f, --file <FILE>` - Add text or media file to prompt (text files with any extension)
+- `-f, --file <FILE_OR_DIR>` - Add text file or directory to prompt (directories processed recursively)
 - `-o, --clipboard-output` - Write response to clipboard instead of stdout
 - `-b, --browser-output` - Write output to file (~/.gia/outputs/, path copied to clipboard) AND open browser preview
 - `-r, --resume [ID]` - Resume last conversation or specify conversation ID

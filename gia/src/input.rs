@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use chardetng::EncodingDetector;
 use std::fs;
 use std::io::{self, Read};
+use std::path::Path;
 
 use crate::audio::record_audio;
 use crate::cli::{Config, ContentSource, ImageSource, OutputMode};
@@ -60,6 +61,63 @@ pub fn read_text_file(file_path: &str) -> Result<String> {
             Ok(content.into_owned())
         }
     }
+}
+
+/// Recursively collect all regular files from a directory or return the single file if it's not a directory
+pub fn collect_files_recursive(path: &str) -> Result<Vec<String>> {
+    let path_obj = Path::new(path);
+
+    if !path_obj.exists() {
+        return Err(anyhow::anyhow!("Path does not exist: {}", path));
+    }
+
+    if path_obj.is_file() {
+        // If it's a file, return it as-is
+        return Ok(vec![path.to_string()]);
+    }
+
+    if path_obj.is_dir() {
+        // If it's a directory, recursively collect all files
+        let mut files = Vec::new();
+        collect_files_from_dir(path_obj, &mut files)?;
+        files.sort(); // Sort for consistent ordering
+        return Ok(files);
+    }
+
+    Err(anyhow::anyhow!(
+        "Path is neither a file nor directory: {}",
+        path
+    ))
+}
+
+/// Helper function to recursively collect files from a directory
+fn collect_files_from_dir(dir: &Path, files: &mut Vec<String>) -> Result<()> {
+    let entries = fs::read_dir(dir)
+        .with_context(|| format!("Failed to read directory: {}", dir.display()))?;
+
+    for entry in entries {
+        let entry = entry
+            .with_context(|| format!("Failed to read directory entry in: {}", dir.display()))?;
+        let path = entry.path();
+
+        if path.is_file() {
+            // Add the file to our collection
+            if let Some(path_str) = path.to_str() {
+                files.push(path_str.to_string());
+            } else {
+                log_debug(&format!(
+                    "Skipping file with invalid UTF-8 path: {:?}",
+                    path
+                ));
+            }
+        } else if path.is_dir() {
+            // Recursively process subdirectories
+            collect_files_from_dir(&path, files)?;
+        }
+        // Skip symlinks, device files, etc.
+    }
+
+    Ok(())
 }
 
 pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Result<()> {
@@ -127,7 +185,7 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
                         log_debug(&format!("Failed to clear clipboard: {clear_err}"));
                     }
                 }
-                
+
                 // Return error to stop execution
                 return Err(e);
             }
@@ -192,26 +250,48 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
         log_debug("No stdin data available (terminal input)");
     }
 
-    // 5. All files coming with -f option
+    // 5. All files coming with -f option (with recursive directory support)
     if !config.text_files.is_empty() {
         log_info(&format!(
-            "Processing {} text file(s)",
+            "Processing {} file path(s)",
             config.text_files.len()
         ));
 
         for file_path in &config.text_files {
-            match read_text_file(file_path) {
-                Ok(file_content) => {
-                    if !file_content.trim().is_empty() {
-                        log_info(&format!("Adding text file to ordered content: {file_path}"));
-                        config
-                            .ordered_content
-                            .push(ContentSource::TextFile(file_path.clone(), file_content));
+            // Collect all files (handles both files and directories recursively)
+            match collect_files_recursive(file_path) {
+                Ok(collected_files) => {
+                    log_info(&format!(
+                        "Collected {} file(s) from path: {}",
+                        collected_files.len(),
+                        file_path
+                    ));
+
+                    for actual_file_path in collected_files {
+                        match read_text_file(&actual_file_path) {
+                            Ok(file_content) => {
+                                if !file_content.trim().is_empty() {
+                                    log_info(&format!(
+                                        "Adding text file to ordered content: {actual_file_path}"
+                                    ));
+                                    config.ordered_content.push(ContentSource::TextFile(
+                                        actual_file_path,
+                                        file_content,
+                                    ));
+                                }
+                            }
+                            Err(e) => {
+                                log_debug(&format!("Failed to read file {actual_file_path}: {e}"));
+                                eprintln!("Warning: Failed to read file '{actual_file_path}': {e}");
+                            }
+                        }
                     }
                 }
                 Err(e) => {
-                    log_debug(&format!("Failed to read file {file_path}: {e}"));
-                    eprintln!("Warning: Failed to read file '{file_path}': {e}");
+                    log_debug(&format!(
+                        "Failed to collect files from path {file_path}: {e}"
+                    ));
+                    eprintln!("Warning: Failed to process path '{file_path}': {e}");
                 }
             }
         }
@@ -330,6 +410,58 @@ mod tests {
             ContentSource::TextFile(_, c) => assert_eq!(c, content2),
             _ => panic!("Expected TextFile"),
         }
+    }
+
+    #[test]
+    fn test_collect_files_recursive_single_file() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let file_path = temp_file.path().to_str().unwrap();
+
+        let result = collect_files_recursive(file_path).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], file_path);
+    }
+
+    #[test]
+    fn test_collect_files_recursive_directory() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let dir_path = temp_dir.path();
+
+        // Create test files
+        let file1 = dir_path.join("file1.txt");
+        let file2 = dir_path.join("file2.txt");
+        let subdir = dir_path.join("subdir");
+        fs::create_dir(&subdir).unwrap();
+        let file3 = subdir.join("file3.txt");
+
+        fs::write(&file1, "content1").unwrap();
+        fs::write(&file2, "content2").unwrap();
+        fs::write(&file3, "content3").unwrap();
+
+        let result = collect_files_recursive(dir_path.to_str().unwrap()).unwrap();
+        assert_eq!(result.len(), 3);
+
+        // Files should be sorted
+        let mut expected = vec![
+            file1.to_str().unwrap().to_string(),
+            file2.to_str().unwrap().to_string(),
+            file3.to_str().unwrap().to_string(),
+        ];
+        expected.sort();
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_collect_files_recursive_nonexistent() {
+        let result = collect_files_recursive("nonexistent_path");
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Path does not exist"));
     }
 
     #[test]
