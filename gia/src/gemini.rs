@@ -5,7 +5,7 @@ use crate::logging::{log_debug, log_error, log_info, log_trace, log_warn};
 use crate::provider::{AiProvider, AiResponse};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use genai::chat::{ChatMessage, ChatRequest, MessageContent};
+use genai::chat::{ChatMessage, ChatRequest};
 use genai::resolver::{AuthData, AuthResolver};
 use genai::Client;
 use rand::prelude::*;
@@ -176,7 +176,7 @@ impl GeminiClient {
 
         // Extract the response text
         let generated_text = chat_response
-            .content_text_as_str()
+            .first_text()
             .context("Failed to extract text from Gemini response")?;
 
         // Check if the generated text is empty or just whitespace

@@ -127,7 +127,9 @@ impl MessageContentWrapper {
     /// Convert to genai::MessageContent for API requests
     pub fn to_genai_message_content(&self) -> genai::chat::MessageContent {
         match self {
-            MessageContentWrapper::Text { text } => genai::chat::MessageContent::from_text(text.clone()),
+            MessageContentWrapper::Text { text } => {
+                genai::chat::MessageContent::from_text(text.clone())
+            }
             MessageContentWrapper::Parts { parts } => {
                 let content_parts: Vec<ContentPart> =
                     parts.iter().map(|p| p.to_genai_content_part()).collect();
