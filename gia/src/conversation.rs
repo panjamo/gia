@@ -620,8 +620,8 @@ impl ConversationSummary {
     }
 
     /// Format conversation data as separate columns for tabwriter
-    /// Returns (preview, id, age) tuple
-    pub fn format_as_table_columns(&self) -> (String, String, String) {
+    /// Returns (preview, id, age, messages) tuple
+    pub fn format_as_table_columns(&self) -> (String, String, String, String) {
         let age = Utc::now() - self.updated_at;
         let age_str = if age.num_days() > 0 {
             format!("{}d", age.num_days())
@@ -637,7 +637,12 @@ impl ConversationSummary {
         // Replace line feeds and tabs with spaces for table format
         let preview_clean = preview.replace(['\n', '\r', '\t'], " ");
 
-        (preview_clean, self.id.clone(), age_str)
+        (
+            preview_clean,
+            self.id.clone(),
+            age_str,
+            self.message_count.to_string(),
+        )
     }
 }
 

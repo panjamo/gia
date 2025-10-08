@@ -371,12 +371,12 @@ fn handle_list_conversations(
             let mut tw = TabWriter::new(std::io::stdout());
 
             // Write header
-            writeln!(tw, "index\tpreview\tid\tage").context("Failed to write header")?;
+            writeln!(tw, "index\tmessages\tage\tid\tpreview").context("Failed to write header")?;
 
             // Write data rows
             for (index, summary) in limited_conversations.iter().enumerate() {
-                let (preview, id, age) = summary.format_as_table_columns();
-                writeln!(tw, "{}\t{}\t{}\t{}", index, preview, id, age)
+                let (preview, id, age, messages) = summary.format_as_table_columns();
+                writeln!(tw, "{}\t{}\t{}\t{}\t{}", index, messages, age, id, preview)
                     .context("Failed to write row")?;
             }
 
