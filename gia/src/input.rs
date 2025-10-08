@@ -5,9 +5,10 @@ use std::io::{self, Read};
 use std::path::Path;
 
 use crate::audio::record_audio;
-use crate::cli::{Config, ContentSource, ImageSource, OutputMode};
+use crate::cli::{Config, ContentSource, OutputMode};
 use crate::clipboard::{has_clipboard_image, read_clipboard, write_clipboard};
-use crate::image::validate_media_file;
+use crate::constants::MEDIA_EXTENSIONS;
+
 use crate::logging::{log_debug, log_info};
 use crate::role::load_all_roles;
 
@@ -61,6 +62,135 @@ pub fn read_text_file(file_path: &str) -> Result<String> {
             Ok(content.into_owned())
         }
     }
+}
+
+#[derive(Debug, PartialEq)]
+enum FileType {
+    Media,
+    Text,
+    Binary,
+}
+
+/// Check if a file is a media file based on its extension
+fn is_media_file_by_extension(path: &Path) -> bool {
+    if let Some(ext) = path.extension() {
+        if let Some(ext_str) = ext.to_str() {
+            return MEDIA_EXTENSIONS.contains(&ext_str.to_lowercase().as_str());
+        }
+    }
+    false
+}
+
+/// Detect whether a file is a media file, text file, or binary file
+fn detect_file_type(path: &Path) -> FileType {
+    // First check if it's a known media file by extension
+    if is_media_file_by_extension(path) {
+        return FileType::Media;
+    }
+
+    // Try to analyze file content to determine if it's text or binary
+    match analyze_file_content(path) {
+        Ok(true) => FileType::Text,
+        Ok(false) => FileType::Binary,
+        Err(_) => {
+            // If we can't read the file, assume it's binary to be safe
+            log_debug(&format!(
+                "Could not analyze file content, treating as binary: {}",
+                path.display()
+            ));
+            FileType::Binary
+        }
+    }
+}
+
+/// Analyze file content to determine if it's likely a text file
+fn analyze_file_content(path: &Path) -> Result<bool> {
+    // Read first 8KB for analysis (enough to detect most text files)
+    const SAMPLE_SIZE: usize = 8192;
+
+    let file = fs::File::open(path)?;
+    let mut buffer = vec![0u8; SAMPLE_SIZE];
+    let mut reader = std::io::BufReader::new(file);
+    let bytes_read = reader.read(&mut buffer)?;
+
+    if bytes_read == 0 {
+        // Empty file, treat as text
+        return Ok(true);
+    }
+
+    buffer.truncate(bytes_read);
+    Ok(is_text_content(&buffer))
+}
+
+/// Determine if the given bytes represent text content
+fn is_text_content(data: &[u8]) -> bool {
+    // Check for UTF-8/UTF-16 BOM (Byte Order Mark)
+    if has_text_bom(data) {
+        return true;
+    }
+
+    // Check for null bytes (strong indicator of binary content)
+    if data.contains(&0) {
+        return false;
+    }
+
+    // Try UTF-8 decoding first
+    if std::str::from_utf8(data).is_ok() {
+        return true;
+    }
+
+    // For non-UTF-8, be more conservative about binary detection
+    // Count different types of characters
+    let mut printable_count = 0;
+    let mut high_byte_count = 0;
+    let mut control_count = 0;
+
+    for &byte in data {
+        match byte {
+            // ASCII printable + common whitespace
+            0x09 | 0x0A | 0x0D | 0x20..=0x7E => printable_count += 1,
+            // High bytes (could be text encoding, but suspicious in sequences)
+            0x80..=0xFF => high_byte_count += 1,
+            // Control characters
+            _ => control_count += 1,
+        }
+    }
+
+    let total = data.len();
+    let printable_ratio = printable_count as f64 / total as f64;
+    let high_byte_ratio = high_byte_count as f64 / total as f64;
+
+    // If mostly ASCII printable, it's text
+    if printable_ratio > 0.8 {
+        return true;
+    }
+
+    // If high ratio of high bytes (>50%), likely binary
+    if high_byte_ratio > 0.5 {
+        return false;
+    }
+
+    // For mixed content, need decent printable ratio and not too many control chars
+    printable_ratio > 0.6 && (control_count as f64 / total as f64) < 0.1
+}
+
+/// Check for UTF-8 or UTF-16 Byte Order Mark
+fn has_text_bom(data: &[u8]) -> bool {
+    if data.len() >= 3 {
+        // UTF-8 BOM: EF BB BF
+        if data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF {
+            return true;
+        }
+    }
+
+    if data.len() >= 2 {
+        // UTF-16 BOM: FF FE or FE FF
+        if (data[0] == 0xFF && data[1] == 0xFE) || (data[0] == 0xFE && data[1] == 0xFF) {
+            return true;
+        }
+    }
+
+    false
 }
 
 /// Recursively collect all regular files from a directory or return the single file if it's not a directory
@@ -268,21 +398,51 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
                     ));
 
                     for actual_file_path in collected_files {
-                        match read_text_file(&actual_file_path) {
-                            Ok(file_content) => {
-                                if !file_content.trim().is_empty() {
-                                    log_info(&format!(
-                                        "Adding text file to ordered content: {actual_file_path}"
-                                    ));
-                                    config.ordered_content.push(ContentSource::TextFile(
-                                        actual_file_path,
-                                        file_content,
-                                    ));
+                        let path = Path::new(&actual_file_path);
+
+                        match detect_file_type(path) {
+                            FileType::Media => {
+                                // Handle as media file
+                                log_info(&format!(
+                                    "Auto-detected media file, adding as image: {actual_file_path}"
+                                ));
+                                config
+                                    .ordered_content
+                                    .push(ContentSource::ImageFile(actual_file_path));
+                            }
+                            FileType::Text => {
+                                // Handle as text file
+                                match read_text_file(&actual_file_path) {
+                                    Ok(file_content) => {
+                                        if !file_content.trim().is_empty() {
+                                            log_info(&format!(
+                                                "Auto-detected text file, adding to ordered content: {actual_file_path}"
+                                            ));
+                                            config.ordered_content.push(ContentSource::TextFile(
+                                                actual_file_path,
+                                                file_content,
+                                            ));
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log_debug(&format!(
+                                            "Failed to read text file {actual_file_path}: {e}"
+                                        ));
+                                        eprintln!(
+                                            "Warning: Failed to read text file '{actual_file_path}': {e}"
+                                        );
+                                    }
                                 }
                             }
-                            Err(e) => {
-                                log_debug(&format!("Failed to read file {actual_file_path}: {e}"));
-                                eprintln!("Warning: Failed to read file '{actual_file_path}': {e}");
+                            FileType::Binary => {
+                                // Skip binary files with a warning
+                                log_info(&format!(
+                                    "Skipping binary file (not media or text): {actual_file_path}"
+                                ));
+                                eprintln!(
+                                    "Warning: Skipping binary file '{}' (not a known media type or text file)",
+                                    actual_file_path
+                                );
                             }
                         }
                     }
@@ -297,43 +457,8 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
         }
     }
 
-    // 6. All files coming with -i option
-    for image_source in &config.image_sources {
-        match image_source {
-            ImageSource::File(image_path) => {
-                log_info(&format!(
-                    "Adding image file to ordered content: {image_path}"
-                ));
-                config
-                    .ordered_content
-                    .push(ContentSource::ImageFile(image_path.clone()));
-            }
-        }
-    }
+    // Media files are now handled automatically in the -f option processing above
 
-    Ok(())
-}
-
-pub fn validate_image_sources(config: &Config) -> Result<()> {
-    if config.image_sources.is_empty() {
-        return Ok(());
-    }
-
-    log_info(&format!(
-        "Validating {} image source(s)",
-        config.image_sources.len()
-    ));
-
-    for image_source in &config.image_sources {
-        match image_source {
-            ImageSource::File(image_path) => {
-                validate_media_file(image_path)
-                    .with_context(|| format!("Failed to validate image file: {image_path}"))?;
-            }
-        }
-    }
-
-    log_info("All image sources validated successfully");
     Ok(())
 }
 
@@ -378,7 +503,6 @@ mod tests {
         let mut config = Config {
             prompt: "Test prompt".to_string(),
             use_clipboard_input: false,
-            image_sources: vec![],
             text_files: vec![
                 temp_file1.path().to_str().unwrap().to_string(),
                 temp_file2.path().to_str().unwrap().to_string(),
@@ -467,10 +591,173 @@ mod tests {
     #[test]
     fn test_get_input_text_empty_files_list() {
         let mut config = Config {
+            prompt: "".to_string(),
+            use_clipboard_input: false,
+            text_files: vec![],
+            output_mode: OutputMode::Stdout,
+            resume_conversation: None,
+            resume_last: false,
+            list_conversations: None,
+            show_conversation: None,
+            model: "test-model".to_string(),
+            record_audio: false,
+            roles: vec![],
+            ordered_content: Vec::new(),
+        };
+
+        let result = get_input_text(&mut config, None);
+        assert!(result.is_ok());
+
+        // Should have no content since files list is empty
+        assert!(config.ordered_content.is_empty());
+    }
+
+    #[test]
+    fn test_get_input_text_with_prompt_override() {
+        let mut config = Config {
+            prompt: "Original prompt".to_string(),
+            use_clipboard_input: false,
+            text_files: vec![],
+            output_mode: OutputMode::Stdout,
+            resume_conversation: None,
+            resume_last: false,
+            list_conversations: None,
+            show_conversation: None,
+            model: "test-model".to_string(),
+            record_audio: false,
+            roles: vec![],
+            ordered_content: Vec::new(),
+        };
+
+        let result = get_input_text(&mut config, Some("Override prompt"));
+        assert!(result.is_ok());
+
+        // Should have 1 content item with the override prompt
+        assert_eq!(config.ordered_content.len(), 1);
+        match &config.ordered_content[0] {
+            ContentSource::CommandLinePrompt(p) => assert_eq!(p, "Override prompt"),
+            _ => panic!("Expected CommandLinePrompt"),
+        }
+    }
+
+    #[test]
+    fn test_is_media_file_by_extension() {
+        use std::path::Path;
+
+        // Test image files
+        assert!(is_media_file_by_extension(Path::new("test.jpg")));
+        assert!(is_media_file_by_extension(Path::new("test.jpeg")));
+        assert!(is_media_file_by_extension(Path::new("test.png")));
+        assert!(is_media_file_by_extension(Path::new("test.webp")));
+        assert!(is_media_file_by_extension(Path::new("test.heic")));
+        assert!(is_media_file_by_extension(Path::new("test.pdf")));
+
+        // Test audio files
+        assert!(is_media_file_by_extension(Path::new("test.ogg")));
+        assert!(is_media_file_by_extension(Path::new("test.opus")));
+        assert!(is_media_file_by_extension(Path::new("test.mp3")));
+        assert!(is_media_file_by_extension(Path::new("test.m4a")));
+
+        // Test video files
+        assert!(is_media_file_by_extension(Path::new("test.mp4")));
+
+        // Test case insensitive
+        assert!(is_media_file_by_extension(Path::new("test.JPG")));
+        assert!(is_media_file_by_extension(Path::new("test.PNG")));
+        assert!(is_media_file_by_extension(Path::new("test.MP4")));
+
+        // Test non-media files
+        assert!(!is_media_file_by_extension(Path::new("test.txt")));
+        assert!(!is_media_file_by_extension(Path::new("test.rs")));
+        assert!(!is_media_file_by_extension(Path::new("test.md")));
+        assert!(!is_media_file_by_extension(Path::new("test.json")));
+        assert!(!is_media_file_by_extension(Path::new("test.xml")));
+
+        // Test files without extension
+        assert!(!is_media_file_by_extension(Path::new("test")));
+        assert!(!is_media_file_by_extension(Path::new("README")));
+    }
+
+    #[test]
+    fn test_is_text_content() {
+        // Test UTF-8 content
+        assert!(is_text_content(b"Hello, world!"));
+        assert!(is_text_content("Hello, 世界!".as_bytes()));
+
+        // Test UTF-8 BOM
+        let utf8_bom = [0xEF, 0xBB, 0xBF, b'H', b'e', b'l', b'l', b'o'];
+        assert!(is_text_content(&utf8_bom));
+
+        // Test UTF-16 BOM
+        let utf16_le_bom = [0xFF, 0xFE, b'H', 0x00, b'i', 0x00];
+        assert!(is_text_content(&utf16_le_bom));
+
+        // Test common text content
+        assert!(is_text_content(
+            b"This is a text file\nwith multiple lines\r\n"
+        ));
+        assert!(is_text_content(b"{\n  \"key\": \"value\"\n}"));
+
+        // Test binary content (contains null bytes)
+        assert!(!is_text_content(&[0x50, 0x4B, 0x03, 0x04, 0x00, 0x00])); // ZIP header
+        assert!(!is_text_content(&[0xFF, 0xD8, 0xFF, 0xE0])); // JPEG header
+
+        // Test mixed content (should be detected as binary due to null bytes)
+        assert!(!is_text_content(&[
+            b'H', b'e', b'l', b'l', b'o', 0x00, b'w', b'o', b'r', b'l', b'd'
+        ]));
+
+        // Test high ratio of high bytes (should be binary)
+        let binary_like = vec![0x80; 100]; // All high bytes
+        assert!(!is_text_content(&binary_like));
+
+        // Test mixed content with some high bytes (should still be text)
+        let mixed_content = [b'H', b'e', b'l', b'l', b'o', 0xE9, b'!', b'\n']; // "Helloé!\n"
+        assert!(is_text_content(&mixed_content));
+    }
+
+    #[test]
+    fn test_has_text_bom() {
+        // UTF-8 BOM
+        assert!(has_text_bom(&[0xEF, 0xBB, 0xBF]));
+        assert!(has_text_bom(&[0xEF, 0xBB, 0xBF, b'H', b'i']));
+
+        // UTF-16 LE BOM
+        assert!(has_text_bom(&[0xFF, 0xFE]));
+        assert!(has_text_bom(&[0xFF, 0xFE, b'H', 0x00]));
+
+        // UTF-16 BE BOM
+        assert!(has_text_bom(&[0xFE, 0xFF]));
+        assert!(has_text_bom(&[0xFE, 0xFF, 0x00, b'H']));
+
+        // No BOM
+        assert!(!has_text_bom(b"Hello, world!"));
+        assert!(!has_text_bom(&[0xEF, 0xBB])); // Incomplete UTF-8 BOM
+        assert!(!has_text_bom(&[0xFF])); // Incomplete UTF-16 BOM
+        assert!(!has_text_bom(&[])); // Empty
+    }
+
+    #[test]
+    fn test_get_input_text_with_mixed_files() {
+        use tempfile::NamedTempFile;
+
+        let temp_text_file = NamedTempFile::new().unwrap();
+        let temp_image_file = NamedTempFile::with_suffix(".jpg").unwrap();
+        let temp_audio_file = NamedTempFile::with_suffix(".mp3").unwrap();
+
+        let text_content = "This is a text file content";
+        fs::write(temp_text_file.path(), text_content).unwrap();
+        fs::write(temp_image_file.path(), b"fake image data").unwrap();
+        fs::write(temp_audio_file.path(), b"fake audio data").unwrap();
+
+        let mut config = Config {
             prompt: "Test prompt".to_string(),
             use_clipboard_input: false,
-            image_sources: vec![],
-            text_files: vec![],
+            text_files: vec![
+                temp_text_file.path().to_str().unwrap().to_string(),
+                temp_image_file.path().to_str().unwrap().to_string(),
+                temp_audio_file.path().to_str().unwrap().to_string(),
+            ],
             output_mode: OutputMode::Stdout,
             resume_conversation: None,
             resume_last: false,
@@ -484,21 +771,64 @@ mod tests {
 
         get_input_text(&mut config, None).unwrap();
 
-        // Verify ordered_content has just the prompt
-        assert_eq!(config.ordered_content.len(), 1);
+        // Should have prompt + 1 text file + 2 media files
+        assert_eq!(config.ordered_content.len(), 4);
+
+        // Check prompt
         match &config.ordered_content[0] {
             ContentSource::CommandLinePrompt(p) => assert_eq!(p, "Test prompt"),
             _ => panic!("Expected CommandLinePrompt"),
         }
+
+        // Check text file
+        let mut found_text_file = false;
+        let mut found_image_file = false;
+        let mut found_audio_file = false;
+
+        for content in &config.ordered_content[1..] {
+            match content {
+                ContentSource::TextFile(path, content) => {
+                    if path == temp_text_file.path().to_str().unwrap() {
+                        assert_eq!(content, text_content);
+                        found_text_file = true;
+                    }
+                }
+                ContentSource::ImageFile(path) => {
+                    if path == temp_image_file.path().to_str().unwrap() {
+                        found_image_file = true;
+                    } else if path == temp_audio_file.path().to_str().unwrap() {
+                        found_audio_file = true;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        assert!(found_text_file, "Text file should be processed as text");
+        assert!(found_image_file, "Image file should be processed as media");
+        assert!(found_audio_file, "Audio file should be processed as media");
     }
 
     #[test]
-    fn test_get_input_text_with_prompt_override() {
+    fn test_get_input_text_with_binary_files() {
+        use tempfile::NamedTempFile;
+
+        let temp_text_file = NamedTempFile::new().unwrap();
+        let temp_binary_file = NamedTempFile::with_suffix(".bin").unwrap();
+
+        let text_content = "This is a text file content";
+        let binary_content = vec![0x00, 0x01, 0x02, 0x03, 0xFF, 0xFE, 0xFD]; // Clear binary data
+
+        fs::write(temp_text_file.path(), text_content).unwrap();
+        fs::write(temp_binary_file.path(), &binary_content).unwrap();
+
         let mut config = Config {
-            prompt: "Original prompt".to_string(),
+            prompt: "Test prompt".to_string(),
             use_clipboard_input: false,
-            image_sources: vec![],
-            text_files: vec![],
+            text_files: vec![
+                temp_text_file.path().to_str().unwrap().to_string(),
+                temp_binary_file.path().to_str().unwrap().to_string(),
+            ],
             output_mode: OutputMode::Stdout,
             resume_conversation: None,
             resume_last: false,
@@ -510,23 +840,48 @@ mod tests {
             ordered_content: Vec::new(),
         };
 
-        get_input_text(&mut config, Some("Override prompt")).unwrap();
+        get_input_text(&mut config, None).unwrap();
 
-        // Verify override was used instead of original prompt
-        assert_eq!(config.ordered_content.len(), 1);
+        // Should have prompt + 1 text file (binary file should be skipped)
+        assert_eq!(config.ordered_content.len(), 2);
+
+        // Check prompt
         match &config.ordered_content[0] {
-            ContentSource::CommandLinePrompt(p) => assert_eq!(p, "Override prompt"),
+            ContentSource::CommandLinePrompt(p) => assert_eq!(p, "Test prompt"),
             _ => panic!("Expected CommandLinePrompt"),
+        }
+
+        // Check that only the text file was processed
+        match &config.ordered_content[1] {
+            ContentSource::TextFile(path, content) => {
+                assert_eq!(path, temp_text_file.path().to_str().unwrap());
+                assert_eq!(content, text_content);
+            }
+            _ => panic!("Expected TextFile"),
         }
     }
 
     #[test]
-    fn test_validate_image_sources_empty() {
-        let config = Config {
-            prompt: "Test".to_string(),
+    fn test_get_input_text_with_directory_containing_mixed_files() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let text_file = temp_dir.path().join("document.txt");
+        let image_file = temp_dir.path().join("photo.png");
+        let audio_file = temp_dir.path().join("recording.mp3");
+        let video_file = temp_dir.path().join("movie.mp4");
+
+        let text_content = "Document content";
+        fs::write(&text_file, text_content).unwrap();
+        fs::write(&image_file, b"fake png data").unwrap();
+        fs::write(&audio_file, b"fake mp3 data").unwrap();
+        fs::write(&video_file, b"fake mp4 data").unwrap();
+
+        let mut config = Config {
+            prompt: "Process this directory".to_string(),
             use_clipboard_input: false,
-            image_sources: vec![],
-            text_files: vec![],
+            text_files: vec![temp_dir.path().to_str().unwrap().to_string()],
             output_mode: OutputMode::Stdout,
             resume_conversation: None,
             resume_last: false,
@@ -538,7 +893,30 @@ mod tests {
             ordered_content: Vec::new(),
         };
 
-        let result = validate_image_sources(&config);
-        assert!(result.is_ok());
+        get_input_text(&mut config, None).unwrap();
+
+        // Should have prompt + 1 text file + 3 media files
+        assert_eq!(config.ordered_content.len(), 5);
+
+        // Check prompt
+        match &config.ordered_content[0] {
+            ContentSource::CommandLinePrompt(p) => assert_eq!(p, "Process this directory"),
+            _ => panic!("Expected CommandLinePrompt"),
+        }
+
+        // Verify we have exactly 1 text file and 3 media files
+        let mut text_files_count = 0;
+        let mut media_files_count = 0;
+
+        for content in &config.ordered_content[1..] {
+            match content {
+                ContentSource::TextFile(_, _) => text_files_count += 1,
+                ContentSource::ImageFile(_) => media_files_count += 1,
+                _ => {}
+            }
+        }
+
+        assert_eq!(text_files_count, 1, "Should have exactly 1 text file");
+        assert_eq!(media_files_count, 3, "Should have exactly 3 media files");
     }
 }

@@ -13,9 +13,9 @@ This workspace contains two binaries:
 - Uses command line arguments as the main prompt
 - **Roles & Tasks** - Load AI role definitions and task instructions from markdown files
 - **Audio recording** - Record audio prompts using ffmpeg with `-a` flag
-- **Media file support** - Include images and audio/video files
-  - `-i` flag: Media files only (JPEG, PNG, WebP, HEIC, PDF, OGG, OPUS, MP3, M4A, MP4)
-  - `-f` flag: Text files (any extension) or directories (processes all files recursively)
+- **Smart file support** - Include any files or directories
+  - `-f` flag: Automatically detects media files (JPEG, PNG, WebP, HEIC, PDF, OGG, OPUS, MP3, M4A, MP4) vs text files
+  - Supports directories (processes all files recursively with auto-detection)
 - Optional additional input from clipboard or stdin (auto-detects text vs images)
 - Output responses to stdout (default) or clipboard
 - Persistent conversation history with resume capability
@@ -108,7 +108,7 @@ GIA automatically combines input from multiple sources:
 - **Stdin**: Automatically detected when piped
 - **Clipboard**: With `-c` flag only
 - **Text files**: With `-f` flag (any extension)
-- **Media files**: With `-i` flag (media only) or `-f` flag (text)
+- **Files**: With `-f` flag (auto-detects media vs text files)
 - **Output**: Response written to stdout (default)
 
 ## GUI Usage (giagui)
@@ -198,34 +198,34 @@ gia "Summarize these documents" -f doc1.txt -f doc2.txt
 gia "Analyze the codebase" -f src/
 gia "Review all documentation" -f docs/ -f README.md
 
-# Include audio/video files:
-gia "Transcribe this recording" -i meeting.mp3
-gia "What is discussed in this video?" -i presentation.mp4
+# Include audio/video files (auto-detected as media):
+gia "Transcribe this recording" -f meeting.mp3
+gia "What is discussed in this video?" -f presentation.mp4
 
-# Combine multiple input sources:
-gia "Analyze code and docs" -f README.md -f main.rs -i diagram.png
-gia "Analyze audio and images" -i recording.mp3 -i screenshot.png
+# Combine multiple input sources (auto-detection):
+gia "Analyze code, docs, and diagram" -f README.md -f main.rs -f diagram.png
+gia "Analyze audio and images" -f recording.mp3 -f screenshot.png
 ```
 
 ### Image analysis
 ```bash
-# Analyze a single image:
-gia "What do you see in this image?" -i photo.jpg
+# Analyze a single image (auto-detected):
+gia "What do you see in this image?" -f photo.jpg
 
-# Compare multiple images:
-gia "What are the differences between these images?" -i image1.jpg -i image2.png
+# Compare multiple images (auto-detected):
+gia "What are the differences between these images?" -f image1.jpg -f image2.png
 
 # Analyze image from clipboard (copy image first):
 gia "What do you see in this image?" -c
 
 # Combine file image with clipboard text:
-gia "Explain this diagram" -i diagram.png -c
+gia "Explain this diagram" -f diagram.png -c
 
 # Mix clipboard image with additional text prompt:
 gia "Describe the technical aspects of this screenshot" -c
 
 # Image with stdin input:
-echo "Focus on the technical aspects" | gia "Analyze this screenshot" -i screenshot.png
+echo "Focus on the technical aspects" | gia "Analyze this screenshot" -f screenshot.png
 ```
 
 ### Output options
@@ -280,8 +280,7 @@ gia -s -b                         # Show latest conversation (file + browser)
 - `-t, --role <NAME>` - Load role/task from ~/.gia/roles/ or ~/.gia/tasks/ (can be used multiple times)
 - `-a, --record-audio` - Record audio input using ffmpeg (auto-generates prompt if no text provided)
 - `-c, --clipboard-input` - Add clipboard content to prompt (auto-detects images vs text)
-- `-i, --image <FILE>` - Add media file to prompt (can be used multiple times; JPEG, PNG, WebP, HEIC, PDF, OGG, OPUS, MP3, M4A, MP4)
-- `-f, --file <FILE_OR_DIR>` - Add text file or directory to prompt (directories processed recursively)
+- `-f, --file <FILE_OR_DIR>` - Add file or directory to prompt (auto-detects media vs text; directories processed recursively)
 - `-o, --clipboard-output` - Write response to clipboard instead of stdout
 - `-b, --browser-output` - Write output to file (~/.gia/outputs/, path copied to clipboard) AND open browser preview
 - `-r, --resume [ID]` - Resume last conversation or specify conversation ID

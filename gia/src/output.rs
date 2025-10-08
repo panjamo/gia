@@ -318,7 +318,6 @@ pub fn speak_conversation(conversation: &Conversation, lang: &str) -> Result<()>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::ImageSource;
 
     #[test]
     fn test_wrap_text_basic() {
@@ -382,16 +381,15 @@ mod tests {
         let config = Config {
             prompt: "Test prompt".to_string(),
             use_clipboard_input: true,
-            image_sources: vec![ImageSource::File("test.jpg".to_string())],
             text_files: vec!["file.txt".to_string()],
             output_mode: OutputMode::Stdout,
             resume_conversation: None,
             resume_last: false,
             list_conversations: None,
             show_conversation: None,
-            model: "gemini-2.5-flash-lite".to_string(),
+            model: "openai::gpt-4".to_string(),
             record_audio: false,
-            roles: vec![],
+            roles: vec!["assistant".to_string()],
             ordered_content: vec![
                 ContentSource::ImageFile("test.jpg".to_string()),
                 ContentSource::TextFile("file.txt".to_string(), "content".to_string()),
@@ -401,8 +399,8 @@ mod tests {
 
         let metadata = build_footer_metadata(&config, None);
 
-        assert_eq!(metadata.provider_name, "gemini");
-        assert_eq!(metadata.model_name, "gemini-2.5-flash-lite");
+        assert_eq!(metadata.provider_name, "openai");
+        assert_eq!(metadata.model_name, "gpt-4");
         assert_eq!(metadata.prompt, "Test prompt");
         assert!(metadata.has_clipboard);
         assert_eq!(metadata.image_files, vec!["test.jpg"]);
@@ -412,9 +410,8 @@ mod tests {
     #[test]
     fn test_build_footer_metadata_with_provider_prefix() {
         let config = Config {
-            prompt: "Test".to_string(),
+            prompt: "Test prompt".to_string(),
             use_clipboard_input: false,
-            image_sources: vec![],
             text_files: vec![],
             output_mode: OutputMode::Stdout,
             resume_conversation: None,
@@ -424,7 +421,7 @@ mod tests {
             model: "openai::gpt-4".to_string(),
             record_audio: false,
             roles: vec![],
-            ordered_content: vec![],
+            ordered_content: Vec::new(),
         };
 
         let metadata = build_footer_metadata(&config, None);

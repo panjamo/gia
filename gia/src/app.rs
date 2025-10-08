@@ -5,7 +5,7 @@ use crate::constants::get_context_window_limit;
 use crate::content_part_wrapper::{ChatMessageWrapper, ContentPartWrapper, MessageContentWrapper};
 use crate::conversation::TokenUsage;
 use crate::conversation::{Conversation, ConversationManager, ResourceInfo, ResourceType};
-use crate::input::{get_input_text, validate_image_sources};
+use crate::input::get_input_text;
 use crate::logging::{log_error, log_info};
 use crate::output::output_text_with_usage;
 use crate::provider::{ProviderConfig, ProviderFactory};
@@ -24,9 +24,6 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     if let Some(conversation_id) = &config.show_conversation {
         return handle_show_conversation(&conversation_manager, conversation_id, &config);
     }
-
-    // Validate image sources if any are provided
-    validate_image_sources(&config).context("Failed to validate image sources")?;
 
     // Determine conversation mode and adjust prompt if needed
     let (mut conversation, final_prompt) =

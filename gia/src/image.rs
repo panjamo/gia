@@ -4,7 +4,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::constants::MEDIA_EXTENSIONS;
-use crate::logging::{log_debug, log_info};
+use crate::logging::log_info;
 
 /// Get MIME type from file extension
 pub fn get_mime_type(file_path: &Path) -> Result<String> {
@@ -34,25 +34,6 @@ pub fn get_mime_type(file_path: &Path) -> Result<String> {
     };
 
     Ok(mime_type.to_string())
-}
-
-/// Validate that the file exists and has a supported format
-pub fn validate_media_file(file_path: &str) -> Result<()> {
-    let path = Path::new(file_path);
-
-    if !path.exists() {
-        return Err(anyhow::anyhow!("Media file not found: {file_path}"));
-    }
-
-    if !path.is_file() {
-        return Err(anyhow::anyhow!("Path is not a file: {file_path}"));
-    }
-
-    // Check file extension
-    get_mime_type(path)?;
-
-    log_debug(&format!("Validated media file: {file_path}"));
-    Ok(())
 }
 
 /// Read media file and encode as base64
@@ -100,12 +81,6 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_media_file() {
-        // Test with non-existent file
-        assert!(validate_media_file("nonexistent.jpg").is_err());
-    }
-
-    #[test]
     fn test_read_media_as_base64() -> Result<()> {
         // Create a temporary media file
         let temp_file = NamedTempFile::new()?;
@@ -127,34 +102,6 @@ mod tests {
         assert_eq!(get_mime_type(Path::new("test.JPG")).unwrap(), "image/jpeg");
         assert_eq!(get_mime_type(Path::new("test.PNG")).unwrap(), "image/png");
         assert_eq!(get_mime_type(Path::new("test.Mp3")).unwrap(), "audio/mpeg");
-    }
-
-    #[test]
-    fn test_validate_media_file_nonexistent() {
-        let result = validate_media_file("nonexistent_file.jpg");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("not found"));
-    }
-
-    #[test]
-    fn test_validate_media_file_unsupported_format() {
-        let temp_file = NamedTempFile::with_suffix(".txt").unwrap();
-        fs::write(temp_file.path(), b"test content").unwrap();
-
-        let result = validate_media_file(temp_file.path().to_str().unwrap());
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unsupported"));
-    }
-
-    #[test]
-    fn test_validate_media_file_valid() -> Result<()> {
-        let temp_file = NamedTempFile::with_suffix(".jpg").unwrap();
-        fs::write(temp_file.path(), b"fake jpeg data")?;
-
-        let result = validate_media_file(temp_file.path().to_str().unwrap());
-        assert!(result.is_ok());
-
-        Ok(())
     }
 
     #[test]

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Cargo workspace containing two binaries:
 
-1. **gia** - Command-line tool that sends prompts to Google's Gemini API and returns AI responses. Supports multiple input sources (command line, clipboard, stdin, images) and output destinations (stdout, clipboard). Supports multimodal interactions with images (JPEG, PNG, WebP, HEIC, PDF).
+1. **gia** - Command-line tool that sends prompts to Google's Gemini API and returns AI responses. Supports multiple input sources (command line, clipboard, stdin, files) and output destinations (stdout, clipboard). Supports multimodal interactions with automatic detection of media files (JPEG, PNG, WebP, HEIC, PDF, MP3, MP4, etc.).
 
 2. **giagui** - GUI wrapper for gia using the egui framework. Must have gia installed and available in PATH.
 
@@ -51,16 +51,16 @@ cargo run -- --resume "continue previous conversation"
 cargo run -- --resume abc123 "continue specific conversation"
 cargo run -- --list-conversations  # List all saved conversations
 
-# Image analysis
-cargo run -- "What do you see in this image?" -i photo.jpg
-cargo run -- "Compare these images" -i img1.jpg -i img2.png
+# Image analysis (auto-detected as media files)
+cargo run -- "What do you see in this image?" -f photo.jpg
+cargo run -- "Compare these images" -f img1.jpg -f img2.png
 
 # Text file input
 cargo run -- "Summarize these documents" -f document1.txt -f document2.txt
 cargo run -- "What are the differences between these files?" -f old.txt -f new.txt
 
-# Combining multiple input sources
-cargo run -- "Analyze this code and documentation" -f README.md -f main.rs -i diagram.png
+# Combining multiple input sources (auto-detection of media vs text)
+cargo run -- "Analyze this code and documentation" -f README.md -f main.rs -f diagram.png
 
 # Clipboard image analysis (copy an image to clipboard first)
 cargo run -- "What do you see in this image?" -c
@@ -128,7 +128,7 @@ This is a Cargo workspace with shared dependencies and build configuration:
 1. Command line arguments (primary prompt)
 2. Clipboard content (with `-c` flag) - supports both text and images
 3. Stdin content (automatically detected when available)
-4. Text file content (with `-f` flag) - can be used multiple times
+4. File content (with `-f` flag) - automatically detects media files vs text files, can be used multiple times
 
 **Output Destinations**: Four output options:
 1. Stdout (default)

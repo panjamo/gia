@@ -11,11 +11,6 @@ pub enum OutputMode {
 }
 
 #[derive(Debug, Clone)]
-pub enum ImageSource {
-    File(String),
-}
-
-#[derive(Debug, Clone)]
 pub enum ContentSource {
     CommandLinePrompt(String),
     AudioRecording(String), // file path
@@ -31,7 +26,7 @@ pub enum ContentSource {
 pub struct Config {
     pub prompt: String,
     pub use_clipboard_input: bool,
-    pub image_sources: Vec<ImageSource>,
+
     pub text_files: Vec<String>,
     pub output_mode: OutputMode,
     pub resume_conversation: Option<String>, // None = new, Some("") = latest, Some(id) = specific
@@ -78,18 +73,6 @@ impl Config {
             OutputMode::Stdout
         };
 
-        let image_paths: Vec<String> = matches
-            .get_many::<String>("image")
-            .unwrap_or_default()
-            .cloned()
-            .collect();
-
-        // Convert image paths to image sources
-        let image_sources: Vec<ImageSource> = image_paths
-            .iter()
-            .map(|path| ImageSource::File(path.clone()))
-            .collect();
-
         let text_files: Vec<String> = matches
             .get_many::<String>("file")
             .unwrap_or_default()
@@ -105,7 +88,7 @@ impl Config {
         Self {
             prompt: prompt_parts.join(" "),
             use_clipboard_input: matches.get_flag("clipboard-input"),
-            image_sources,
+
             text_files,
             output_mode,
             resume_conversation,
@@ -138,19 +121,12 @@ impl Config {
                     .help("Add clipboard content to prompt")
                     .action(clap::ArgAction::SetTrue),
             )
-            .arg(
-                Arg::new("image")
-                    .short('i')
-                    .long("image")
-                    .help("Add image file to prompt (can be used multiple times)")
-                    .value_name("FILE")
-                    .action(clap::ArgAction::Append),
-            )
+
             .arg(
                 Arg::new("file")
                     .short('f')
                     .long("file")
-                    .help("Add text file content to prompt (can be used multiple times). Supports files and directories (processes all files recursively)")
+                    .help("Add file content to prompt (can be used multiple times). Automatically detects media files (jpg, png, mp4, etc.) vs text files. Supports files and directories (processes all files recursively)")
                     .value_name("FILE_OR_DIR")
                     .action(clap::ArgAction::Append),
             )

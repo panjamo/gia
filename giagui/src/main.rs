@@ -1,7 +1,7 @@
 use arboard::Clipboard;
 use eframe::egui;
 use std::fs;
-use std::path::Path;
+
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -113,33 +113,6 @@ fn load_md_files(subdir: &str) -> Vec<String> {
     files
 }
 
-fn is_media_file(path: &Path) -> bool {
-    // Keep in sync with gia/src/constants.rs::MEDIA_EXTENSIONS
-    const MEDIA_EXTENSIONS: &[&str] = &[
-        "jpg", "jpeg", "png", "webp", "heic", "pdf", "ogg", "opus", "mp3", "m4a", "mp4",
-    ];
-
-    if let Some(ext) = path.extension() {
-        if let Some(ext_str) = ext.to_str() {
-            return MEDIA_EXTENSIONS.contains(&ext_str.to_lowercase().as_str());
-        }
-    }
-    false
-}
-
-fn collect_files_recursive(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
-    if let Ok(entries) = fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                collect_files_recursive(&path, files);
-            } else if path.is_file() {
-                files.push(path);
-            }
-        }
-    }
-}
-
 impl eframe::App for GiaApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Cache mutex values at the start
@@ -219,32 +192,8 @@ impl eframe::App for GiaApp {
                     let dropped_files = ctx.input(|i| i.raw.dropped_files.clone());
                     for file in dropped_files {
                         if let Some(path) = file.path {
-                            if path.is_dir() {
-                                // Recursively add all files from directory
-                                let mut files_to_add = Vec::new();
-                                collect_files_recursive(&path, &mut files_to_add);
-
-                                for file_path in files_to_add {
-                                    if let Some(path_str) = file_path.to_str() {
-                                        let option_line = if is_media_file(&file_path) {
-                                            format!("-i{}", path_str)
-                                        } else {
-                                            format!("-f{}", path_str)
-                                        };
-
-                                        if !self.options.is_empty() && !self.options.ends_with('\n')
-                                        {
-                                            self.options.push('\n');
-                                        }
-                                        self.options.push_str(&option_line);
-                                    }
-                                }
-                            } else if let Some(path_str) = path.to_str() {
-                                let option_line = if is_media_file(&path) {
-                                    format!("-i{}", path_str)
-                                } else {
-                                    format!("-f{}", path_str)
-                                };
+                            if let Some(path_str) = path.to_str() {
+                                let option_line = format!("-f{}", path_str);
 
                                 if !self.options.is_empty() && !self.options.ends_with('\n') {
                                     self.options.push('\n');
@@ -310,7 +259,7 @@ impl eframe::App for GiaApp {
 
                     // Custom options input
                     ui.vertical(|ui| {
-                        ui.label("GIA Command Line Options: (Drop files here)");
+                        ui.label("GIA Command Line Options: (Drop files or folders here)");
                         let options_lines = self.options.lines().count().clamp(1, 10);
                         egui::ScrollArea::vertical()
                             .max_height(200.0)
