@@ -261,17 +261,8 @@ pub fn output_text_with_usage(
             let wrapped_text = wrap_text(&plain_text, 100);
             println!("{wrapped_text}");
 
-            // Then start TTS
-            let mut tts = Tts::default()?;
-            setup_tts_voice(&mut tts, lang)?;
-            tts.speak(&plain_text, true)?;
-
-            // Wait for speech to complete
-            while tts.is_speaking()? {
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
-
-            Ok(())
+            // Then speak using TTS
+            speak_and_wait(&plain_text, lang)
         }
     };
 
@@ -308,6 +299,26 @@ fn setup_tts_voice(tts: &mut Tts, lang: &str) -> Result<()> {
             "No voice found for language {lang}, using default"
         ));
     }
+
+    Ok(())
+}
+
+/// Speak text using TTS and wait for completion
+fn speak_and_wait(text: &str, lang: &str) -> Result<()> {
+    let mut tts = Tts::default()?;
+    setup_tts_voice(&mut tts, lang)?;
+    tts.speak(text, true)?;
+
+    // Small delay to let speech start
+    std::thread::sleep(std::time::Duration::from_millis(200));
+
+    log_info("Waiting for speech to complete...");
+    // Wait for speech to complete
+    while tts.is_speaking()? {
+        log_info("Still speaking...");
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    log_info("Speech complete");
 
     Ok(())
 }
@@ -352,17 +363,8 @@ pub fn speak_conversation(conversation: &Conversation, lang: &str) -> Result<()>
     let wrapped_text = wrap_text(&content_to_speak, 100);
     println!("{wrapped_text}");
 
-    // Then speak
-    let mut tts = Tts::default()?;
-    setup_tts_voice(&mut tts, lang)?;
-    tts.speak(&content_to_speak, true)?;
-
-    // Wait for speech to complete
-    while tts.is_speaking()? {
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
-
-    Ok(())
+    // Then speak using TTS
+    speak_and_wait(&content_to_speak, lang)
 }
 
 #[cfg(test)]
