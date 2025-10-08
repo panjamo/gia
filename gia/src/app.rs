@@ -46,8 +46,12 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     // Truncate conversation if it's getting too long
     conversation.truncate_if_needed(get_context_window_limit());
 
-    // Get API keys
-    let api_keys = crate::api_key::get_api_keys().context("Failed to get API keys")?;
+    // Get API keys - only required for non-Ollama providers
+    let api_keys = if config.model.to_lowercase().starts_with("ollama::") {
+        Vec::new()
+    } else {
+        crate::api_key::get_api_keys().context("Failed to get API keys")?
+    };
 
     // Initialize AI provider
     let provider_config = ProviderConfig {
