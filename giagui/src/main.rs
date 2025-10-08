@@ -1,5 +1,6 @@
 use arboard::Clipboard;
 use eframe::egui;
+use serde::Deserialize;
 use std::fs;
 
 use std::process::Command;
@@ -8,6 +9,32 @@ use std::thread;
 
 #[cfg(not(target_os = "macos"))]
 use notify_rust::Notification;
+
+/// Ollama API response for /api/tags
+#[derive(Debug, Deserialize)]
+struct OllamaTagsResponse {
+    models: Vec<OllamaModel>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OllamaModel {
+    name: String,
+}
+
+/// Fetch available Ollama models from local Ollama instance (blocking)
+fn fetch_ollama_models() -> Vec<String> {
+    match reqwest::blocking::get("http://localhost:11434/api/tags") {
+        Ok(response) => match response.json::<OllamaTagsResponse>() {
+            Ok(data) => data
+                .models
+                .into_iter()
+                .map(|m| format!("ollama::{}", m.name))
+                .collect(),
+            Err(_) => Vec::new(),
+        },
+        Err(_) => Vec::new(),
+    }
+}
 
 /// Show a system notification when audio recording is complete
 fn show_completion_notification() {
@@ -76,6 +103,7 @@ struct GiaApp {
     role: String,
     tasks: Vec<String>,
     roles: Vec<String>,
+    ollama_models: Arc<Mutex<Vec<String>>>,
     is_executing: Arc<Mutex<bool>>,
     animation_time: f64,
     pending_response: Arc<Mutex<Option<String>>>,
@@ -88,6 +116,15 @@ impl Default for GiaApp {
     fn default() -> Self {
         let tasks = load_md_files("tasks");
         let roles = load_md_files("roles");
+
+        // Fetch Ollama models in background thread
+        let ollama_models = Arc::new(Mutex::new(Vec::new()));
+        let ollama_models_clone = Arc::clone(&ollama_models);
+
+        thread::spawn(move || {
+            let models = fetch_ollama_models();
+            *ollama_models_clone.lock().unwrap() = models;
+        });
 
         Self {
             prompt: String::new(),
@@ -102,6 +139,7 @@ impl Default for GiaApp {
             role: String::new(),
             tasks,
             roles,
+            ollama_models,
             is_executing: Arc::new(Mutex::new(false)),
             animation_time: 0.0,
             pending_response: Arc::new(Mutex::new(None)),
@@ -304,6 +342,7 @@ impl eframe::App for GiaApp {
                                         egui::ComboBox::from_id_salt("model_selector")
                                             .selected_text(&self.model)
                                             .show_ui(ui, |ui| {
+                                                ui.label("Gemini Models:");
                                                 ui.selectable_value(
                                                     &mut self.model,
                                                     "gemini-2.5-pro".to_string(),
@@ -329,6 +368,23 @@ impl eframe::App for GiaApp {
                                                     "gemini-2.0-flash-lite".to_string(),
                                                     "Gemini 2.0 Flash-Lite",
                                                 );
+
+                                                // Add Ollama models if available
+                                                let ollama_models = {
+                                                    let models = self.ollama_models.lock().unwrap();
+                                                    models.clone()
+                                                };
+                                                if !ollama_models.is_empty() {
+                                                    ui.separator();
+                                                    ui.label("Ollama Models:");
+                                                    for model in ollama_models.iter() {
+                                                        ui.selectable_value(
+                                                            &mut self.model,
+                                                            model.clone(),
+                                                            model,
+                                                        );
+                                                    }
+                                                }
                                             })
                                             .response
                                             .rect
