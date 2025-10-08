@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use cpal::traits::{DeviceTrait, HostTrait};
 use native_dialog::MessageDialog;
 use regex::Regex;
 use std::fs;
@@ -37,6 +38,26 @@ fn validate_audio_device(device: &str) -> Result<String> {
     }
 
     Ok(device.to_string())
+}
+
+/// Diagnostic function to detect and display default audio device using cpal
+/// This helps diagnose Ford auto-device recognition issues
+fn diagnose_cpal_audio_device() {
+    log_info("Running cpal audio device diagnostics...");
+
+    let host = cpal::default_host();
+    if let Some(device) = host.default_input_device() {
+        if let Ok(name) = device.name() {
+            println!("Default input device: {}", name);
+            log_info(&format!("cpal detected default input device: {}", name));
+        } else {
+            println!("Default input device found but name unavailable");
+            log_info("cpal detected default input device but name unavailable");
+        }
+    } else {
+        println!("No default input device found");
+        log_info("cpal found no default input device");
+    }
 }
 
 /// Record audio using ffmpeg and return the path to the recorded file
@@ -308,6 +329,9 @@ fn check_ffmpeg_available() -> Result<()> {
 
 /// Get the audio device (from environment variable or auto-detect)
 fn get_audio_device() -> Result<String> {
+    // Run cpal diagnostics first to help with Ford auto-device recognition issues
+    diagnose_cpal_audio_device();
+
     // Check for environment variable first
     if let Ok(device) = std::env::var("GIA_AUDIO_DEVICE") {
         let trimmed = device.trim();
@@ -538,5 +562,14 @@ mod tests {
             Ok(device) => println!("Auto-detected device: {device}"),
             Err(e) => println!("Auto-detection failed (expected in CI): {e}"),
         }
+    }
+
+    #[test]
+    fn test_diagnose_cpal_audio_device() {
+        // This test simply ensures the diagnostic function doesn't panic
+        // and can be called successfully
+        diagnose_cpal_audio_device();
+        // If we reach this point, the function executed without panic
+        assert!(true);
     }
 }
