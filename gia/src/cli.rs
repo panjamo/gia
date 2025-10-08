@@ -108,6 +108,7 @@ impl Config {
         Command::new("gia")
             .version(env!("GIA_VERSION"))
             .about("AI CLI tool using Google Gemini API (stdout default)")
+            .next_help_heading("Input Options")
             .arg(
                 Arg::new("prompt")
                     .help("Prompt text for the AI")
@@ -121,7 +122,6 @@ impl Config {
                     .help("Add clipboard content to prompt")
                     .action(clap::ArgAction::SetTrue),
             )
-
             .arg(
                 Arg::new("file")
                     .short('f')
@@ -130,6 +130,22 @@ impl Config {
                     .value_name("FILE_OR_DIR")
                     .action(clap::ArgAction::Append),
             )
+            .arg(
+                Arg::new("record-audio")
+                    .short('a')
+                    .long("record-audio")
+                    .help("Record audio input using ffmpeg (requires ffmpeg to be installed)")
+                    .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("role")
+                    .short('t')
+                    .long("role")
+                    .help("Load role/task from ~/.gia/roles/<name>.md or ~/.gia/tasks/<name>.md (can be used multiple times)")
+                    .value_name("NAME")
+                    .action(clap::ArgAction::Append),
+            )
+            .next_help_heading("Output Options")
             .arg(
                 Arg::new("clipboard-output")
                     .short('o')
@@ -154,6 +170,7 @@ impl Config {
                     .default_missing_value("de-DE")
                     .action(clap::ArgAction::Set),
             )
+            .next_help_heading("Conversation Management")
             .arg(
                 Arg::new("resume")
                     .short('r')
@@ -190,6 +207,7 @@ impl Config {
                     .default_missing_value("")
                     .action(clap::ArgAction::Set),
             )
+            .next_help_heading("Other Options")
             .arg(
                 Arg::new("model")
                     .short('m')
@@ -204,21 +222,6 @@ impl Config {
                     .long("verbose-help")
                     .help("Open browser with detailed documentation on GitHub")
                     .action(clap::ArgAction::SetTrue),
-            )
-            .arg(
-                Arg::new("record-audio")
-                    .short('a')
-                    .long("record-audio")
-                    .help("Record audio input using ffmpeg (requires ffmpeg to be installed)")
-                    .action(clap::ArgAction::SetTrue),
-            )
-            .arg(
-                Arg::new("role")
-                    .short('t')
-                    .long("role")
-                    .help("Load role/task from ~/.gia/roles/<name>.md or ~/.gia/tasks/<name>.md (can be used multiple times)")
-                    .value_name("NAME")
-                    .action(clap::ArgAction::Append),
             )
             .arg(
                 Arg::new("completions")
