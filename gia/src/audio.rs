@@ -41,29 +41,27 @@ fn validate_audio_device(device: &str) -> Result<String> {
 }
 
 /// Diagnostic function to detect and display default audio device using cpal
-/// This helps diagnose Ford auto-device recognition issues
-fn diagnose_cpal_audio_device() {
+/// This helps diagnose audio auto-device recognition issues
+/// Returns the device name if detected, None otherwise
+fn diagnose_cpal_audio_device() -> Option<String> {
     log_info("Running cpal audio device diagnostics...");
 
     let host = cpal::default_host();
     if let Some(device) = host.default_input_device() {
         if let Ok(name) = device.name() {
-            println!("Default input device: {}", name);
             log_info(&format!("cpal detected default input device: {}", name));
+            return Some(name);
         } else {
-            println!("Default input device found but name unavailable");
             log_info("cpal detected default input device but name unavailable");
         }
     } else {
-        println!("No default input device found");
         log_info("cpal found no default input device");
     }
+    None
 }
 
 /// Record audio using ffmpeg and return the path to the recorded file
 pub fn record_audio() -> Result<String> {
-    log_info("Starting audio recording...");
-
     // Kill any existing ffmpeg processes that might interfere with recording
     log_debug("Checking for and terminating any existing ffmpeg processes...");
 
@@ -97,9 +95,11 @@ pub fn record_audio() -> Result<String> {
     let audio_device = get_audio_device()?;
     let validated_device =
         validate_audio_device(&audio_device).context("Invalid audio device name")?;
-    log_info(&format!("Using validated audio device: {validated_device}"));
 
-    eprintln!("🎙️  Recording audio...");
+    log_info(&format!(
+        "Starting audio recording with device: {validated_device}"
+    ));
+    eprintln!("🎙️  Recording audio from device: {validated_device}");
 
     // Start ffmpeg recording with captured stdout/stderr for logging
     // Use platform-specific audio input format
@@ -107,11 +107,20 @@ pub fn record_audio() -> Result<String> {
 
     #[cfg(target_os = "macos")]
     {
+        // Support both numeric index (e.g., "0") and device name (e.g., "Built-in Microphone")
+        let device_arg = if audio_device.chars().all(|c| c.is_ascii_digit()) {
+            // Numeric index: use existing :N format for backward compatibility
+            format!(":{}", audio_device)
+        } else {
+            // Device name: use :device_name format
+            format!(":{}", validated_device)
+        };
+
         ffmpeg_cmd.args([
             "-f",
             "avfoundation",
             "-i",
-            &format!(":{audio_device}"), // :N format for audio device index on macOS
+            &device_arg,
             "-c:a",
             "libopus",
             "-b:a",
@@ -219,9 +228,13 @@ pub fn record_audio() -> Result<String> {
 
     // Show message dialog to stop recording
     log_debug("Showing message dialog to stop recording");
+    let dialog_text = format!(
+        "🎙️  Recording in progress from device:\n{}\n\nClick Yes to stop and continue, or No to abort.",
+        validated_device
+    );
     let user_confirmed = MessageDialog::new()
         .set_title("Stop Recording")
-        .set_text("🎙️  Recording in progress...\n\nClick Yes to stop and continue, or No to abort.")
+        .set_text(&dialog_text)
         .set_type(native_dialog::MessageType::Info)
         .show_confirm()
         .context("Failed to show recording dialog")?;
@@ -354,6 +367,9 @@ fn get_default_audio_device() -> Result<String> {
 
     #[cfg(target_os = "macos")]
     {
+        // Get CPAL detected device first
+        let cpal_device = diagnose_cpal_audio_device();
+
         // Try to list audio devices using ffmpeg with avfoundation
         let output = Command::new("ffmpeg")
             .args(["-f", "avfoundation", "-list_devices", "true", "-i", ""])
@@ -373,6 +389,8 @@ fn get_default_audio_device() -> Result<String> {
         let device_regex = Regex::new(r#"\[AVFoundation[^\]]*\] \[(\d+)\] (.+)"#)
             .context("Failed to compile audio device regex")?;
 
+        let mut ffmpeg_devices: Vec<(String, String)> = Vec::new(); // (index, name)
+
         for line in stderr.lines() {
             log_debug(line);
 
@@ -388,23 +406,48 @@ fn get_default_audio_device() -> Result<String> {
                     if let (Some(device_idx), Some(device_name)) =
                         (captures.get(1), captures.get(2))
                     {
-                        let device_name = device_name.as_str();
-                        let device_idx = device_idx.as_str();
-                        log_debug(&format!("Found audio device [{device_idx}]: {device_name}"));
-                        // Return the index number for macOS (avfoundation uses indices)
-                        return Ok(device_idx.to_string());
+                        let device_name = device_name.as_str().to_string();
+                        let device_idx = device_idx.as_str().to_string();
+                        log_debug(&format!(
+                            "Found audio device [{}]: {}",
+                            device_idx, device_name
+                        ));
+                        ffmpeg_devices.push((device_idx, device_name));
                     }
                 }
             }
         }
 
-        // Fallback to device 0 if no devices found
-        log_debug("No audio devices found, using fallback device 0");
-        Ok("0".to_string())
+        // If CPAL detected a device, try to match it with FFmpeg devices
+        if let Some(cpal_name) = cpal_device {
+            log_debug(&format!(
+                "Trying to match CPAL device '{}' with FFmpeg devices",
+                cpal_name
+            ));
+            for (_, ffmpeg_name) in &ffmpeg_devices {
+                if ffmpeg_name == &cpal_name {
+                    log_info(&format!("Matched CPAL device to FFmpeg: {}", cpal_name));
+                    return Ok(cpal_name);
+                }
+            }
+            log_debug("No exact match found between CPAL and FFmpeg devices");
+        }
+
+        // Return first device name if available
+        if let Some((_, first_device_name)) = ffmpeg_devices.first() {
+            return Ok(first_device_name.clone());
+        }
+
+        // Fallback to common device name if no devices found
+        log_debug("No audio devices found, using fallback");
+        Ok("Built-in Microphone".to_string())
     }
 
     #[cfg(target_os = "windows")]
     {
+        // Get CPAL detected device first
+        let cpal_device = diagnose_cpal_audio_device();
+
         // Try to list audio devices using ffmpeg with dshow
         let output = Command::new("ffmpeg")
             .args(["-f", "dshow", "-list_devices", "true", "-i", "dummy"])
@@ -418,15 +461,36 @@ fn get_default_audio_device() -> Result<String> {
         let device_regex = Regex::new(r#"\[dshow +@ +[^\]]+\] +[# "]([^"']+)["'] +\(audio\)"#)
             .context("Failed to compile audio device regex")?;
 
+        let mut ffmpeg_devices = Vec::new();
         for line in stderr.lines() {
             log_debug(line);
             if let Some(captures) = device_regex.captures(line) {
                 if let Some(device_name) = captures.get(1) {
                     let device_name = device_name.as_str();
                     log_debug(&format!("Found audio device: {device_name}"));
-                    return Ok(device_name.to_string());
+                    ffmpeg_devices.push(device_name.to_string());
                 }
             }
+        }
+
+        // If CPAL detected a device, try to match it exactly with FFmpeg devices
+        if let Some(cpal_name) = cpal_device {
+            log_debug(&format!(
+                "Trying to match CPAL device '{}' with FFmpeg devices",
+                cpal_name
+            ));
+            for ffmpeg_device in &ffmpeg_devices {
+                if ffmpeg_device == &cpal_name {
+                    log_info(&format!("Matched CPAL device to FFmpeg: {}", cpal_name));
+                    return Ok(cpal_name);
+                }
+            }
+            log_debug("No exact match found between CPAL and FFmpeg devices");
+        }
+
+        // Return first FFmpeg device if available
+        if let Some(first_device) = ffmpeg_devices.first() {
+            return Ok(first_device.clone());
         }
 
         // Fallback to common device names if no devices found
@@ -436,6 +500,9 @@ fn get_default_audio_device() -> Result<String> {
 
     #[cfg(target_os = "linux")]
     {
+        // Run CPAL diagnostics (for logging purposes)
+        let _cpal_device = diagnose_cpal_audio_device();
+
         // Try to list audio devices using ffmpeg with pulse
         let output = Command::new("ffmpeg")
             .args(["-f", "pulse", "-list_devices", "true", "-i", ""])
@@ -568,8 +635,13 @@ mod tests {
     fn test_diagnose_cpal_audio_device() {
         // This test simply ensures the diagnostic function doesn't panic
         // and can be called successfully
-        diagnose_cpal_audio_device();
+        let result = diagnose_cpal_audio_device();
         // If we reach this point, the function executed without panic
+        // The result may be Some or None depending on the system
+        match result {
+            Some(device) => println!("CPAL detected device: {}", device),
+            None => println!("CPAL found no default device"),
+        }
         assert!(true);
     }
 }
