@@ -6,6 +6,31 @@ use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+#[cfg(not(target_os = "macos"))]
+use notify_rust::Notification;
+
+/// Show a system notification when audio recording is complete
+fn show_completion_notification() {
+    #[cfg(target_os = "macos")]
+    {
+        // On macOS, use osascript to show notification
+        let _ = std::process::Command::new("osascript")
+            .arg("-e")
+            .arg("display notification \"Recording complete! Check the response box.\" with title \"GIA Audio Recording\"")
+            .output();
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        // On Windows and Linux, use notify-rust
+        let _ = Notification::new()
+            .summary("GIA Audio Recording")
+            .body("Recording complete! Check the response box.")
+            .icon("microphone")
+            .show();
+    }
+}
+
 fn main() -> eframe::Result<()> {
     let version = env!("GIA_VERSION");
     let title = format!("GIA GUI - v{}", version);
@@ -528,8 +553,11 @@ impl GiaApp {
         let is_executing = Arc::clone(&self.is_executing);
         let pending_response = Arc::clone(&self.pending_response);
 
+        // Check if clipboard output mode is enabled
+        let has_clipboard_output = args.iter().any(|arg| arg == "-o" || arg == "--output");
+
         thread::spawn(move || {
-            let result = match Command::new("gia").args(args).output() {
+            let result = match Command::new("gia").args(&args).output() {
                 Ok(output) => {
                     let mut response = String::from_utf8_lossy(&output.stdout).to_string();
                     if !output.stderr.is_empty() {
@@ -540,6 +568,11 @@ impl GiaApp {
                 }
                 Err(e) => format!("Error executing gia: {}", e),
             };
+
+            // Show notification only if audio recording was used AND output is to clipboard
+            if with_audio && has_clipboard_output {
+                show_completion_notification();
+            }
 
             *pending_response.lock().unwrap() = Some(result);
             *is_executing.lock().unwrap() = false;

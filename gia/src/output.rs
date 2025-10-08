@@ -10,6 +10,9 @@ use crate::clipboard::write_clipboard;
 use crate::conversation::{Conversation, TokenUsage};
 use crate::logging::{log_error, log_info};
 
+#[cfg(not(target_os = "macos"))]
+use notify_rust::Notification;
+
 fn wrap_text(text: &str, width: usize) -> String {
     // First pass: merge lines ending with '•' or number followed by '.'
     let mut merged_lines = Vec::new();
@@ -85,6 +88,40 @@ pub fn get_outputs_dir() -> Result<PathBuf> {
     Ok(home_dir.join(".gia").join("outputs"))
 }
 
+/// Show a system notification for audio recording completion
+fn show_audio_completion_notification(output_mode: &OutputMode) {
+    let message = match output_mode {
+        OutputMode::Clipboard => "Recording complete! Result copied to clipboard.",
+        OutputMode::TempFileWithPreview => "Recording complete! Preview opened in browser.",
+        OutputMode::Stdout => "Recording complete! Check your terminal.",
+        OutputMode::Tts(_) => "Recording complete! Playing audio response.",
+    };
+
+    #[cfg(target_os = "macos")]
+    {
+        // On macOS, use osascript to show notification
+        let _ = std::process::Command::new("osascript")
+            .arg("-e")
+            .arg(format!(
+                "display notification \"{}\" with title \"GIA Audio Recording\"",
+                message
+            ))
+            .output();
+        log_info("Showed macOS notification for audio recording completion");
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        // On Windows and Linux, use notify-rust
+        let _ = Notification::new()
+            .summary("GIA Audio Recording")
+            .body(message)
+            .icon("microphone")
+            .show();
+        log_info("Showed system notification for audio recording completion");
+    }
+}
+
 fn build_footer_metadata(config: &Config, token_usage: Option<TokenUsage>) -> FooterMetadata {
     // Parse provider and model from config.model
     let (provider_name, model_name) = if config.model.contains("::") {
@@ -157,7 +194,13 @@ pub fn output_text_with_usage(
     token_usage: Option<TokenUsage>,
     conversation_id: &str,
 ) -> Result<()> {
-    match &config.output_mode {
+    // Check if audio recording was used
+    let has_audio_recording = config
+        .ordered_content
+        .iter()
+        .any(|content| matches!(content, ContentSource::AudioRecording(_)));
+
+    let result = match &config.output_mode {
         OutputMode::TempFileWithPreview => {
             log_info("Writing response to output file, copying file path to clipboard, and opening browser preview");
 
@@ -230,7 +273,14 @@ pub fn output_text_with_usage(
 
             Ok(())
         }
+    };
+
+    // Show notification only if audio recording was used AND output is to clipboard
+    if has_audio_recording && matches!(config.output_mode, OutputMode::Clipboard) {
+        show_audio_completion_notification(&config.output_mode);
     }
+
+    result
 }
 
 // Function removed - now in conversation.rs as Conversation::extract_prompt_section()

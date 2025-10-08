@@ -37,5 +37,6 @@ textwrap = "0.16"
 encoding_rs = "0.8"
 chardetng = "0.1"
 tts = "0.26"
+notify-rust = "4.11"
 
 
