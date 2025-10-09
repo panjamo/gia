@@ -69,3 +69,29 @@ impl ProviderFactory {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_ollama_provider() {
+        let config = ProviderConfig {
+            model: "ollama::llama3.2".to_string(),
+            api_keys: Vec::new(),
+        };
+        let result = ProviderFactory::create_provider(config);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().provider_name(), "Ollama");
+    }
+
+    #[test]
+    fn test_unsupported_provider() {
+        let config = ProviderConfig {
+            model: "unknown::model".to_string(),
+            api_keys: Vec::new(),
+        };
+        let result = ProviderFactory::create_provider(config);
+        assert!(result.is_err());
+    }
+}

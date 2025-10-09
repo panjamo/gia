@@ -1,3 +1,11 @@
+//! Ollama provider implementation for local LLM integration.
+//!
+//! # Token Usage Limitation
+//!
+//! The `genai` crate (v0.4) does not currently expose token usage statistics
+//! for Ollama responses. All token counts default to zero. This is a known
+//! limitation of the underlying library, not this implementation.
+
 use crate::conversation::TokenUsage;
 use crate::logging::{log_debug, log_info};
 use crate::provider::{AiProvider, AiResponse};
@@ -72,6 +80,7 @@ impl AiProvider for OllamaClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use genai::chat::{ChatMessage, MessageContent};
 
     #[tokio::test]
     async fn test_ollama_client_creation() {
@@ -82,5 +91,20 @@ mod tests {
         let client = client.unwrap();
         assert_eq!(client.model_name(), &model);
         assert_eq!(client.provider_name(), "Ollama");
+    }
+
+    #[tokio::test]
+    async fn test_ollama_error_handling() {
+        let mut client = OllamaClient::new("llama3.2".to_string()).unwrap();
+
+        let messages = vec![ChatMessage {
+            role: genai::chat::ChatRole::User,
+            content: MessageContent::from_text(""),
+            options: None,
+        }];
+
+        // Will fail with connection error or empty response error
+        let result = client.generate_content_with_chat_messages(messages).await;
+        assert!(result.is_err());
     }
 }

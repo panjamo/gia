@@ -21,18 +21,65 @@ struct OllamaModel {
     name: String,
 }
 
-/// Fetch available Ollama models from local Ollama instance (blocking)
+const DEFAULT_OLLAMA_BASE_URL: &str = "http://localhost:11434";
+
+/// Fetch available Ollama models from local Ollama instance (blocking).
+///
+/// # Returns
+/// Vector of model names in format "ollama::model-name", or empty vec on failure.
+///
+/// # Environment Variables
+/// - `OLLAMA_API_BASE`: Custom Ollama server URL (default: http://localhost:11434)
+///
+/// # Errors
+/// Returns empty vec on: invalid URL, network timeout (2s), or parse failure.
 fn fetch_ollama_models() -> Vec<String> {
-    match reqwest::blocking::get("http://localhost:11434/api/tags") {
+    let base_url =
+        std::env::var("OLLAMA_API_BASE").unwrap_or_else(|_| DEFAULT_OLLAMA_BASE_URL.to_string());
+
+    let base = match reqwest::Url::parse(&base_url) {
+        Ok(url) => url,
+        Err(e) => {
+            eprintln!("Ollama: invalid base URL '{}': {}", base_url, e);
+            return Vec::new();
+        }
+    };
+
+    let url = match base.join("/api/tags") {
+        Ok(url) => url,
+        Err(e) => {
+            eprintln!("Ollama: failed to construct API URL: {}", e);
+            return Vec::new();
+        }
+    };
+
+    let client = match reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Ollama: failed to create HTTP client: {}", e);
+            return Vec::new();
+        }
+    };
+
+    match client.get(url).send() {
         Ok(response) => match response.json::<OllamaTagsResponse>() {
             Ok(data) => data
                 .models
                 .into_iter()
                 .map(|m| format!("ollama::{}", m.name))
                 .collect(),
-            Err(_) => Vec::new(),
+            Err(e) => {
+                eprintln!("Ollama: failed to parse response: {}", e);
+                Vec::new()
+            }
         },
-        Err(_) => Vec::new(),
+        Err(e) => {
+            eprintln!("Ollama: connection failed: {}", e);
+            Vec::new()
+        }
     }
 }
 
@@ -378,10 +425,13 @@ impl eframe::App for GiaApp {
                                                     ui.separator();
                                                     ui.label("Ollama Models:");
                                                     for model in ollama_models.iter() {
+                                                        let display_name = model
+                                                            .strip_prefix("ollama::")
+                                                            .unwrap_or(model);
                                                         ui.selectable_value(
                                                             &mut self.model,
                                                             model.clone(),
-                                                            model,
+                                                            format!("Ollama {}", display_name),
                                                         );
                                                     }
                                                 }
@@ -674,5 +724,20 @@ impl GiaApp {
                 self.response = format!("Error executing gia: {}", e);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+
+    #[test]
+    #[serial]
+    fn test_fetch_ollama_models_unreachable_host() {
+        std::env::set_var("OLLAMA_API_BASE", "http://127.0.0.1:9999");
+        let result = fetch_ollama_models();
+        assert!(result.is_empty());
+        std::env::remove_var("OLLAMA_API_BASE");
     }
 }
