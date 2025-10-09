@@ -270,8 +270,8 @@ pub fn output_text_with_usage(
         }
     };
 
-    // Show notification only if audio recording was used AND output is to clipboard
-    if has_audio_recording && matches!(config.output_mode, OutputMode::Clipboard) {
+    // Show notification only if audio recording was used AND output is to clipboard AND spinner is not active
+    if has_audio_recording && matches!(config.output_mode, OutputMode::Clipboard) && !config.spinner {
         show_audio_completion_notification(&config.output_mode);
     }
 
