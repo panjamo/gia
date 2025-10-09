@@ -9,6 +9,7 @@ use crate::input::get_input_text;
 use crate::logging::{log_error, log_info};
 use crate::output::output_text_with_usage;
 use crate::provider::{ProviderConfig, ProviderFactory};
+use crate::spinner::SpinnerProcess;
 
 pub async fn run_app(mut config: Config) -> Result<()> {
     // Initialize conversation manager
@@ -97,10 +98,20 @@ pub async fn run_app(mut config: Config) -> Result<()> {
         provider.model_name()
     ));
 
+    // Start spinner if requested
+    let _spinner = if config.spinner {
+        Some(SpinnerProcess::start())
+    } else {
+        None
+    };
+
     let ai_response = provider
         .generate_content_with_chat_messages(all_genai_messages)
         .await
         .context("Failed to generate content")?;
+
+    // Spinner is automatically killed when dropped here
+    drop(_spinner);
 
     let response = ai_response.content;
     let usage = ai_response.usage;

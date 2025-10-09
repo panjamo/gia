@@ -15,6 +15,7 @@ mod ollama;
 mod output;
 mod provider;
 mod role;
+mod spinner;
 
 use anyhow::Result;
 

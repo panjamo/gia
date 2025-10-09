@@ -37,6 +37,7 @@ pub struct Config {
     pub record_audio: bool,                  // true = record audio input
     pub roles: Vec<String>,                  // role names to load from ~/.gia/<role>.md
     pub ordered_content: Vec<ContentSource>, // ordered content for multimodal requests
+    pub spinner: bool,                       // true = show spinner during AI request
 }
 
 impl Config {
@@ -101,6 +102,7 @@ impl Config {
             record_audio: matches.get_flag("record-audio"),
             roles,
             ordered_content: Vec::new(), // will be populated in input.rs
+            spinner: matches.get_flag("spinner"),
         }
     }
 
@@ -221,6 +223,12 @@ impl Config {
                 Arg::new("verbose-help")
                     .long("verbose-help")
                     .help("Open browser with detailed documentation on GitHub")
+                    .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("spinner")
+                    .long("spinner")
+                    .help("Show visual spinner during AI request (requires giagui)")
                     .action(clap::ArgAction::SetTrue),
             )
             .arg(
