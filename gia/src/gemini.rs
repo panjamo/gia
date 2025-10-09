@@ -5,7 +5,7 @@ use crate::logging::{log_debug, log_error, log_info, log_trace, log_warn};
 use crate::provider::{AiProvider, AiResponse};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use genai::chat::{ChatMessage, ChatRequest, MessageContent};
+use genai::chat::{ChatMessage, ChatRequest};
 use genai::resolver::{AuthData, AuthResolver};
 use genai::Client;
 use rand::prelude::*;
@@ -109,21 +109,10 @@ impl GeminiClient {
 
         for (i, msg) in messages.iter().enumerate() {
             log_info(&format!("Message {}: {:?}", i + 1, msg.role));
-            match &msg.content {
-                MessageContent::Text(text) => {
-                    log_info(&format!("  Type: Text ({} chars)", text.len()));
-                    log_trace(&format!("  Content: {}", text));
-                }
-                MessageContent::Parts(parts) => {
-                    log_info(&format!("  Type: Multimodal ({} parts)", parts.len()));
-                    for (j, part) in parts.iter().enumerate() {
-                        log_trace(&format!("  Part {}: {:?}", j + 1, part));
-                    }
-                }
-                _ => {
-                    log_info("  Type: Other");
-                    log_trace(&format!("  Content: {:?}", msg.content));
-                }
+            let parts = msg.content.parts();
+            log_info(&format!("  Type: {} part(s)", parts.len()));
+            for (j, part) in parts.iter().enumerate() {
+                log_trace(&format!("  Part {}: {:?}", j + 1, part));
             }
         }
         log_info("=== End Chat Request Structure ===");
@@ -187,7 +176,7 @@ impl GeminiClient {
 
         // Extract the response text
         let generated_text = chat_response
-            .content_text_as_str()
+            .first_text()
             .context("Failed to extract text from Gemini response")?;
 
         // Check if the generated text is empty or just whitespace

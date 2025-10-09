@@ -56,12 +56,42 @@ impl ProviderFactory {
                     crate::gemini::GeminiClient::new(model_name.to_string(), config.api_keys)?;
                 Ok(Box::new(client))
             }
+            "ollama" => {
+                let client = crate::ollama::OllamaClient::new(model_name.to_string())?;
+                Ok(Box::new(client))
+            }
             // Future providers can be added here:
             // "openai" => Ok(Box::new(OpenAiClient::new(model_name.to_string(), config.api_keys)?)),
             // "anthropic" => Ok(Box::new(AnthropicClient::new(model_name.to_string(), config.api_keys)?)),
             _ => Err(anyhow::anyhow!(
-                "Unsupported provider: {provider_name}. Supported providers: gemini"
+                "Unsupported provider: {provider_name}. Supported providers: gemini, ollama"
             )),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_ollama_provider() {
+        let config = ProviderConfig {
+            model: "ollama::llama3.2".to_string(),
+            api_keys: Vec::new(),
+        };
+        let result = ProviderFactory::create_provider(config);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().provider_name(), "Ollama");
+    }
+
+    #[test]
+    fn test_unsupported_provider() {
+        let config = ProviderConfig {
+            model: "unknown::model".to_string(),
+            api_keys: Vec::new(),
+        };
+        let result = ProviderFactory::create_provider(config);
+        assert!(result.is_err());
     }
 }

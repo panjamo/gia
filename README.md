@@ -2,7 +2,7 @@
 
 # GIA - General Intelligence Assistant
 
-A command-line tool (and GUI wrapper) that sends text prompts to Gemini API and returns AI-generated responses.
+A command-line tool (and GUI wrapper) that sends text prompts to AI models and returns AI-generated responses.
 
 This workspace contains two binaries:
 - **gia** - Command-line interface
@@ -49,7 +49,9 @@ This workspace contains two binaries:
 
 ## Setup
 
-Set your Gemini API key as an environment variable:
+### Using Gemini (Google AI)
+
+Set your API key as an environment variable:
 
 ```bash
 export GEMINI_API_KEY="your_api_key_here"
@@ -66,12 +68,19 @@ For automatic fallback on rate limits, set multiple keys separated by pipe (`|`)
 export GEMINI_API_KEY="key1|key2|key3"
 ```
 
-On Windows:
-```cmd
-set GEMINI_API_KEY=key1|key2|key3
+To get an API key, visit: https://makersuite.google.com/app/apikey
+
+### Using Ollama (Local Models)
+
+Install and start Ollama from https://ollama.ai, then use the `-m` flag:
+
+```bash
+gia -m "ollama::llama3.2" "your prompt here"
 ```
 
-Optionally configure the context window limit (default: 8000):
+### Optional Configuration
+
+Configure the context window limit (default: 8000):
 
 ```bash
 export CONTEXT_WINDOW_LIMIT=10000
@@ -95,10 +104,6 @@ export GIA_AUDIO_DEVICE="0"
 # Use device name or "default"
 export GIA_AUDIO_DEVICE="default"
 ```
-
-GIA will randomly select an API key for each request and automatically fallback to other keys if it encounters a "429 Too Many Requests" error.
-
-To get a Gemini API key, visit: https://makersuite.google.com/app/apikey
 
 ## Default Behavior
 
@@ -287,7 +292,9 @@ gia -s -b                         # Show latest conversation (file + browser)
 - `-R` - Resume the very last conversation
 - `-l, --list-conversations [NUMBER]` - List saved conversations (optionally limit number)
 - `-s, --show-conversation [ID]` - Show conversation (follows output options: stdout/clipboard/file+browser)
-- `-m, --model <MODEL>` - Specify Gemini model (default: gemini-2.5-flash-lite) see https://ai.google.dev/gemini-api/docs/models
+- `-m, --model <MODEL>` - Specify model (default: gemini-2.5-flash-lite)
+  - Gemini models: see https://ai.google.dev/gemini-api/docs/models
+  - Ollama models: use `ollama::model-name` format (e.g., `ollama::llama3.2`)
 
 ## Logging
 
@@ -334,7 +341,7 @@ gia "Rewrite this professionally" -c -o
 ## Dependencies
 
 - `tokio` - Async runtime
-- `genai` - Gemini API client
+- `genai` - AI API client (Gemini, Ollama)
 - `serde` - JSON serialization
 - `clap` - Command line parsing
 - `anyhow` - Error handling

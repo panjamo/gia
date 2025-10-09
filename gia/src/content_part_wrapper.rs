@@ -85,10 +85,10 @@ impl ContentPartWrapper {
             }
             ContentPartWrapper::Image {
                 mime_type, data, ..
-            } => ContentPart::from_image_base64(mime_type.clone(), data.clone()),
+            } => ContentPart::from_binary_base64(mime_type.clone(), data.clone(), None),
             ContentPartWrapper::Audio {
                 mime_type, data, ..
-            } => ContentPart::from_image_base64(mime_type.clone(), data.clone()),
+            } => ContentPart::from_binary_base64(mime_type.clone(), data.clone(), None),
             ContentPartWrapper::Text(text) => ContentPart::Text(text.clone()),
         }
     }
@@ -127,11 +127,13 @@ impl MessageContentWrapper {
     /// Convert to genai::MessageContent for API requests
     pub fn to_genai_message_content(&self) -> genai::chat::MessageContent {
         match self {
-            MessageContentWrapper::Text { text } => genai::chat::MessageContent::Text(text.clone()),
+            MessageContentWrapper::Text { text } => {
+                genai::chat::MessageContent::from_text(text.clone())
+            }
             MessageContentWrapper::Parts { parts } => {
                 let content_parts: Vec<ContentPart> =
                     parts.iter().map(|p| p.to_genai_content_part()).collect();
-                genai::chat::MessageContent::Parts(content_parts)
+                genai::chat::MessageContent::from_parts(content_parts)
             }
         }
     }
@@ -159,6 +161,10 @@ impl ChatMessageWrapper {
 
         let content = self.content.to_genai_message_content();
 
-        Ok(ChatMessage { role, content })
+        Ok(ChatMessage {
+            role,
+            content,
+            options: None,
+        })
     }
 }

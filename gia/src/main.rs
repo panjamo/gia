@@ -11,6 +11,7 @@ mod gemini;
 mod image;
 mod input;
 mod logging;
+mod ollama;
 mod output;
 mod provider;
 mod role;

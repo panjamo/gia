@@ -212,7 +212,7 @@ impl Config {
                 Arg::new("model")
                     .short('m')
                     .long("model")
-                    .help("Specify the Gemini model to use (see https://ai.google.dev/gemini-api/docs/models)")
+                    .help("Specify the model to use. Format: 'provider::model' or just 'model' for Gemini (e.g., 'ollama::llama3.2', 'gemini-2.5-flash-lite')")
                     .value_name("MODEL")
                     .default_value("gemini-2.5-flash-lite")
                     .action(clap::ArgAction::Set),

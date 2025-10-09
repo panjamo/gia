@@ -1,5 +1,6 @@
 use arboard::Clipboard;
 use eframe::egui;
+use serde::Deserialize;
 use std::fs;
 
 use std::process::Command;
@@ -8,6 +9,79 @@ use std::thread;
 
 #[cfg(not(target_os = "macos"))]
 use notify_rust::Notification;
+
+/// Ollama API response for /api/tags
+#[derive(Debug, Deserialize)]
+struct OllamaTagsResponse {
+    models: Vec<OllamaModel>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OllamaModel {
+    name: String,
+}
+
+const DEFAULT_OLLAMA_BASE_URL: &str = "http://localhost:11434";
+
+/// Fetch available Ollama models from local Ollama instance (blocking).
+///
+/// # Returns
+/// Vector of model names in format "ollama::model-name", or empty vec on failure.
+///
+/// # Environment Variables
+/// - `OLLAMA_API_BASE`: Custom Ollama server URL (default: http://localhost:11434)
+///
+/// # Errors
+/// Returns empty vec on: invalid URL, network timeout (2s), or parse failure.
+fn fetch_ollama_models() -> Vec<String> {
+    let base_url =
+        std::env::var("OLLAMA_API_BASE").unwrap_or_else(|_| DEFAULT_OLLAMA_BASE_URL.to_string());
+
+    let base = match reqwest::Url::parse(&base_url) {
+        Ok(url) => url,
+        Err(e) => {
+            eprintln!("Ollama: invalid base URL '{}': {}", base_url, e);
+            return Vec::new();
+        }
+    };
+
+    let url = match base.join("/api/tags") {
+        Ok(url) => url,
+        Err(e) => {
+            eprintln!("Ollama: failed to construct API URL: {}", e);
+            return Vec::new();
+        }
+    };
+
+    let client = match reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Ollama: failed to create HTTP client: {}", e);
+            return Vec::new();
+        }
+    };
+
+    match client.get(url).send() {
+        Ok(response) => match response.json::<OllamaTagsResponse>() {
+            Ok(data) => data
+                .models
+                .into_iter()
+                .map(|m| format!("ollama::{}", m.name))
+                .collect(),
+            Err(e) => {
+                eprintln!("Ollama: failed to parse response: {}", e);
+                Vec::new()
+            }
+        },
+        Err(e) => {
+            eprintln!("Ollama: connection failed: {}", e);
+            Vec::new()
+        }
+    }
+}
 
 /// Show a system notification when audio recording is complete
 fn show_completion_notification() {
@@ -76,6 +150,7 @@ struct GiaApp {
     role: String,
     tasks: Vec<String>,
     roles: Vec<String>,
+    ollama_models: Arc<Mutex<Vec<String>>>,
     is_executing: Arc<Mutex<bool>>,
     animation_time: f64,
     pending_response: Arc<Mutex<Option<String>>>,
@@ -88,6 +163,15 @@ impl Default for GiaApp {
     fn default() -> Self {
         let tasks = load_md_files("tasks");
         let roles = load_md_files("roles");
+
+        // Fetch Ollama models in background thread
+        let ollama_models = Arc::new(Mutex::new(Vec::new()));
+        let ollama_models_clone = Arc::clone(&ollama_models);
+
+        thread::spawn(move || {
+            let models = fetch_ollama_models();
+            *ollama_models_clone.lock().unwrap() = models;
+        });
 
         Self {
             prompt: String::new(),
@@ -102,6 +186,7 @@ impl Default for GiaApp {
             role: String::new(),
             tasks,
             roles,
+            ollama_models,
             is_executing: Arc::new(Mutex::new(false)),
             animation_time: 0.0,
             pending_response: Arc::new(Mutex::new(None)),
@@ -304,6 +389,7 @@ impl eframe::App for GiaApp {
                                         egui::ComboBox::from_id_salt("model_selector")
                                             .selected_text(&self.model)
                                             .show_ui(ui, |ui| {
+                                                ui.label("Gemini Models:");
                                                 ui.selectable_value(
                                                     &mut self.model,
                                                     "gemini-2.5-pro".to_string(),
@@ -329,6 +415,26 @@ impl eframe::App for GiaApp {
                                                     "gemini-2.0-flash-lite".to_string(),
                                                     "Gemini 2.0 Flash-Lite",
                                                 );
+
+                                                // Add Ollama models if available
+                                                let ollama_models = {
+                                                    let models = self.ollama_models.lock().unwrap();
+                                                    models.clone()
+                                                };
+                                                if !ollama_models.is_empty() {
+                                                    ui.separator();
+                                                    ui.label("Ollama Models:");
+                                                    for model in ollama_models.iter() {
+                                                        let display_name = model
+                                                            .strip_prefix("ollama::")
+                                                            .unwrap_or(model);
+                                                        ui.selectable_value(
+                                                            &mut self.model,
+                                                            model.clone(),
+                                                            format!("Ollama {}", display_name),
+                                                        );
+                                                    }
+                                                }
                                             })
                                             .response
                                             .rect
@@ -618,5 +724,20 @@ impl GiaApp {
                 self.response = format!("Error executing gia: {}", e);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+
+    #[test]
+    #[serial]
+    fn test_fetch_ollama_models_unreachable_host() {
+        std::env::set_var("OLLAMA_API_BASE", "http://127.0.0.1:9999");
+        let result = fetch_ollama_models();
+        assert!(result.is_empty());
+        std::env::remove_var("OLLAMA_API_BASE");
     }
 }
