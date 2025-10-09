@@ -2168,6 +2168,7 @@ name = "giagui"
 version = "0.1.0"
 dependencies = [
  "arboard",
+ "clap",
  "dirs",
  "eframe",
  "egui",

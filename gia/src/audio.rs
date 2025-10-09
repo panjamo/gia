@@ -201,7 +201,9 @@ pub fn record_audio() -> Result<String> {
             // Show error dialog to user
             let error_msg = format!(
                 "Audio recording failed!\n\nffmpeg process exited unexpectedly.\nExit code: {}\n\nPlease check:\n- Audio device is available\n- ffmpeg is properly installed\n- GIA_AUDIO_DEVICE is set correctly (if used)",
-                status.code().map_or("unknown".to_string(), |c| c.to_string())
+                status
+                    .code()
+                    .map_or("unknown".to_string(), |c| c.to_string())
             );
 
             let _ = MessageDialog::new()
@@ -464,12 +466,12 @@ fn get_default_audio_device(cpal_device: Option<String>) -> Result<String> {
         let mut ffmpeg_devices = Vec::new();
         for line in stderr.lines() {
             log_debug(line);
-            if let Some(captures) = device_regex.captures(line) {
-                if let Some(device_name) = captures.get(1) {
-                    let device_name = device_name.as_str();
-                    log_debug(&format!("Found audio device: {device_name}"));
-                    ffmpeg_devices.push(device_name.to_string());
-                }
+            if let Some(captures) = device_regex.captures(line)
+                && let Some(device_name) = captures.get(1)
+            {
+                let device_name = device_name.as_str();
+                log_debug(&format!("Found audio device: {device_name}"));
+                ffmpeg_devices.push(device_name.to_string());
             }
         }
 
@@ -608,11 +610,11 @@ mod tests {
     #[test]
     #[serial]
     fn test_get_audio_device_with_env_var() {
-        std::env::set_var("GIA_AUDIO_DEVICE", "Test Microphone");
+        unsafe { std::env::set_var("GIA_AUDIO_DEVICE", "Test Microphone") };
 
         let result = get_audio_device();
 
-        std::env::remove_var("GIA_AUDIO_DEVICE");
+        unsafe { std::env::remove_var("GIA_AUDIO_DEVICE") };
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "Test Microphone");
@@ -621,7 +623,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_get_audio_device_without_env_var() {
-        std::env::remove_var("GIA_AUDIO_DEVICE");
+        unsafe { std::env::remove_var("GIA_AUDIO_DEVICE") };
 
         let result = get_audio_device();
 

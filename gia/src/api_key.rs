@@ -5,22 +5,22 @@ use std::env;
 
 pub fn get_api_keys() -> Result<Vec<String>> {
     // First try environment variable - now supports pipe-separated keys
-    if let Ok(keys_string) = env::var("GEMINI_API_KEY") {
-        if !keys_string.trim().is_empty() {
-            // Split by pipe character and filter out empty strings
-            let keys: Vec<String> = keys_string
-                .split('|')
-                .map(|k| k.trim().to_string())
-                .filter(|k| !k.is_empty())
-                .collect();
+    if let Ok(keys_string) = env::var("GEMINI_API_KEY")
+        && !keys_string.trim().is_empty()
+    {
+        // Split by pipe character and filter out empty strings
+        let keys: Vec<String> = keys_string
+            .split('|')
+            .map(|k| k.trim().to_string())
+            .filter(|k| !k.is_empty())
+            .collect();
 
-            if !keys.is_empty() {
-                log_info(&format!(
-                    "Found {} API key(s) in GEMINI_API_KEY environment variable",
-                    keys.len()
-                ));
-                return Ok(keys);
-            }
+        if !keys.is_empty() {
+            log_info(&format!(
+                "Found {} API key(s) in GEMINI_API_KEY environment variable",
+                keys.len()
+            ));
+            return Ok(keys);
         }
     }
 
@@ -159,11 +159,11 @@ mod tests {
     #[serial]
     fn test_pipe_separated_api_keys() {
         // Clean up any existing environment variable first
-        env::remove_var("GEMINI_API_KEY");
+        unsafe { env::remove_var("GEMINI_API_KEY") };
 
         // Set up test environment variable with pipe-separated keys
         let test_keys = "AIzaSyKey1ForTesting123456789012345|AIzaSyKey2ForTesting123456789012345|AIzaSyKey3ForTesting123456789012345";
-        env::set_var("GEMINI_API_KEY", test_keys);
+        unsafe { env::set_var("GEMINI_API_KEY", test_keys) };
 
         // Test that we can get the keys and they are properly parsed
         let result = get_api_keys();
@@ -176,18 +176,18 @@ mod tests {
         assert_eq!(keys[2], "AIzaSyKey3ForTesting123456789012345");
 
         // Clean up
-        env::remove_var("GEMINI_API_KEY");
+        unsafe { env::remove_var("GEMINI_API_KEY") };
     }
 
     #[test]
     #[serial]
     fn test_pipe_separated_with_spaces() {
         // Clean up any existing environment variable first
-        env::remove_var("GEMINI_API_KEY");
+        unsafe { env::remove_var("GEMINI_API_KEY") };
 
         // Test with spaces around separators
         let test_keys = "AIzaSyKey1ForTesting123456789012345 | AIzaSyKey2ForTesting123456789012345 | AIzaSyKey3ForTesting123456789012345";
-        env::set_var("GEMINI_API_KEY", test_keys);
+        unsafe { env::set_var("GEMINI_API_KEY", test_keys) };
 
         let result = get_api_keys();
         assert!(result.is_ok());
@@ -199,18 +199,18 @@ mod tests {
         assert_eq!(keys[1], "AIzaSyKey2ForTesting123456789012345");
         assert_eq!(keys[2], "AIzaSyKey3ForTesting123456789012345");
 
-        env::remove_var("GEMINI_API_KEY");
+        unsafe { env::remove_var("GEMINI_API_KEY") };
     }
 
     #[test]
     #[serial]
     fn test_single_api_key_backward_compatibility() {
         // Clean up any existing environment variable first
-        env::remove_var("GEMINI_API_KEY");
+        unsafe { env::remove_var("GEMINI_API_KEY") };
 
         // Test that single key still works (backward compatibility)
         let single_key = "AIzaSySingleKeyTesting123456789012345";
-        env::set_var("GEMINI_API_KEY", single_key);
+        unsafe { env::set_var("GEMINI_API_KEY", single_key) };
 
         let result = get_api_keys();
         assert!(result.is_ok());
@@ -219,6 +219,6 @@ mod tests {
         assert_eq!(keys.len(), 1);
         assert_eq!(keys[0], single_key);
 
-        env::remove_var("GEMINI_API_KEY");
+        unsafe { env::remove_var("GEMINI_API_KEY") };
     }
 }

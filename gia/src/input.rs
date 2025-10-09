@@ -73,10 +73,10 @@ enum FileType {
 
 /// Check if a file is a media file based on its extension
 fn is_media_file_by_extension(path: &Path) -> bool {
-    if let Some(ext) = path.extension() {
-        if let Some(ext_str) = ext.to_str() {
-            return MEDIA_EXTENSIONS.contains(&ext_str.to_lowercase().as_str());
-        }
+    if let Some(ext) = path.extension()
+        && let Some(ext_str) = ext.to_str()
+    {
+        return MEDIA_EXTENSIONS.contains(&ext_str.to_lowercase().as_str());
     }
     false
 }
@@ -483,10 +483,12 @@ mod tests {
     fn test_read_text_file_nonexistent() {
         let result = read_text_file("nonexistent_file.txt");
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Failed to read file"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Failed to read file")
+        );
     }
 
     #[test]
@@ -582,10 +584,12 @@ mod tests {
     fn test_collect_files_recursive_nonexistent() {
         let result = collect_files_recursive("nonexistent_path");
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Path does not exist"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Path does not exist")
+        );
     }
 
     #[test]

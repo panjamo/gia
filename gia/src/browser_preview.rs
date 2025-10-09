@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use std::fs;
 use std::path::Path;
@@ -185,16 +185,15 @@ fn build_footer_html(metadata: &FooterMetadata) -> String {
     ));
 
     // Token usage
-    if let Some(usage) = &metadata.token_usage {
-        if usage.prompt_tokens.is_some()
+    if let Some(usage) = &metadata.token_usage
+        && (usage.prompt_tokens.is_some()
             || usage.completion_tokens.is_some()
-            || usage.total_tokens.is_some()
-        {
-            footer.push_str(&format!(
-                "<p><strong>Tokens:</strong> {}</p>",
-                usage.format_short()
-            ));
-        }
+            || usage.total_tokens.is_some())
+    {
+        footer.push_str(&format!(
+            "<p><strong>Tokens:</strong> {}</p>",
+            usage.format_short()
+        ));
     }
 
     // Inputs section

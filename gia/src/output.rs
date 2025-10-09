@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tts::Tts;
 
-use crate::browser_preview::{open_markdown_preview, FooterMetadata};
+use crate::browser_preview::{FooterMetadata, open_markdown_preview};
 use crate::cli::{Config, ContentSource, OutputMode};
 use crate::clipboard::write_clipboard;
 use crate::conversation::{Conversation, TokenUsage};
@@ -61,10 +61,12 @@ fn wrap_text(text: &str, width: usize) -> String {
         let curr_indent = line.chars().position(|c| c.is_alphanumeric()).unwrap_or(0);
 
         // Add newline if indentation decreased and previous line wasn't empty
-        if let Some(prev) = prev_indent {
-            if !prev_was_empty && !is_empty && curr_indent < prev {
-                result.push(String::new());
-            }
+        if let Some(prev) = prev_indent
+            && !prev_was_empty
+            && !is_empty
+            && curr_indent < prev
+        {
+            result.push(String::new());
         }
 
         // Create indentation string matching the position
@@ -202,7 +204,9 @@ pub fn output_text_with_usage(
 
     let result = match &config.output_mode {
         OutputMode::TempFileWithPreview => {
-            log_info("Writing response to output file, copying file path to clipboard, and opening browser preview");
+            log_info(
+                "Writing response to output file, copying file path to clipboard, and opening browser preview",
+            );
 
             // Get outputs directory and create it if it doesn't exist
             let outputs_dir = get_outputs_dir()?;

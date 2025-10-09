@@ -1,4 +1,5 @@
 use arboard::Clipboard;
+use clap::Parser;
 use eframe::egui;
 use serde::Deserialize;
 use std::fs;
@@ -22,6 +23,15 @@ struct OllamaModel {
 }
 
 const DEFAULT_OLLAMA_BASE_URL: &str = "http://localhost:11434";
+
+/// GIA GUI - Graphical user interface for the GIA command-line tool
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Display only a spinner until the process is killed
+    #[arg(short, long)]
+    spinner: bool,
+}
 
 /// Fetch available Ollama models from local Ollama instance (blocking).
 ///
@@ -106,21 +116,56 @@ fn show_completion_notification() {
 }
 
 fn main() -> eframe::Result<()> {
+    let args = Args::parse();
     let version = env!("GIA_VERSION");
     let title = format!("GIA GUI - v{}", version);
 
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([800.0, 600.0])
-            .with_icon(load_icon()),
-        ..Default::default()
-    };
+    if args.spinner {
+        // Spinner-only mode: small window with just a spinner, no decorations, centered
+        let options = eframe::NativeOptions {
+            viewport: egui::ViewportBuilder::default()
+                .with_inner_size([150.0, 150.0])
+                .with_resizable(false)
+                .with_decorations(false)
+                .with_transparent(true)
+                .with_always_on_top()
+                .with_icon(load_icon()),
+            centered: true,
+            hardware_acceleration: eframe::HardwareAcceleration::Required,
+            ..Default::default()
+        };
 
-    eframe::run_native(
-        &title,
-        options,
-        Box::new(|_cc| Ok(Box::new(GiaApp::default()))),
-    )
+        eframe::run_native(
+            &title,
+            options,
+            Box::new(|cc| {
+                // Set the clear color to fully transparent
+                let mut visuals = egui::Visuals::dark();
+                visuals.window_fill = egui::Color32::TRANSPARENT;
+                visuals.panel_fill = egui::Color32::TRANSPARENT;
+                visuals.extreme_bg_color = egui::Color32::TRANSPARENT;
+                visuals.window_stroke = egui::Stroke::NONE;
+                visuals.popup_shadow = egui::epaint::Shadow::NONE;
+                cc.egui_ctx.set_visuals(visuals);
+
+                Ok(Box::new(SpinnerApp::default()))
+            }),
+        )
+    } else {
+        // Normal GUI mode
+        let options = eframe::NativeOptions {
+            viewport: egui::ViewportBuilder::default()
+                .with_inner_size([800.0, 600.0])
+                .with_icon(load_icon()),
+            ..Default::default()
+        };
+
+        eframe::run_native(
+            &title,
+            options,
+            Box::new(|_cc| Ok(Box::new(GiaApp::default()))),
+        )
+    }
 }
 
 fn load_icon() -> egui::IconData {
@@ -134,6 +179,71 @@ fn load_icon() -> egui::IconData {
         rgba: image.into_raw(),
         width,
         height,
+    }
+}
+
+struct SpinnerApp {
+    animation_time: f64,
+}
+
+impl Default for SpinnerApp {
+    fn default() -> Self {
+        Self {
+            animation_time: 0.0,
+        }
+    }
+}
+
+impl eframe::App for SpinnerApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Update animation time
+        self.animation_time += ctx.input(|i| i.stable_dt as f64);
+        ctx.request_repaint();
+
+        // Set background to be completely transparent
+        ctx.set_pixels_per_point(1.0);
+
+        // Set the visuals to have a transparent background
+        let mut visuals = ctx.style().visuals.clone();
+        visuals.window_fill = egui::Color32::TRANSPARENT;
+        visuals.panel_fill = egui::Color32::TRANSPARENT;
+        visuals.extreme_bg_color = egui::Color32::TRANSPARENT;
+        ctx.set_visuals(visuals);
+
+        // Make background fully transparent
+        egui::CentralPanel::default()
+            .frame(
+                egui::Frame::new()
+                    .fill(egui::Color32::TRANSPARENT)
+                    .inner_margin(egui::Margin::ZERO)
+                    .outer_margin(egui::Margin::ZERO),
+            )
+            .show(ctx, |ui| {
+                // Draw animated spinner directly on transparent background
+                let num_dots = 8;
+                let radius = 20.0;
+                let dot_radius = 4.0;
+                let center = egui::pos2(75.0, 75.0); // Center of 150x150 window
+
+                for i in 0..num_dots {
+                    let angle = (self.animation_time * 2.0) as f32
+                        + (i as f32 * std::f32::consts::TAU / num_dots as f32);
+                    let x = center.x + angle.cos() * radius;
+                    let y = center.y + angle.sin() * radius;
+
+                    let opacity =
+                        ((self.animation_time * 3.0 + i as f64 * 0.5).sin() * 0.5 + 0.5) as f32;
+                    let color = egui::Color32::from_rgba_unmultiplied(
+                        100,
+                        150,
+                        255,
+                        (opacity * 255.0) as u8,
+                    );
+
+                    ui.painter()
+                        .circle_filled(egui::pos2(x, y), dot_radius, color);
+                }
+            });
     }
 }
 
@@ -205,15 +315,13 @@ fn load_md_files(subdir: &str) -> Vec<String> {
 
         if let Ok(entries) = fs::read_dir(path) {
             for entry in entries.flatten() {
-                if let Ok(file_type) = entry.file_type() {
-                    if file_type.is_file() {
-                        if let Some(file_name) = entry.file_name().to_str() {
-                            if file_name.ends_with(".md") {
-                                let name = file_name.trim_end_matches(".md").to_string();
-                                files.push(name);
-                            }
-                        }
-                    }
+                if let Ok(file_type) = entry.file_type()
+                    && file_type.is_file()
+                    && let Some(file_name) = entry.file_name().to_str()
+                    && file_name.ends_with(".md")
+                {
+                    let name = file_name.trim_end_matches(".md").to_string();
+                    files.push(name);
                 }
             }
         }
@@ -229,10 +337,10 @@ impl eframe::App for GiaApp {
         let is_executing = *self.is_executing.lock().unwrap();
 
         // Check for pending response
-        if let Ok(mut pending) = self.pending_response.lock() {
-            if let Some(response) = pending.take() {
-                self.response = response;
-            }
+        if let Ok(mut pending) = self.pending_response.lock()
+            && let Some(response) = pending.take()
+        {
+            self.response = response;
         }
 
         // Request repaint for animation (use cached value)
@@ -301,15 +409,15 @@ impl eframe::App for GiaApp {
                 if !ctx.input(|i| i.raw.dropped_files.is_empty()) {
                     let dropped_files = ctx.input(|i| i.raw.dropped_files.clone());
                     for file in dropped_files {
-                        if let Some(path) = file.path {
-                            if let Some(path_str) = path.to_str() {
-                                let option_line = format!("-f{}", path_str);
+                        if let Some(path) = file.path
+                            && let Some(path_str) = path.to_str()
+                        {
+                            let option_line = format!("-f{}", path_str);
 
-                                if !self.options.is_empty() && !self.options.ends_with('\n') {
-                                    self.options.push('\n');
-                                }
-                                self.options.push_str(&option_line);
+                            if !self.options.is_empty() && !self.options.ends_with('\n') {
+                                self.options.push('\n');
                             }
+                            self.options.push_str(&option_line);
                         }
                     }
                 }
@@ -735,9 +843,9 @@ mod tests {
     #[test]
     #[serial]
     fn test_fetch_ollama_models_unreachable_host() {
-        std::env::set_var("OLLAMA_API_BASE", "http://127.0.0.1:9999");
+        unsafe { std::env::set_var("OLLAMA_API_BASE", "http://127.0.0.1:9999") };
         let result = fetch_ollama_models();
         assert!(result.is_empty());
-        std::env::remove_var("OLLAMA_API_BASE");
+        unsafe { std::env::remove_var("OLLAMA_API_BASE") };
     }
 }

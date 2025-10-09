@@ -472,17 +472,17 @@ impl ConversationManager {
             let entry = entry.context("Failed to read directory entry")?;
             let path = entry.path();
 
-            if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
-                    // Check if the name ends with the provided id (hash match)
-                    if name.ends_with(id) {
-                        let content = fs::read_to_string(&path)
-                            .context("Failed to read conversation file")?;
-                        let conversation: Conversation = serde_json::from_str(&content)
-                            .context("Failed to deserialize conversation")?;
-                        log_debug(&format!("Loaded conversation from: {path:?}"));
-                        return Ok(conversation);
-                    }
+            if path.extension().and_then(|s| s.to_str()) == Some("json")
+                && let Some(name) = path.file_stem().and_then(|s| s.to_str())
+            {
+                // Check if the name ends with the provided id (hash match)
+                if name.ends_with(id) {
+                    let content =
+                        fs::read_to_string(&path).context("Failed to read conversation file")?;
+                    let conversation: Conversation = serde_json::from_str(&content)
+                        .context("Failed to deserialize conversation")?;
+                    log_debug(&format!("Loaded conversation from: {path:?}"));
+                    return Ok(conversation);
                 }
             }
         }

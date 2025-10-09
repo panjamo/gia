@@ -159,10 +159,12 @@ mod tests {
     fn test_load_role_file_not_found() {
         let result = load_role_file("nonexistent-role-xyz123");
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Role/task 'nonexistent-role-xyz123' not found"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Role/task 'nonexistent-role-xyz123' not found")
+        );
     }
 
     #[test]

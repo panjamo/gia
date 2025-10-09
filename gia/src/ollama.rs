@@ -11,8 +11,8 @@ use crate::logging::{log_debug, log_info};
 use crate::provider::{AiProvider, AiResponse};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use genai::chat::{ChatMessage, ChatRequest};
 use genai::Client;
+use genai::chat::{ChatMessage, ChatRequest};
 
 #[derive(Debug)]
 pub struct OllamaClient {

@@ -34,7 +34,9 @@ pub async fn run_app(mut config: Config) -> Result<()> {
 
     if config.ordered_content.is_empty() {
         log_error("No input content provided");
-        eprintln!("Error: No input content provided. Provide prompt as command line arguments or use -c/-f/-i for additional input.");
+        eprintln!(
+            "Error: No input content provided. Provide prompt as command line arguments or use -c/-f/-i for additional input."
+        );
         std::process::exit(1);
     }
 

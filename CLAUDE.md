@@ -40,11 +40,14 @@ cargo check                      # Check compilation without building
 cargo run -p gia -- "your prompt here"
 
 # GUI Development
-cargo run -p giagui
+cargo run -p giagui                    # Normal GUI mode
+cargo run -p giagui -- --spinner       # Spinner-only mode (runs until killed)
+cargo run -p giagui -- -s              # Spinner-only mode (short flag)
 
 # After building
 ./target/release/gia "your prompt here"
-./target/release/giagui
+./target/release/giagui                # Normal GUI
+./target/release/giagui --spinner      # Spinner-only mode
 
 # Using Ollama (local, requires Ollama running on localhost:11434)
 cargo run -- -m "ollama::llama3.2" "your prompt here"
@@ -123,9 +126,12 @@ This is a Cargo workspace with shared dependencies and build configuration:
 
 ### Module Structure (giagui GUI)
 - `giagui/src/main.rs` - Single-file egui application
-- **GiaApp struct**: Main application state
+- **Args struct**: Command-line argument parsing with clap
+- **SpinnerApp struct**: Minimal spinner-only display mode
+- **GiaApp struct**: Full GUI application state
 - **Command execution**: Spawns `gia` CLI process
 - **Icons**: References `../icons/gia.png` from workspace root
+- **Spinner mode**: Launched with `--spinner` or `-s` flag, displays only animated spinner until process is killed
 
 ### Key Design Patterns
 
