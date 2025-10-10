@@ -271,7 +271,8 @@ pub fn output_text_with_usage(
     };
 
     // Show notification only if audio recording was used AND output is to clipboard AND spinner is not active
-    if has_audio_recording && matches!(config.output_mode, OutputMode::Clipboard) && !config.spinner {
+    if has_audio_recording && matches!(config.output_mode, OutputMode::Clipboard) && !config.spinner
+    {
         show_audio_completion_notification(&config.output_mode);
     }
 
@@ -451,6 +452,7 @@ mod tests {
                 ContentSource::TextFile("file.txt".to_string(), "content".to_string()),
                 ContentSource::ClipboardText("clipboard".to_string()),
             ],
+            spinner: false,
         };
 
         let metadata = build_footer_metadata(&config, None);
@@ -477,7 +479,8 @@ mod tests {
             model: "openai::gpt-4".to_string(),
             record_audio: false,
             roles: vec![],
-            ordered_content: Vec::new(),
+            ordered_content: vec![],
+            spinner: false,
         };
 
         let metadata = build_footer_metadata(&config, None);

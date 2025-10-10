@@ -518,6 +518,7 @@ mod tests {
             record_audio: false,
             roles: vec![],
             ordered_content: Vec::new(),
+            spinner: false,
         };
 
         get_input_text(&mut config, None).unwrap();
@@ -607,6 +608,7 @@ mod tests {
             record_audio: false,
             roles: vec![],
             ordered_content: Vec::new(),
+            spinner: false,
         };
 
         let result = get_input_text(&mut config, None);
@@ -631,6 +633,7 @@ mod tests {
             record_audio: false,
             roles: vec![],
             ordered_content: Vec::new(),
+            spinner: false,
         };
 
         let result = get_input_text(&mut config, Some("Override prompt"));
@@ -771,6 +774,7 @@ mod tests {
             record_audio: false,
             roles: vec![],
             ordered_content: Vec::new(),
+            spinner: false,
         };
 
         get_input_text(&mut config, None).unwrap();
@@ -829,10 +833,7 @@ mod tests {
         let mut config = Config {
             prompt: "Test prompt".to_string(),
             use_clipboard_input: false,
-            text_files: vec![
-                temp_text_file.path().to_str().unwrap().to_string(),
-                temp_binary_file.path().to_str().unwrap().to_string(),
-            ],
+            text_files: vec![],
             output_mode: OutputMode::Stdout,
             resume_conversation: None,
             resume_last: false,
@@ -842,6 +843,7 @@ mod tests {
             record_audio: false,
             roles: vec![],
             ordered_content: Vec::new(),
+            spinner: false,
         };
 
         get_input_text(&mut config, None).unwrap();
@@ -895,6 +897,7 @@ mod tests {
             record_audio: false,
             roles: vec![],
             ordered_content: Vec::new(),
+            spinner: false,
         };
 
         get_input_text(&mut config, None).unwrap();
