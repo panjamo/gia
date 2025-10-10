@@ -589,7 +589,6 @@ pub struct ConversationSummary {
     #[allow(dead_code)]
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    #[allow(dead_code)]
     pub message_count: usize,
     pub first_user_message: Option<String>,
 }

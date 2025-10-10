@@ -39,3 +39,6 @@ chardetng = "0.1"
 tts = "0.26"
 notify-rust = "4.11"
 cpal = "0.15"
+
+[dev-dependencies]
+tempfile = "3.0"
