@@ -113,14 +113,18 @@ impl MockEnvironment {
         // Store original value for restoration
         self.original_vars
             .insert(key.to_string(), env::var(key).ok());
-        unsafe { env::set_var(key, value); }
+        unsafe {
+            env::set_var(key, value);
+        }
     }
 
     /// Remove an environment variable for testing
     pub fn remove_var(&mut self, key: &str) {
         self.original_vars
             .insert(key.to_string(), env::var(key).ok());
-        unsafe { env::remove_var(key); }
+        unsafe {
+            env::remove_var(key);
+        }
     }
 }
 

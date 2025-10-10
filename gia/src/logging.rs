@@ -21,7 +21,6 @@ pub fn log_error(msg: &str) {
     error!("{msg}");
 }
 
-#[allow(dead_code)]
 pub fn log_warn(msg: &str) {
     warn!("{msg}");
 }

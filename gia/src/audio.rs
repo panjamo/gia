@@ -406,20 +406,17 @@ fn get_default_audio_device(cpal_device: Option<String>) -> Result<String> {
             }
 
             // If we're in the audio section, look for device entries
-            if in_audio_section {
-                if let Some(captures) = device_regex.captures(line) {
-                    if let (Some(device_idx), Some(device_name)) =
-                        (captures.get(1), captures.get(2))
-                    {
-                        let device_name = device_name.as_str().to_string();
-                        let device_idx = device_idx.as_str().to_string();
-                        log_debug(&format!(
-                            "Found audio device [{}]: {}",
-                            device_idx, device_name
-                        ));
-                        ffmpeg_devices.push((device_idx, device_name));
-                    }
-                }
+            if in_audio_section
+                && let Some(captures) = device_regex.captures(line)
+                && let (Some(device_idx), Some(device_name)) = (captures.get(1), captures.get(2))
+            {
+                let device_name = device_name.as_str().to_string();
+                let device_idx = device_idx.as_str().to_string();
+                log_debug(&format!(
+                    "Found audio device [{}]: {}",
+                    device_idx, device_name
+                ));
+                ffmpeg_devices.push((device_idx, device_name));
             }
         }
 
