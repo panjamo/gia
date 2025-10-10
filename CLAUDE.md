@@ -99,10 +99,24 @@ For Ollama: Install from https://ollama.ai and run `ollama serve`
 
 ### Logging
 ```bash
-RUST_LOG=debug cargo run -- "test"  # Debug logging
-RUST_LOG=info cargo run -- "test"   # Info logging
-RUST_LOG=error cargo run -- "test"  # Error logging only
+# Console logging (requires RUST_LOG to be set)
+RUST_LOG=debug cargo run -- "test"  # Debug logging to stderr
+RUST_LOG=info cargo run -- "test"   # Info logging to stderr
+RUST_LOG=error cargo run -- "test"  # Error logging only to stderr
+
+# File logging (per-conversation log files in ~/.gia/conversations/)
+GIA_LOG_TO_FILE=1 cargo run -- "test"  # Enable file logging only
+GIA_LOG_TO_FILE=1 RUST_LOG=info cargo run -- "test"  # Enable both file and console logging
+
+# Without either variable, no logs are produced (clean stdout/stderr)
+cargo run -- "test"  # No logging output
 ```
+
+**Logging Behavior:**
+- **Console logging**: Only enabled when `RUST_LOG` is set (outputs to stderr)
+- **File logging**: Only enabled when `GIA_LOG_TO_FILE` is set (creates `<conversation-id>.log` in `~/.gia/conversations/`)
+- **Both can be enabled simultaneously**: Set both environment variables
+- **Clean output by default**: Without these variables, stdout remains clean for piping
 
 ## Architecture
 

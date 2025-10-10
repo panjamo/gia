@@ -6,7 +6,7 @@ use crate::content_part_wrapper::{ChatMessageWrapper, ContentPartWrapper, Messag
 use crate::conversation::TokenUsage;
 use crate::conversation::{Conversation, ConversationManager, ResourceInfo, ResourceType};
 use crate::input::get_input_text;
-use crate::logging::{log_error, log_info};
+use crate::logging::{log_error, log_info, setup_conversation_file_logging};
 use crate::output::output_text_with_usage;
 use crate::provider::{ProviderConfig, ProviderFactory};
 use crate::spinner::SpinnerProcess;
@@ -29,6 +29,10 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     // Determine conversation mode and adjust prompt if needed
     let (mut conversation, final_prompt) =
         resolve_conversation(&config, &conversation_manager, &config.model)?;
+
+    // Setup file logging for this conversation if GIA_LOG_TO_FILE is set
+    setup_conversation_file_logging(&conversation.id)
+        .context("Failed to setup conversation file logging")?;
 
     // Get input content (this may modify config to add clipboard images)
     get_input_text(&mut config, Some(&final_prompt)).context("Failed to get input text")?;
