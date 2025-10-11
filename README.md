@@ -121,6 +121,22 @@ export GIA_AUDIO_DEVICE="0"
 export GIA_AUDIO_DEVICE="default"
 ```
 
+## Environment Variables & Help
+
+### Environment Variables
+- `GEMINI_API_KEY` - Gemini API key(s), pipe-separated for fallback: `key1|key2|key3`
+- `GIA_DEFAULT_MODEL` - Default AI model (default: `gemini-2.5-flash-lite`)
+- `CONTEXT_WINDOW_LIMIT` - Context window size limit (default: 8000)
+- `GIA_AUDIO_DEVICE` - Audio recording device name or index
+- `RUST_LOG` - Logging level: `debug`, `info`, `error` (outputs to stderr)
+- `GIA_LOG_TO_FILE` - Enable per-conversation file logging: `1`
+
+### Getting Help
+```bash
+gia --help          # Full help with all options and examples
+gia -h              # Short help with basic usage
+```
+
 ## Default Behavior
 
 GIA automatically combines input from multiple sources:
