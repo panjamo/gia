@@ -97,6 +97,19 @@ set GEMINI_API_KEY=key1|key2|key3
 
 For Ollama: Install from https://ollama.ai and run `ollama serve`
 
+### Default Model Configuration
+Set default AI model:
+```bash
+# Set default model globally
+export GIA_DEFAULT_MODEL="gemini-2.5-pro"
+
+# Use Ollama model as default
+export GIA_DEFAULT_MODEL="ollama::llama3.2"
+
+# Windows
+set GIA_DEFAULT_MODEL=gemini-2.5-pro
+```
+
 ### Logging
 ```bash
 # Console logging (requires RUST_LOG to be set)
@@ -230,7 +243,13 @@ Tests use the `serial_test` crate to prevent environment variable conflicts when
 ### Build System
 - Both `gia/build.rs` and `giagui/build.rs` are identical copies that generate version info from git commit count
 - Git commands traverse up to find `.git` directory at workspace root
-- Environment variables set: `GIA_VERSION`, `GIA_COMMIT_COUNT`, `GIA_IS_DIRTY`
+**Environment variables set: `GIA_VERSION`, `GIA_COMMIT_COUNT`, `GIA_IS_DIRTY`**
+
+**Default Model Configuration**: Both CLI and GUI respect the `GIA_DEFAULT_MODEL` environment variable:
+- **Default**: `gemini-2.5-flash-lite`
+- **CLI**: Uses environment variable for `--model` flag default value
+- **GUI**: Uses environment variable for model dropdown default selection
+- **Supported formats**: Standard model names (`gemini-2.5-pro`) or provider format (`ollama::llama3.2`)
 
 ### GitHub Actions
 - Workflow builds both `gia` and `giagui` for three platforms (Windows x64, macOS Intel, macOS ARM)

@@ -80,6 +80,22 @@ gia -m "ollama::llama3.2" "your prompt here"
 
 ### Optional Configuration
 
+Configure the default AI model (default: gemini-2.5-flash-lite):
+
+```bash
+# Set default model globally
+export GIA_DEFAULT_MODEL="gemini-2.5-pro"
+
+# Use Ollama model as default
+export GIA_DEFAULT_MODEL="ollama::llama3.2"
+```
+
+**Windows:**
+```cmd
+set GIA_DEFAULT_MODEL=gemini-2.5-pro
+set GIA_DEFAULT_MODEL=ollama::llama3.2
+```
+
 Configure the context window limit (default: 8000):
 
 ```bash

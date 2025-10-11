@@ -1,3 +1,4 @@
+use crate::constants::get_default_model;
 use clap::{Arg, Command};
 use clap_complete::{generate, shells};
 use clap_complete_nushell::Nushell;
@@ -214,9 +215,9 @@ impl Config {
                 Arg::new("model")
                     .short('m')
                     .long("model")
-                    .help("Specify the model to use. Format: 'provider::model' or just 'model' for Gemini (e.g., 'ollama::llama3.2', 'gemini-2.5-flash-lite')")
+                    .help("Specify the model to use. Format: 'provider::model' or just 'model' for Gemini (e.g., 'ollama::llama3.2', 'gemini-2.5-flash-lite'). Can be set via GIA_DEFAULT_MODEL environment variable.")
                     .value_name("MODEL")
-                    .default_value("gemini-2.5-flash-lite")
+                    .default_value(&get_default_model())
                     .action(clap::ArgAction::Set),
             )
             .arg(
@@ -275,4 +276,93 @@ impl Config {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+    use serial_test::serial;
+    use std::env;
+
+    #[test]
+    #[serial]
+    fn test_default_model_from_env_var() {
+        // Clean up any existing environment variable first
+        unsafe { env::remove_var("GIA_DEFAULT_MODEL") };
+
+        // Test without environment variable - should use hardcoded default
+        let config = Config::from_args_with_test(&[]);
+        assert_eq!(config.model, "gemini-2.5-flash-lite");
+
+        // Test with environment variable
+        unsafe { env::set_var("GIA_DEFAULT_MODEL", "gemini-2.5-pro") };
+        let config = Config::from_args_with_test(&[]);
+        assert_eq!(config.model, "gemini-2.5-pro");
+
+        // Test with Ollama format
+        unsafe { env::set_var("GIA_DEFAULT_MODEL", "ollama::llama3.2") };
+        let config = Config::from_args_with_test(&[]);
+        assert_eq!(config.model, "ollama::llama3.2");
+
+        // Test that explicit command line argument overrides environment variable
+        unsafe { env::set_var("GIA_DEFAULT_MODEL", "gemini-2.5-pro") };
+        let config = Config::from_args_with_test(&["--model", "gemini-2.0-flash"]);
+        assert_eq!(config.model, "gemini-2.0-flash");
+
+        // Clean up
+        unsafe { env::remove_var("GIA_DEFAULT_MODEL") };
+    }
+
+    impl Config {
+        fn from_args_with_test(args: &[&str]) -> Self {
+            let matches = Self::build_cli()
+                .try_get_matches_from(std::iter::once("gia").chain(args.iter().copied()))
+                .unwrap();
+
+            let prompt_parts: Vec<String> = matches
+                .get_many::<String>("prompt")
+                .unwrap_or_default()
+                .cloned()
+                .collect();
+
+            let resume_conversation = matches.get_one::<String>("resume").cloned();
+
+            let output_mode = if matches.get_flag("browser-output") {
+                OutputMode::TempFileWithPreview
+            } else if matches.get_flag("clipboard-output") {
+                OutputMode::Clipboard
+            } else if let Some(lang) = matches.get_one::<String>("tts-output").cloned() {
+                OutputMode::Tts(lang)
+            } else {
+                OutputMode::Stdout
+            };
+
+            let text_files: Vec<String> = matches
+                .get_many::<String>("file")
+                .unwrap_or_default()
+                .cloned()
+                .collect();
+
+            let roles: Vec<String> = matches
+                .get_many::<String>("role")
+                .unwrap_or_default()
+                .cloned()
+                .collect();
+
+            Self {
+                prompt: prompt_parts.join(" "),
+                use_clipboard_input: matches.get_flag("clipboard-input"),
+                text_files,
+                output_mode,
+                resume_conversation,
+                resume_last: matches.get_flag("resume-last"),
+                list_conversations: matches
+                    .get_one::<String>("list-conversations")
+                    .map(|s| s.parse::<usize>().unwrap_or(0)),
+                show_conversation: matches.get_one::<String>("show-conversation").cloned(),
+                model: matches.get_one::<String>("model").unwrap().clone(),
+                record_audio: matches.get_flag("record-audio"),
+                roles,
+                ordered_content: Vec::new(),
+                spinner: matches.get_flag("spinner"),
+            }
+        }
+    }
+}

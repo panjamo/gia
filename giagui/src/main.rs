@@ -24,6 +24,11 @@ struct OllamaModel {
 
 const DEFAULT_OLLAMA_BASE_URL: &str = "http://localhost:11434";
 
+/// Get default model from environment variable or default
+fn get_default_model() -> String {
+    std::env::var("GIA_DEFAULT_MODEL").unwrap_or_else(|_| "gemini-2.5-flash-lite".to_string())
+}
+
 /// GIA GUI - Graphical user interface for the GIA command-line tool
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -291,7 +296,7 @@ impl Default for GiaApp {
             resume: false,
             response: String::new(),
             first_frame: true,
-            model: "gemini-2.5-flash-lite".to_string(),
+            model: get_default_model(),
             task: String::new(),
             role: String::new(),
             tasks,
@@ -847,5 +852,35 @@ mod tests {
         let result = fetch_ollama_models();
         assert!(result.is_empty());
         unsafe { std::env::remove_var("OLLAMA_API_BASE") };
+    }
+
+    #[test]
+    #[serial]
+    fn test_get_default_model_without_env_var() {
+        // Clean up any existing environment variable first
+        unsafe { std::env::remove_var("GIA_DEFAULT_MODEL") };
+
+        let result = get_default_model();
+        assert_eq!(result, "gemini-2.5-flash-lite");
+
+        // Clean up
+        unsafe { std::env::remove_var("GIA_DEFAULT_MODEL") };
+    }
+
+    #[test]
+    #[serial]
+    fn test_get_default_model_with_env_var() {
+        // Clean up any existing environment variable first
+        unsafe { std::env::remove_var("GIA_DEFAULT_MODEL") };
+
+        // Set a custom model via environment variable
+        let custom_model = "gemini-2.5-pro";
+        unsafe { std::env::set_var("GIA_DEFAULT_MODEL", custom_model) };
+
+        let result = get_default_model();
+        assert_eq!(result, custom_model);
+
+        // Clean up
+        unsafe { std::env::remove_var("GIA_DEFAULT_MODEL") };
     }
 }
