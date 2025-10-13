@@ -17,9 +17,9 @@ use crate::provider::{AiProvider, AiResponse};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use genai::Client;
+use genai::ServiceTarget;
 use genai::chat::{ChatMessage, ChatRequest};
 use genai::resolver::{Endpoint, ServiceTargetResolver};
-use genai::ServiceTarget;
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -51,10 +51,11 @@ impl OllamaClient {
             let url = Self::normalize_base_url(base_url);
 
             // Create resolver to override endpoint
-            let resolver = ServiceTargetResolver::from_resolver_fn(move |mut target: ServiceTarget| {
-                target.endpoint = Endpoint::from_owned(Arc::from(url.as_str()));
-                Ok(target)
-            });
+            let resolver =
+                ServiceTargetResolver::from_resolver_fn(move |mut target: ServiceTarget| {
+                    target.endpoint = Endpoint::from_owned(Arc::from(url.as_str()));
+                    Ok(target)
+                });
 
             Client::builder()
                 .with_service_target_resolver(resolver)

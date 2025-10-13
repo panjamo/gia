@@ -133,7 +133,10 @@ impl MessageContentWrapper {
             MessageContentWrapper::Parts { parts } => {
                 // Check if all parts are text-only (no images or audio)
                 let has_media = parts.iter().any(|p| {
-                    matches!(p, ContentPartWrapper::Image { .. } | ContentPartWrapper::Audio { .. })
+                    matches!(
+                        p,
+                        ContentPartWrapper::Image { .. } | ContentPartWrapper::Audio { .. }
+                    )
                 });
 
                 if !has_media && parts.len() > 1 {
