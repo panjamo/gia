@@ -131,9 +131,28 @@ impl MessageContentWrapper {
                 genai::chat::MessageContent::from_text(text.clone())
             }
             MessageContentWrapper::Parts { parts } => {
-                let content_parts: Vec<ContentPart> =
-                    parts.iter().map(|p| p.to_genai_content_part()).collect();
-                genai::chat::MessageContent::from_parts(content_parts)
+                // Check if all parts are text-only (no images or audio)
+                let has_media = parts.iter().any(|p| {
+                    matches!(p, ContentPartWrapper::Image { .. } | ContentPartWrapper::Audio { .. })
+                });
+
+                if !has_media && parts.len() > 1 {
+                    // Merge all text parts into a single text for Ollama compatibility
+                    // Ollama's OpenAI compatibility layer doesn't handle multiple text parts properly
+                    let merged_text = parts
+                        .iter()
+                        .map(|p| match p.to_genai_content_part() {
+                            ContentPart::Text(text) => text,
+                            _ => String::new(), // Should never happen since we filtered media
+                        })
+                        .collect::<Vec<String>>()
+                        .join("\n\n");
+                    genai::chat::MessageContent::from_text(merged_text)
+                } else {
+                    let content_parts: Vec<ContentPart> =
+                        parts.iter().map(|p| p.to_genai_content_part()).collect();
+                    genai::chat::MessageContent::from_parts(content_parts)
+                }
             }
         }
     }
