@@ -8,8 +8,8 @@
 //!
 //! # Environment Variables
 //!
-//! - `OLLAMA_BASE_URL`: Base URL for the Ollama server (optional, defaults to genai's default: http://localhost:11434)
-//! - `OLLAMA_MODEL`: Default model to use when not specified (e.g., "llama3.2")
+//! - `OLLAMA_BASE_URL`: Base URL for the Ollama server (optional, defaults to http://localhost:11434)
+//! - `GIA_DEFAULT_MODEL`: Default model to use (e.g., "ollama::llama3.2", "gemini-2.5-pro")
 
 use crate::conversation::TokenUsage;
 use crate::logging::{log_debug, log_info};

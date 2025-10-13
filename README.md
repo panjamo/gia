@@ -77,7 +77,7 @@ Install and start Ollama from https://ollama.ai
 **Quick setup (no Gemini API key needed):**
 ```bash
 # Set your preferred Ollama model once
-export OLLAMA_MODEL="llama3.2"
+export GIA_DEFAULT_MODEL="ollama::llama3.2"
 
 # Now use gia without any flags
 gia "your prompt here"
@@ -85,7 +85,7 @@ gia "your prompt here"
 
 **Windows:**
 ```cmd
-set OLLAMA_MODEL=llama3.2
+set GIA_DEFAULT_MODEL=ollama::llama3.2
 gia "your prompt here"
 ```
 
@@ -118,9 +118,9 @@ set GIA_DEFAULT_MODEL=gemini-2.5-pro
 set GIA_DEFAULT_MODEL=ollama::llama3.2
 ```
 
-**Priority:** `-m` flag > `OLLAMA_MODEL` > `GIA_DEFAULT_MODEL` > `gemini-2.5-flash-lite`
+**Priority:** `-m` flag > `GIA_DEFAULT_MODEL` > `gemini-2.5-flash-lite`
 
-*Note: The `-m` command-line flag always takes precedence. If not specified, `OLLAMA_MODEL` takes priority, allowing you to use Ollama without needing Gemini API keys. `GIA_DEFAULT_MODEL` only affects Gemini model selection when `OLLAMA_MODEL` is not set.*
+*Note: The `-m` command-line flag always takes precedence. Set `GIA_DEFAULT_MODEL` to `ollama::model-name` to use Ollama without needing Gemini API keys.*
 
 Configure the context window limit (default: 8000):
 
@@ -150,10 +150,9 @@ export GIA_AUDIO_DEVICE="default"
 ## Environment Variables & Help
 
 ### Environment Variables
-- `OLLAMA_MODEL` - Default Ollama model (e.g., `llama3.2`), takes priority over other defaults (no Gemini API key needed)
+- `GIA_DEFAULT_MODEL` - Default AI model (default: `gemini-2.5-flash-lite`). Use `ollama::model-name` for Ollama models
 - `OLLAMA_BASE_URL` - Ollama server URL (default: `http://localhost:11434`)
 - `GEMINI_API_KEY` - Gemini API key(s), pipe-separated for fallback: `key1|key2|key3` (not required when using Ollama)
-- `GIA_DEFAULT_MODEL` - Default Gemini model when `OLLAMA_MODEL` is not set (default: `gemini-2.5-flash-lite`)
 - `CONTEXT_WINDOW_LIMIT` - Context window size limit (default: 8000)
 - `GIA_AUDIO_DEVICE` - Audio recording device name or index
 - `RUST_LOG` - Logging level: `debug`, `info`, `error` (outputs to stderr)
