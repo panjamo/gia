@@ -6,6 +6,7 @@ pub const API_KEY_PREFIX: &str = "AIza";
 pub const DEFAULT_MODEL: &str = "gemini-2.5-flash-lite";
 
 /// Get default model from environment variable or default
+/// Priority: GIA_DEFAULT_MODEL > DEFAULT_MODEL
 pub fn get_default_model() -> String {
     std::env::var("GIA_DEFAULT_MODEL").unwrap_or_else(|_| DEFAULT_MODEL.to_string())
 }
