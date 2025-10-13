@@ -6,8 +6,21 @@ pub const API_KEY_PREFIX: &str = "AIza";
 pub const DEFAULT_MODEL: &str = "gemini-2.5-flash-lite";
 
 /// Get default model from environment variable or default
+/// Priority: OLLAMA_MODEL (with ollama:: prefix) > GIA_DEFAULT_MODEL > DEFAULT_MODEL
+/// Note: OLLAMA_MODEL takes precedence to allow easy switching to local Ollama without Gemini API keys
 pub fn get_default_model() -> String {
-    std::env::var("GIA_DEFAULT_MODEL").unwrap_or_else(|_| DEFAULT_MODEL.to_string())
+    // First check OLLAMA_MODEL - if set, always use Ollama (no Gemini)
+    if let Ok(model) = std::env::var("OLLAMA_MODEL") {
+        return format!("ollama::{}", model);
+    }
+
+    // Then check GIA_DEFAULT_MODEL - for Gemini model selection
+    if let Ok(model) = std::env::var("GIA_DEFAULT_MODEL") {
+        return model;
+    }
+
+    // Fall back to default Gemini model
+    DEFAULT_MODEL.to_string()
 }
 
 /// Conversation management constants
@@ -89,6 +102,7 @@ mod tests {
     fn test_default_model_with_empty_env_var() {
         // Clean up any existing environment variable first
         unsafe { env::remove_var("GIA_DEFAULT_MODEL") };
+        unsafe { env::remove_var("OLLAMA_MODEL") };
 
         // Set empty environment variable
         unsafe { env::set_var("GIA_DEFAULT_MODEL", "") };
@@ -96,6 +110,60 @@ mod tests {
         let result = get_default_model();
         // Empty string should still be returned (env var exists but is empty)
         assert_eq!(result, "");
+
+        // Clean up
+        unsafe { env::remove_var("GIA_DEFAULT_MODEL") };
+    }
+
+    #[test]
+    #[serial]
+    fn test_default_model_ollama_model_priority() {
+        // Clean up any existing environment variables first
+        unsafe { env::remove_var("GIA_DEFAULT_MODEL") };
+        unsafe { env::remove_var("OLLAMA_MODEL") };
+
+        // Test with only OLLAMA_MODEL set
+        unsafe { env::set_var("OLLAMA_MODEL", "llama3.2") };
+        let result = get_default_model();
+        assert_eq!(result, "ollama::llama3.2");
+
+        // Clean up
+        unsafe { env::remove_var("OLLAMA_MODEL") };
+    }
+
+    #[test]
+    #[serial]
+    fn test_default_model_ollama_over_gia_default() {
+        // Clean up any existing environment variables first
+        unsafe { env::remove_var("GIA_DEFAULT_MODEL") };
+        unsafe { env::remove_var("OLLAMA_MODEL") };
+
+        // Set both - OLLAMA_MODEL should take priority
+        unsafe { env::set_var("OLLAMA_MODEL", "llama3.2") };
+        unsafe { env::set_var("GIA_DEFAULT_MODEL", "gemini-2.5-pro") };
+
+        let result = get_default_model();
+        // OLLAMA_MODEL should win
+        assert_eq!(result, "ollama::llama3.2");
+
+        // Clean up
+        unsafe { env::remove_var("OLLAMA_MODEL") };
+        unsafe { env::remove_var("GIA_DEFAULT_MODEL") };
+    }
+
+    #[test]
+    #[serial]
+    fn test_default_model_gia_default_when_no_ollama() {
+        // Clean up any existing environment variables first
+        unsafe { env::remove_var("GIA_DEFAULT_MODEL") };
+        unsafe { env::remove_var("OLLAMA_MODEL") };
+
+        // Set only GIA_DEFAULT_MODEL
+        unsafe { env::set_var("GIA_DEFAULT_MODEL", "gemini-2.5-pro") };
+
+        let result = get_default_model();
+        // GIA_DEFAULT_MODEL should be used
+        assert_eq!(result, "gemini-2.5-pro");
 
         // Clean up
         unsafe { env::remove_var("GIA_DEFAULT_MODEL") };

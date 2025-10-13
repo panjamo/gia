@@ -80,7 +80,9 @@ cargo run -- "Tell me a joke" -T                         # Uses default: de-DE
 ```
 
 ### Environment Setup
-Set API key(s):
+
+#### Gemini API Keys
+Set API key(s) for Gemini (not required if using Ollama):
 ```bash
 # Single key
 export GEMINI_API_KEY="your_api_key_here"
@@ -95,10 +97,32 @@ set GEMINI_API_KEY=your_api_key_here
 set GEMINI_API_KEY=key1|key2|key3
 ```
 
+#### Ollama Configuration
 For Ollama: Install from https://ollama.ai and run `ollama serve`
 
+```bash
+# Set default Ollama model (optional, automatically prefixes with ollama::)
+export OLLAMA_MODEL="llama3.2"
+
+# Set custom Ollama server URL (optional, defaults to http://localhost:11434)
+export OLLAMA_BASE_URL="http://192.168.1.100:11434"
+
+# Windows
+set OLLAMA_MODEL=llama3.2
+set OLLAMA_BASE_URL=http://192.168.1.100:11434
+```
+
+With `OLLAMA_MODEL` set, you can use gia without any arguments:
+```bash
+# Just set the environment variable once
+export OLLAMA_MODEL="llama3.2"
+
+# Now you can use gia directly without -m flag or GEMINI_API_KEY
+gia "What is the capital of France?"
+```
+
 ### Default Model Configuration
-Set default AI model:
+Set default AI model (overrides OLLAMA_MODEL):
 ```bash
 # Set default model globally
 export GIA_DEFAULT_MODEL="gemini-2.5-pro"
@@ -109,6 +133,10 @@ export GIA_DEFAULT_MODEL="ollama::llama3.2"
 # Windows
 set GIA_DEFAULT_MODEL=gemini-2.5-pro
 ```
+
+**Priority:** `-m` flag > `OLLAMA_MODEL` > `GIA_DEFAULT_MODEL` > `gemini-2.5-flash-lite`
+
+*Note: The `-m` command-line flag always takes precedence. If not specified, `OLLAMA_MODEL` takes priority, allowing you to use Ollama without needing Gemini API keys. `GIA_DEFAULT_MODEL` only affects Gemini model selection when `OLLAMA_MODEL` is not set.*
 
 ### Logging
 ```bash
