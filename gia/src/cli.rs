@@ -39,6 +39,7 @@ pub struct Config {
     pub roles: Vec<String>,                  // role names to load from ~/.gia/<role>.md
     pub ordered_content: Vec<ContentSource>, // ordered content for multimodal requests
     pub spinner: bool,                       // true = show spinner during AI request
+    pub mcp_server: Option<String>,          // MCP server to connect to (e.g., "file", "git")
 }
 
 impl Config {
@@ -104,6 +105,7 @@ impl Config {
             roles,
             ordered_content: Vec::new(), // will be populated in input.rs
             spinner: matches.get_flag("spinner"),
+            mcp_server: matches.get_one::<String>("mcp-server").cloned(),
         }
     }
 
@@ -231,6 +233,13 @@ impl Config {
                     .long("spinner")
                     .help("Show visual spinner during AI request (requires giagui)")
                     .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("mcp-server")
+                    .long("mcp-server")
+                    .help("Connect to MCP server for tool access (e.g., 'file' for file operations)")
+                    .value_name("SERVER")
+                    .action(clap::ArgAction::Set),
             )
             .arg(
                 Arg::new("completions")

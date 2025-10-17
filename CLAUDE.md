@@ -150,6 +150,7 @@ This is a Cargo workspace with shared dependencies and build configuration:
 - `gia/src/clipboard.rs` - Clipboard operations using arboard
 - `gia/src/conversation.rs` - Conversation management with persistent storage
 - `gia/src/logging.rs` - Structured logging to stderr
+- `gia/src/mcp_client.rs` - MCP (Model Context Protocol) client for tool integration
 
 ### Module Structure (giagui GUI)
 - `giagui/src/main.rs` - Single-file egui application
@@ -181,6 +182,18 @@ This is a Cargo workspace with shared dependencies and build configuration:
 - Automatic conversation history inclusion in prompts
 - Context window management with automatic truncation
 - Support for resuming latest or specific conversations
+
+**MCP Tool Integration** (Phase 1 MVP - Issue #2): Integration with Model Context Protocol for extended tool capabilities:
+- `mcp_client.rs` module provides MCP server connection and tool execution
+- TCP connection to unified mcp-server (127.0.0.1:8080)
+- Tool discovery via `list_tools()` with caching
+- Tool execution via `call_tool()` with 30-second timeout
+- CLI flag `--mcp-server <category>` to connect to tool categories (git, code, web, system)
+- Graceful fallback if MCP server connection fails
+- **Server Architecture**: Unified `mcp-server` binary serves all 4 tool categories (17 total tools)
+- **Server Options**: Configurable host, port, tool categories, working directory
+- **Current Status**: Phase 1 MVP with TCP connection and mock tool implementations
+- **Future**: Phase 2 will implement actual JSON-RPC communication with MCP server API
 
 **Error Handling**: Comprehensive error handling with user-friendly messages for common issues like missing API keys, authentication failures, and rate limits.
 

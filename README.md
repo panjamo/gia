@@ -78,6 +78,57 @@ Install and start Ollama from https://ollama.ai, then use the `-m` flag:
 gia -m "ollama::llama3.2" "your prompt here"
 ```
 
+### Using MCP Tools (Model Context Protocol)
+
+**⚠️ Phase 1 MVP**: MCP integration connects to the unified `mcp-server` on `127.0.0.1:8080`.
+
+**Prerequisites:**
+```bash
+# Install mcp-tools
+cargo install mcp-tools
+
+# Start the unified MCP server (in a separate terminal)
+mcp-server
+
+# Or with custom options:
+mcp-server --host 127.0.0.1 --port 8080 --verbose
+mcp-server --tools git,code          # Enable only specific categories
+mcp-server --working-dir ./myproject # Set working directory
+```
+
+**MCP Server Options:**
+- `-h, --host <HOST>` - Server bind address (default: 127.0.0.1)
+- `-p, --port <PORT>` - Server port (default: 8080)
+- `--tools <TOOLS>` - Enable specific categories: git,code,web,system (default: all)
+- `-w, --working-dir <DIR>` - Set working directory
+- `-v, --verbose` - Enable verbose logging
+- `--config <CONFIG>` - Load configuration file
+- `--allow-unsafe` - Enable unsafe system commands (NOT RECOMMENDED)
+
+Connect to MCP tool categories:
+
+```bash
+# Connect to git tools (5 tools available)
+gia "Show recent commits" --mcp-server git
+
+# Connect to code analysis tools (4 tools available)
+gia "Analyze code complexity" --mcp-server code
+
+# Connect to web tools (4 tools available)
+gia "Fetch content from URL" --mcp-server web
+
+# Connect to system tools (4 tools available)
+gia "Show system information" --mcp-server system
+```
+
+**Available MCP Tool Categories** (17 total tools):
+- `git` - Git repository management (5 tools)
+- `code` - Code analysis and refactoring (4 tools)
+- `web` - Web scraping and HTTP operations (4 tools)
+- `system` - System information and process management (4 tools)
+
+**Current Status**: Phase 1 MVP connects to the unified MCP server via TCP. LLM autonomous tool selection will be implemented in Phase 2.
+
 ### Optional Configuration
 
 Configure the default AI model (default: gemini-2.5-flash-lite):

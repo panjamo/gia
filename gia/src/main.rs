@@ -11,6 +11,7 @@ mod gemini;
 mod image;
 mod input;
 mod logging;
+pub mod mcp_client;
 mod ollama;
 mod output;
 mod provider;

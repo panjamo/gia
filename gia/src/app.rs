@@ -7,6 +7,7 @@ use crate::conversation::TokenUsage;
 use crate::conversation::{Conversation, ConversationManager, ResourceInfo, ResourceType};
 use crate::input::get_input_text;
 use crate::logging::{log_error, log_info, setup_conversation_file_logging};
+use crate::mcp_client::{McpClient, McpConfig, ConnectionType};
 use crate::output::output_text_with_usage;
 use crate::provider::{ProviderConfig, ProviderFactory};
 use crate::spinner::SpinnerProcess;
@@ -68,6 +69,41 @@ pub async fn run_app(mut config: Config) -> Result<()> {
 
     let mut provider = ProviderFactory::create_provider(provider_config)
         .context("Failed to initialize AI provider")?;
+
+    // Initialize MCP client if --mcp-server is provided
+    let mut mcp_client: Option<McpClient> = None;
+    if let Some(server_name) = &config.mcp_server {
+        log_info(&format!("Initializing MCP tools connection (category: '{}')", server_name));
+
+        let mcp_config = McpConfig {
+            server_name: server_name.clone(),
+            connection_type: ConnectionType::Tcp,
+            command: String::new(), // Not used for TCP
+            args: vec![],
+            address: Some("127.0.0.1:8080".to_string()),
+        };
+
+        match McpClient::new(mcp_config).await {
+            Ok(mut client) => {
+                log_info(&format!("Successfully initialized MCP server '{}'", server_name));
+                
+                // List available tools
+                if let Ok(tools) = client.list_tools().await {
+                    log_info(&format!("Available tools: {}", 
+                        tools.iter().map(|t| t.name.as_str()).collect::<Vec<_>>().join(", ")
+                    ));
+                }
+                
+                mcp_client = Some(client);
+            }
+            Err(e) => {
+                eprintln!("⚠️  Warning: Failed to connect to MCP server (category '{}'): {}", server_name, e);
+                eprintln!("    Make sure the unified MCP server is running: mcp-server");
+                eprintln!("    Continuing without MCP tools...");
+                log_error(&format!("MCP client initialization failed: {}", e));
+            }
+        }
+    }
 
     // 1. Build new user message wrapper from ordered content
     let content_part_wrappers = build_content_part_wrappers(&config.ordered_content)?;
