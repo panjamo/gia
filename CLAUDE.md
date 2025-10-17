@@ -77,6 +77,11 @@ cargo run -- "What is the weather today?" -T en-US
 cargo run -- "Erzähl mir eine Geschichte" --tts de-DE
 cargo run -- "Erzähl mir eine Geschichte" --tts          # Uses default: de-DE
 cargo run -- "Tell me a joke" -T                         # Uses default: de-DE
+
+# Transcribe-only mode (no conversation history saved)
+cargo run -- --record-audio --role EN --no-save         # English transcription only
+cargo run -- --record-audio --role DE --no-save         # German transcription only
+cargo run -- "Transcribe this" --record-audio --no-save # Custom prompt transcription
 ```
 
 ### Environment Setup

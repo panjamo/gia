@@ -176,15 +176,17 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     conversation.add_message_with_usage(new_user_message_wrapper, resources, TokenUsage::default());
     conversation.add_message_with_usage(assistant_message_wrapper, Vec::new(), usage);
 
-    // Save conversation
-    conversation_manager
-        .save_conversation(&conversation)
-        .context("Failed to save conversation")?;
+    // Save conversation (only if no_save flag is not set)
+    if !config.no_save {
+        conversation_manager
+            .save_conversation(&conversation)
+            .context("Failed to save conversation")?;
 
-    // Save markdown
-    conversation_manager
-        .save_markdown(&conversation)
-        .context("Failed to save markdown")?;
+        // Save markdown
+        conversation_manager
+            .save_markdown(&conversation)
+            .context("Failed to save markdown")?;
+    }
 
     // Output response
     output_text_with_usage(&response, &config, Some(usage), &conversation.id)

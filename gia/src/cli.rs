@@ -39,6 +39,7 @@ pub struct Config {
     pub roles: Vec<String>,                  // role names to load from ~/.gia/<role>.md
     pub ordered_content: Vec<ContentSource>, // ordered content for multimodal requests
     pub spinner: bool,                       // true = show spinner during AI request
+    pub no_save: bool, // true = don't save to conversation history (transcribe-only mode)
 }
 
 impl Config {
@@ -104,6 +105,7 @@ impl Config {
             roles,
             ordered_content: Vec::new(), // will be populated in input.rs
             spinner: matches.get_flag("spinner"),
+            no_save: matches.get_flag("no-save"),
         }
     }
 
@@ -230,6 +232,12 @@ impl Config {
                 Arg::new("spinner")
                     .long("spinner")
                     .help("Show visual spinner during AI request (requires giagui)")
+                    .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("no-save")
+                    .long("no-save")
+                    .help("Don't save to conversation history (transcribe-only mode)")
                     .action(clap::ArgAction::SetTrue),
             )
             .arg(
@@ -362,6 +370,7 @@ mod tests {
                 roles,
                 ordered_content: Vec::new(),
                 spinner: matches.get_flag("spinner"),
+                no_save: matches.get_flag("no-save"),
             }
         }
     }

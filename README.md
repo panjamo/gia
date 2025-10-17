@@ -199,6 +199,11 @@ gia -a  # Short option
 # Audio recording with custom prompt:
 gia --record-audio "Transcribe and summarize this audio"
 
+# Transcribe-only mode (no conversation history saved):
+gia --record-audio --role EN --no-save         # English transcription only
+gia --record-audio --role DE --no-save         # German transcription only
+gia "Transcribe this" --record-audio --no-save # Custom prompt transcription
+
 # With clipboard input:
 gia "Summarize this text" -c
 
@@ -325,6 +330,7 @@ gia -s -b                         # Show latest conversation (file + browser)
 - `-l, --list-conversations [NUMBER]` - List saved conversations (optionally limit number)
 - `-s, --show-conversation [ID]` - Show conversation (follows output options: stdout/clipboard/file+browser)
 - `-m, --model <MODEL>` - Specify model (default: gemini-2.5-flash-lite)
+- `--no-save` - Don't save to conversation history (transcribe-only mode)
   - Gemini models: see https://ai.google.dev/gemini-api/docs/models
   - Ollama models: use `ollama::model-name` format (e.g., `ollama::llama3.2`)
 

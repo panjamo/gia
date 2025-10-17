@@ -247,6 +247,7 @@ struct GiaApp {
     tts_enabled: bool,
     tts_language: String,
     logo_texture: Option<egui::TextureHandle>,
+    clear_prompt_on_next_record: bool,
 }
 
 impl Default for GiaApp {
@@ -283,6 +284,7 @@ impl Default for GiaApp {
             tts_enabled: false,
             tts_language: "de-DE".to_string(),
             logo_texture: None,
+            clear_prompt_on_next_record: false,
         }
     }
 }
@@ -332,6 +334,10 @@ impl eframe::App for GiaApp {
         // Handle keyboard shortcuts
         if ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.ctrl) {
             self.send_prompt();
+            // Set flag to clear prompt on next record
+            if self.resume {
+                self.clear_prompt_on_next_record = true;
+            }
         }
         if ctx.input(|i| i.key_pressed(egui::Key::L) && i.modifiers.ctrl) {
             self.clear_form();
@@ -392,11 +398,16 @@ impl eframe::App for GiaApp {
                     let prompt_response = egui::ScrollArea::vertical()
                         .max_height(60.0)
                         .show(ui, |ui| {
-                            ui.add(
+                            let response = ui.add(
                                 egui::TextEdit::multiline(&mut self.prompt)
                                     .desired_width(f32::INFINITY)
                                     .desired_rows(3),
-                            )
+                            );
+                            // Reset flag if user starts typing in prompt
+                            if response.changed() {
+                                self.clear_prompt_on_next_record = false;
+                            }
+                            response
                         })
                         .inner;
 
@@ -632,6 +643,10 @@ impl eframe::App for GiaApp {
                 ui.horizontal(|ui| {
                     if ui.button("📨 Send (Ctrl+Enter)").clicked() {
                         self.send_prompt();
+                        // Set flag to clear prompt on next record
+                        if self.resume {
+                            self.clear_prompt_on_next_record = true;
+                        }
                     }
                     if ui.button("❌ Clear (Ctrl+L)").clicked() {
                         self.clear_form();
@@ -784,6 +799,7 @@ impl GiaApp {
         self.use_clipboard = false;
         self.browser_output = false;
         self.resume = false;
+        self.clear_prompt_on_next_record = false;
     }
 
     fn copy_response(&mut self) {
@@ -820,14 +836,25 @@ impl GiaApp {
 
     fn record_audio(&mut self, role: &str, prompt: &str) {
         match Command::new("gia")
-            .args(["--record-audio", "--role", role, "--spinner", prompt])
+            .args([
+                "--record-audio",
+                "--role",
+                role,
+                "--spinner",
+                "--no-save",
+                prompt,
+            ])
             .output()
         {
             Ok(output) => {
                 let audio_text = String::from_utf8_lossy(&output.stdout);
                 let trimmed_text = audio_text.trim();
                 if !trimmed_text.is_empty() {
-                    if !self.prompt.is_empty() {
+                    // Check if we should clear the prompt first
+                    if self.clear_prompt_on_next_record {
+                        self.prompt.clear();
+                        self.clear_prompt_on_next_record = false; // Reset flag after use
+                    } else if !self.prompt.is_empty() {
                         self.prompt.push(' ');
                     }
                     self.prompt.push_str(trimmed_text);
@@ -836,6 +863,8 @@ impl GiaApp {
             Err(e) => {
                 // Optionally show error in response field
                 self.response = format!("Error recording audio: {}", e);
+                // Reset flag even on error
+                self.clear_prompt_on_next_record = false;
             }
         }
     }
