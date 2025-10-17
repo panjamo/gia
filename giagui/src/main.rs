@@ -8,9 +8,6 @@ use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-#[cfg(not(target_os = "macos"))]
-use notify_rust::Notification;
-
 /// Ollama API response for /api/tags
 #[derive(Debug, Deserialize)]
 struct OllamaTagsResponse {
@@ -95,28 +92,6 @@ fn fetch_ollama_models() -> Vec<String> {
             eprintln!("Ollama: connection failed: {}", e);
             Vec::new()
         }
-    }
-}
-
-/// Show a system notification when audio recording is complete
-fn show_completion_notification() {
-    #[cfg(target_os = "macos")]
-    {
-        // On macOS, use osascript to show notification
-        let _ = std::process::Command::new("osascript")
-            .arg("-e")
-            .arg("display notification \"Recording complete! Check the response box.\" with title \"GIA Audio Recording\"")
-            .output();
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        // On Windows and Linux, use notify-rust
-        let _ = Notification::new()
-            .summary("GIA Audio Recording")
-            .body("Recording complete! Check the response box.")
-            .icon("microphone")
-            .show();
     }
 }
 
@@ -358,9 +333,6 @@ impl eframe::App for GiaApp {
         if ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.ctrl) {
             self.send_prompt();
         }
-        if ctx.input(|i| i.key_pressed(egui::Key::R) && i.modifiers.ctrl) {
-            self.send_prompt_with_audio();
-        }
         if ctx.input(|i| i.key_pressed(egui::Key::L) && i.modifiers.ctrl) {
             self.clear_form();
         }
@@ -386,12 +358,37 @@ impl eframe::App for GiaApp {
         if ctx.input(|i| i.key_pressed(egui::Key::Num4) && i.modifiers.ctrl) {
             self.tts_enabled = !self.tts_enabled;
         }
+        // Audio recording shortcuts
+        if ctx.input(|i| i.key_pressed(egui::Key::E) && i.modifiers.ctrl) {
+            self.record_audio("EN", "Transcript");
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::D) && i.modifiers.ctrl) {
+            self.record_audio("DE", "Transkribiere");
+        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical(|ui| {
                 // Prompt input
                 ui.vertical(|ui| {
-                    ui.label("Prompt:");
+                    ui.horizontal(|ui| {
+                        ui.label("Prompt:");
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui
+                                .button("🎤 DE")
+                                .on_hover_text("German transcription using role: DE (Ctrl+D)")
+                                .clicked()
+                            {
+                                self.record_audio("DE", "Transkribiere");
+                            }
+                            if ui
+                                .button("🎤 EN")
+                                .on_hover_text("English transcription using role: EN (Ctrl+E)")
+                                .clicked()
+                            {
+                                self.record_audio("EN", "Transcript");
+                            }
+                        });
+                    });
                     let prompt_response = egui::ScrollArea::vertical()
                         .max_height(60.0)
                         .show(ui, |ui| {
@@ -636,9 +633,6 @@ impl eframe::App for GiaApp {
                     if ui.button("📨 Send (Ctrl+Enter)").clicked() {
                         self.send_prompt();
                     }
-                    if ui.button("🔴 Record (Ctrl+R)").clicked() {
-                        self.send_prompt_with_audio();
-                    }
                     if ui.button("❌ Clear (Ctrl+L)").clicked() {
                         self.clear_form();
                     }
@@ -703,19 +697,12 @@ impl eframe::App for GiaApp {
 
 impl GiaApp {
     fn send_prompt(&mut self) {
-        self.execute_gia(false);
+        self.execute_gia();
     }
 
-    fn send_prompt_with_audio(&mut self) {
-        self.execute_gia(true);
-    }
-
-    fn execute_gia(&mut self, with_audio: bool) {
+    fn execute_gia(&mut self) {
         let mut args = vec![];
 
-        if with_audio {
-            args.push("--record-audio".to_string());
-        }
         if self.use_clipboard {
             args.push("-c".to_string());
         }
@@ -772,9 +759,6 @@ impl GiaApp {
         let is_executing = Arc::clone(&self.is_executing);
         let pending_response = Arc::clone(&self.pending_response);
 
-        // Check if clipboard output mode is enabled
-        let has_clipboard_output = args.iter().any(|arg| arg == "-o" || arg == "--output");
-
         thread::spawn(move || {
             let result = match Command::new("gia").args(&args).output() {
                 Ok(output) => {
@@ -787,11 +771,6 @@ impl GiaApp {
                 }
                 Err(e) => format!("Error executing gia: {}", e),
             };
-
-            // Show notification only if audio recording was used AND output is to clipboard
-            if with_audio && has_clipboard_output {
-                show_completion_notification();
-            }
 
             *pending_response.lock().unwrap() = Some(result);
             *is_executing.lock().unwrap() = false;
@@ -835,6 +814,28 @@ impl GiaApp {
             }
             Err(e) => {
                 self.response = format!("Error executing gia: {}", e);
+            }
+        }
+    }
+
+    fn record_audio(&mut self, role: &str, prompt: &str) {
+        match Command::new("gia")
+            .args(["--record-audio", "--role", role, "--spinner", prompt])
+            .output()
+        {
+            Ok(output) => {
+                let audio_text = String::from_utf8_lossy(&output.stdout);
+                let trimmed_text = audio_text.trim();
+                if !trimmed_text.is_empty() {
+                    if !self.prompt.is_empty() {
+                        self.prompt.push(' ');
+                    }
+                    self.prompt.push_str(trimmed_text);
+                }
+            }
+            Err(e) => {
+                // Optionally show error in response field
+                self.response = format!("Error recording audio: {}", e);
             }
         }
     }

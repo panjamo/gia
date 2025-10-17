@@ -217,7 +217,7 @@ impl Config {
                     .long("model")
                     .help("Specify the model to use. Format: 'provider::model' or just 'model' for Gemini (e.g., 'ollama::llama3.2', 'gemini-2.5-flash-lite'). Can be set via GIA_DEFAULT_MODEL environment variable.")
                     .value_name("MODEL")
-                    .default_value(&get_default_model())
+                    .default_value(get_default_model())
                     .action(clap::ArgAction::Set),
             )
             .arg(
