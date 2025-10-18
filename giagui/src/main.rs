@@ -687,7 +687,7 @@ impl eframe::App for GiaApp {
                 if is_executing || is_recording {
                     ui.horizontal(|ui| {
                         let label_text = if is_recording {
-                            "Recording Audio"
+                            "Recording Audio - Wait for message box before speaking"
                         } else {
                             "Executing GIA"
                         };
