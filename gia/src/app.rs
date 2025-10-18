@@ -34,6 +34,13 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     setup_conversation_file_logging(&conversation.id)
         .context("Failed to setup conversation file logging")?;
 
+    // Start spinner if requested (before any potentially time-consuming operations)
+    let _spinner = if config.spinner {
+        Some(SpinnerProcess::start())
+    } else {
+        None
+    };
+
     // Get input content (this may modify config to add clipboard images)
     get_input_text(&mut config, Some(&final_prompt)).context("Failed to get input text")?;
 
@@ -102,12 +109,7 @@ pub async fn run_app(mut config: Config) -> Result<()> {
         provider.model_name()
     ));
 
-    // Start spinner if requested
-    let _spinner = if config.spinner {
-        Some(SpinnerProcess::start())
-    } else {
-        None
-    };
+    // Spinner already started earlier if requested
 
     let ai_response = provider
         .generate_content_with_chat_messages(all_genai_messages)
