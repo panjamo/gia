@@ -50,7 +50,7 @@ impl ContentPartWrapper {
     pub fn to_genai_content_part(&self) -> ContentPart {
         match self {
             ContentPartWrapper::Prompt(text) => {
-                ContentPart::Text(format!("=== Prompt ===\n\n{}", text))
+                ContentPart::Text(format!("### Prompt\n\n{}", text))
             }
             ContentPartWrapper::RoleDefinition {
                 name,
@@ -58,9 +58,9 @@ impl ContentPartWrapper {
                 is_task,
             } => {
                 let header = if *is_task {
-                    format!("=== Task: {} ===", name)
+                    format!("### Task: {}", name)
                 } else {
-                    format!("=== Role: {} ===", name)
+                    format!("### Role: {}", name)
                 };
                 let formatted = if content.ends_with('\n') {
                     format!("{}\n{}", header, content)
@@ -71,17 +71,17 @@ impl ContentPartWrapper {
             }
             ContentPartWrapper::TextFile { path, content } => {
                 let formatted = if content.ends_with('\n') {
-                    format!("=== Content from: {} ===\n{}", path, content)
+                    format!("### Content from: {}\n\n{}", path, content)
                 } else {
-                    format!("=== Content from: {} ===\n{}\n", path, content)
+                    format!("### Content from: {}\n\n{}\n", path, content)
                 };
                 ContentPart::Text(formatted)
             }
             ContentPartWrapper::ClipboardText(text) => {
-                ContentPart::Text(format!("=== Content from: clipboard ===\n{}", text))
+                ContentPart::Text(format!("### Content from: clipboard\n\n{}", text))
             }
             ContentPartWrapper::StdinText(text) => {
-                ContentPart::Text(format!("=== Content from: stdin ===\n{}", text))
+                ContentPart::Text(format!("### Content from: stdin\n\n{}", text))
             }
             ContentPartWrapper::Image {
                 mime_type, data, ..
