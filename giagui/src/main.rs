@@ -461,23 +461,17 @@ impl eframe::App for GiaApp {
                     // Checkboxes
                     ui.group(|ui| {
                         ui.vertical(|ui| {
-                            ui.checkbox(
-                                &mut self.resume,
-                                "📥 Resume last conversation (-R) [Ctrl+1]",
-                            );
-                            ui.checkbox(
-                                &mut self.use_clipboard,
-                                "📥 Use clipboard input (-c) [Ctrl+2]",
-                            );
+                            ui.checkbox(&mut self.resume, "📥 Resume last conversation")
+                                .on_hover_text("Resume the most recent conversation (-R) [Ctrl+1]");
+                            ui.checkbox(&mut self.use_clipboard, "📥 Use clipboard input")
+                                .on_hover_text("Use content from clipboard as input (-c) [Ctrl+2]");
                             ui.add_space(3.0);
-                            ui.checkbox(
-                                &mut self.browser_output,
-                                "📤 Browser output (--browser-output) [Ctrl+3]",
-                            );
-                            ui.checkbox(
-                                &mut self.tts_enabled,
-                                "📤 Text-to-Speech (--tts) [Ctrl+4]",
-                            );
+                            ui.checkbox(&mut self.browser_output, "📤 Browser output")
+                                .on_hover_text(
+                                    "Open response in browser (--browser-output) [Ctrl+3]",
+                                );
+                            ui.checkbox(&mut self.tts_enabled, "📤 Text-to-Speech")
+                                .on_hover_text("Enable text-to-speech output (--tts) [Ctrl+4]");
                         });
                     });
 
@@ -503,7 +497,18 @@ impl eframe::App for GiaApp {
 
                     if let Some(ref texture) = self.logo_texture {
                         ui.add_space(10.0);
-                        ui.image(texture);
+                        // Make logo clickable to send prompt
+                        let logo_response = ui
+                            .add(egui::ImageButton::new(texture).frame(false))
+                            .on_hover_text("Click to send prompt (same as Send button)");
+
+                        if logo_response.clicked() {
+                            self.send_prompt();
+                            // Set flag to clear prompt on next record
+                            if self.resume {
+                                self.clear_prompt_on_next_record = true;
+                            }
+                        }
                         ui.add_space(10.0);
                     }
 
@@ -585,18 +590,18 @@ impl eframe::App for GiaApp {
                                 ui.horizontal(|ui| {
                                     ui.label("💬");
                                     egui::ComboBox::from_id_salt("tts_language_selector")
-                                        .selected_text(&self.tts_language)
+                                        .selected_text(format!("TTS: {}", &self.tts_language))
                                         .width(model_width)
                                         .show_ui(ui, |ui| {
                                             ui.selectable_value(
                                                 &mut self.tts_language,
                                                 "de-DE".to_string(),
-                                                "de-DE",
+                                                "de-DE (German)",
                                             );
                                             ui.selectable_value(
                                                 &mut self.tts_language,
                                                 "en-US".to_string(),
-                                                "en-US",
+                                                "en-US (English)",
                                             );
                                         });
                                 });
@@ -660,23 +665,47 @@ impl eframe::App for GiaApp {
 
                 // Buttons
                 ui.horizontal(|ui| {
-                    if ui.button("📨 Send (Ctrl+Enter)").clicked() {
+                    // Green Send button (3x wider)
+                    let send_button = egui::Button::new("📨")
+                        .fill(egui::Color32::from_rgb(40, 140, 40)) // Green background
+                        .min_size(egui::vec2(90.0, 0.0)); // 3x wider
+                    if ui
+                        .add(send_button)
+                        .on_hover_text("Send prompt to GIA (Ctrl+Enter)")
+                        .clicked()
+                    {
                         self.send_prompt();
                         // Set flag to clear prompt on next record
                         if self.resume {
                             self.clear_prompt_on_next_record = true;
                         }
                     }
-                    if ui.button("❌ Clear (Ctrl+L)").clicked() {
+                    if ui
+                        .button("❌")
+                        .on_hover_text("Clear all fields (Ctrl+L)")
+                        .clicked()
+                    {
                         self.clear_form();
                     }
-                    if ui.button("📋 Copy (Ctrl+Shift+C)").clicked() {
+                    if ui
+                        .button("📋")
+                        .on_hover_text("Copy response to clipboard (Ctrl+Shift+C)")
+                        .clicked()
+                    {
                         self.copy_response();
                     }
-                    if ui.button("💬 Conversation (Ctrl+O)").clicked() {
+                    if ui
+                        .button("💬")
+                        .on_hover_text("Show conversation history (Ctrl+O)")
+                        .clicked()
+                    {
                         self.show_conversation();
                     }
-                    if ui.button("❓ Help (F1)").clicked() {
+                    if ui
+                        .button("❓")
+                        .on_hover_text("Show GIA help (F1)")
+                        .clicked()
+                    {
                         self.show_help();
                     }
                 });
