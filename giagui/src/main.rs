@@ -242,8 +242,10 @@ struct GiaApp {
     roles: Vec<String>,
     ollama_models: Arc<Mutex<Vec<String>>>,
     is_executing: Arc<Mutex<bool>>,
+    is_recording: Arc<Mutex<bool>>,
     animation_time: f64,
     pending_response: Arc<Mutex<Option<String>>>,
+    pending_recording: Arc<Mutex<Option<String>>>,
     tts_enabled: bool,
     tts_language: String,
     logo_texture: Option<egui::TextureHandle>,
@@ -279,8 +281,10 @@ impl Default for GiaApp {
             roles,
             ollama_models,
             is_executing: Arc::new(Mutex::new(false)),
+            is_recording: Arc::new(Mutex::new(false)),
             animation_time: 0.0,
             pending_response: Arc::new(Mutex::new(None)),
+            pending_recording: Arc::new(Mutex::new(None)),
             tts_enabled: false,
             tts_language: "de-DE".to_string(),
             logo_texture: None,
@@ -317,6 +321,7 @@ impl eframe::App for GiaApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Cache mutex values at the start
         let is_executing = *self.is_executing.lock().unwrap();
+        let is_recording = *self.is_recording.lock().unwrap();
 
         // Check for pending response
         if let Ok(mut pending) = self.pending_response.lock()
@@ -325,8 +330,22 @@ impl eframe::App for GiaApp {
             self.response = response;
         }
 
-        // Request repaint for animation (use cached value)
-        if is_executing {
+        // Check for pending recording
+        if let Ok(mut pending) = self.pending_recording.lock()
+            && let Some(recording_text) = pending.take()
+        {
+            // Check if we should clear the prompt first
+            if self.clear_prompt_on_next_record {
+                self.prompt.clear();
+                self.clear_prompt_on_next_record = false; // Reset flag after use
+            } else if !self.prompt.is_empty() {
+                self.prompt.push(' ');
+            }
+            self.prompt.push_str(&recording_text);
+        }
+
+        // Request repaint for animation (use cached values)
+        if is_executing || is_recording {
             self.animation_time += ctx.input(|i| i.stable_dt as f64);
             ctx.request_repaint();
         }
@@ -665,9 +684,14 @@ impl eframe::App for GiaApp {
                 ui.add_space(5.0);
 
                 // Animation during execution (use cached value)
-                if is_executing {
+                if is_executing || is_recording {
                     ui.horizontal(|ui| {
-                        ui.label("Executing GIA");
+                        let label_text = if is_recording {
+                            "Recording Audio"
+                        } else {
+                            "Executing GIA"
+                        };
+                        ui.label(label_text);
 
                         // Animated spinner with rotating dots
                         let num_dots = 8;
@@ -694,7 +718,6 @@ impl eframe::App for GiaApp {
                                 .circle_filled(egui::pos2(x, y), dot_radius, color);
                         }
                     });
-                    ui.add_space(5.0);
                 }
 
                 // Response box - use remaining space
@@ -835,38 +858,40 @@ impl GiaApp {
     }
 
     fn record_audio(&mut self, role: &str, prompt: &str) {
-        match Command::new("gia")
-            .args([
-                "--record-audio",
-                "--role",
-                role,
-                "--spinner",
-                "--no-save",
-                prompt,
-            ])
-            .output()
-        {
-            Ok(output) => {
-                let audio_text = String::from_utf8_lossy(&output.stdout);
-                let trimmed_text = audio_text.trim();
-                if !trimmed_text.is_empty() {
-                    // Check if we should clear the prompt first
-                    if self.clear_prompt_on_next_record {
-                        self.prompt.clear();
-                        self.clear_prompt_on_next_record = false; // Reset flag after use
-                    } else if !self.prompt.is_empty() {
-                        self.prompt.push(' ');
+        // Start recording animation
+        *self.is_recording.lock().unwrap() = true;
+        self.animation_time = 0.0;
+
+        let is_recording = Arc::clone(&self.is_recording);
+        let pending_recording = Arc::clone(&self.pending_recording);
+        let role = role.to_string();
+        let prompt = prompt.to_string();
+
+        thread::spawn(move || {
+            let result = match Command::new("gia")
+                .args(["--record-audio", "--role", &role, "--no-save", &prompt])
+                .output()
+            {
+                Ok(output) => {
+                    let audio_text = String::from_utf8_lossy(&output.stdout);
+                    let trimmed_text = audio_text.trim();
+                    if !trimmed_text.is_empty() {
+                        trimmed_text.to_string()
+                    } else {
+                        String::new()
                     }
-                    self.prompt.push_str(trimmed_text);
                 }
+                Err(_e) => {
+                    // Return empty string on error - we'll handle this in the UI
+                    String::new()
+                }
+            };
+
+            if !result.is_empty() {
+                *pending_recording.lock().unwrap() = Some(result);
             }
-            Err(e) => {
-                // Optionally show error in response field
-                self.response = format!("Error recording audio: {}", e);
-                // Reset flag even on error
-                self.clear_prompt_on_next_record = false;
-            }
-        }
+            *is_recording.lock().unwrap() = false;
+        });
     }
 }
 
