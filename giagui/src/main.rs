@@ -104,7 +104,7 @@ fn main() -> eframe::Result<()> {
         // Spinner-only mode: small window with just a spinner, no decorations, centered
         let options = eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
-                .with_inner_size([60.0, 60.0])
+                .with_inner_size([136.0, 136.0])
                 .with_resizable(false)
                 .with_decorations(false)
                 .with_transparent(true)
@@ -203,7 +203,7 @@ impl eframe::App for SpinnerApp {
                 let num_dots = 8;
                 let radius = 20.0;
                 let dot_radius = 4.0;
-                let center = egui::pos2(30.0, 30.0); // Center of 60x60 window
+                let center = egui::pos2(68.0, 68.0); // Center of 136x136 window
 
                 for i in 0..num_dots {
                     let angle = (self.animation_time * 2.0) as f32
