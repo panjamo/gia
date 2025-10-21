@@ -131,31 +131,9 @@ impl MessageContentWrapper {
                 genai::chat::MessageContent::from_text(text.clone())
             }
             MessageContentWrapper::Parts { parts } => {
-                // Check if all parts are text-only (no images or audio)
-                let has_media = parts.iter().any(|p| {
-                    matches!(
-                        p,
-                        ContentPartWrapper::Image { .. } | ContentPartWrapper::Audio { .. }
-                    )
-                });
-
-                if !has_media && parts.len() > 1 {
-                    // Merge all text parts into a single text for Ollama compatibility
-                    // Ollama's OpenAI compatibility layer doesn't handle multiple text parts properly
-                    let merged_text = parts
-                        .iter()
-                        .map(|p| match p.to_genai_content_part() {
-                            ContentPart::Text(text) => text,
-                            _ => String::new(), // Should never happen since we filtered media
-                        })
-                        .collect::<Vec<String>>()
-                        .join("\n\n");
-                    genai::chat::MessageContent::from_text(merged_text)
-                } else {
-                    let content_parts: Vec<ContentPart> =
-                        parts.iter().map(|p| p.to_genai_content_part()).collect();
-                    genai::chat::MessageContent::from_parts(content_parts)
-                }
+                let content_parts: Vec<ContentPart> =
+                    parts.iter().map(|p| p.to_genai_content_part()).collect();
+                genai::chat::MessageContent::from_parts(content_parts)
             }
         }
     }
@@ -188,5 +166,151 @@ impl ChatMessageWrapper {
             content,
             options: None,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_message_content_wrapper_preserves_multiple_parts() {
+        // Create a wrapper with multiple text parts (simulating: prompt + file + clipboard)
+        let parts = vec![
+            ContentPartWrapper::Prompt("What is this?".to_string()),
+            ContentPartWrapper::TextFile {
+                path: "data.txt".to_string(),
+                content: "Large file content here...".to_string(),
+            },
+            ContentPartWrapper::ClipboardText("Extra context from clipboard".to_string()),
+        ];
+
+        let wrapper = MessageContentWrapper::Parts {
+            parts: parts.clone(),
+        };
+
+        // Convert to genai MessageContent
+        let genai_content = wrapper.to_genai_message_content();
+
+        // Verify that parts are preserved (not merged into single text)
+        let result_parts = genai_content.parts();
+
+        // Should have 3 separate parts for Gemini caching
+        assert_eq!(
+            result_parts.len(),
+            3,
+            "Parts should be preserved for Gemini caching"
+        );
+
+        // All parts should be Text type (with their formatting)
+        for part in result_parts {
+            assert!(
+                matches!(part, genai::chat::ContentPart::Text(_)),
+                "All parts should be ContentPart::Text"
+            );
+        }
+    }
+
+    #[test]
+    fn test_message_content_wrapper_single_text() {
+        let wrapper = MessageContentWrapper::Text {
+            text: "Simple text".to_string(),
+        };
+
+        let genai_content = wrapper.to_genai_message_content();
+        let result_parts = genai_content.parts();
+
+        assert_eq!(result_parts.len(), 1);
+        if let genai::chat::ContentPart::Text(text) = &result_parts[0] {
+            assert_eq!(text, "Simple text");
+        } else {
+            panic!("Expected Text part");
+        }
+    }
+
+    #[test]
+    fn test_chat_message_wrapper_preserves_parts_structure() {
+        // Simulate a real user message with multiple inputs
+        let parts = vec![
+            ContentPartWrapper::RoleDefinition {
+                name: "code-reviewer".to_string(),
+                content: "You are an expert code reviewer.".to_string(),
+                is_task: false,
+            },
+            ContentPartWrapper::TextFile {
+                path: "main.rs".to_string(),
+                content: "fn main() { println!(\"Hello\"); }".to_string(),
+            },
+            ContentPartWrapper::Prompt("Review this code".to_string()),
+        ];
+
+        let message_wrapper = ChatMessageWrapper {
+            role: "User".to_string(),
+            content: MessageContentWrapper::Parts { parts },
+        };
+
+        // Convert to genai ChatMessage
+        let genai_message = message_wrapper.to_genai_chat_message().unwrap();
+
+        // Verify parts are preserved in the final message
+        let result_parts = genai_message.content.parts();
+        assert_eq!(
+            result_parts.len(),
+            3,
+            "Should preserve 3 separate parts for Gemini caching"
+        );
+
+        // Verify the content formatting is correct
+        if let genai::chat::ContentPart::Text(text) = &result_parts[0] {
+            assert!(
+                text.contains("=== Role: code-reviewer ==="),
+                "Role definition should be formatted"
+            );
+        }
+
+        if let genai::chat::ContentPart::Text(text) = &result_parts[1] {
+            assert!(
+                text.contains("=== Content from: main.rs ==="),
+                "File content should be formatted"
+            );
+        }
+
+        if let genai::chat::ContentPart::Text(text) = &result_parts[2] {
+            assert!(
+                text.contains("=== Prompt ==="),
+                "Prompt should be formatted"
+            );
+        }
+    }
+
+    #[test]
+    fn test_message_with_image_preserves_parts() {
+        // Test that images are kept as separate parts
+        let parts = vec![
+            ContentPartWrapper::Image {
+                path: Some("photo.jpg".to_string()),
+                mime_type: "image/jpeg".to_string(),
+                data: "base64data".to_string(),
+            },
+            ContentPartWrapper::Prompt("What's in this image?".to_string()),
+        ];
+
+        let wrapper = MessageContentWrapper::Parts { parts };
+        let genai_content = wrapper.to_genai_message_content();
+        let result_parts = genai_content.parts();
+
+        assert_eq!(result_parts.len(), 2, "Image and text should be separate");
+
+        // First part should be Binary (image)
+        assert!(
+            matches!(result_parts[0], genai::chat::ContentPart::Binary(_)),
+            "First part should be image"
+        );
+
+        // Second part should be Text (prompt)
+        assert!(
+            matches!(result_parts[1], genai::chat::ContentPart::Text(_)),
+            "Second part should be text"
+        );
     }
 }
