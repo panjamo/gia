@@ -9,8 +9,7 @@ flowchart LR
     AUDIO[Audio Recording<br/>-a, --record-audio<br/>Uses ffmpeg]
     CLIPBOARD[Clipboard Content<br/>-c, --clipboard-input<br/>Auto-detects text vs images]
     STDIN[Standard Input<br/>Auto-detected when piped]
-    TEXTFILES[Text Files<br/>-f, --file<br/>Any extension]
-    MEDIAFILES[Media Files<br/>-i, --image<br/>JPEG, PNG, WebP, HEIC, PDF<br/>OGG, OPUS, MP3, M4A, MP4]
+    FILES[Files or Folders<br/>-f, --file<br/>Any extension and<br/>JPEG, PNG, WebP, HEIC, PDF<br/>OGG, OPUS, MP3, M4A, MP4]
     ROLES[Roles & Tasks<br/>-t, --role<br/>From ~/.gia/roles/ or ~/.gia/tasks/]
     RESUME[Resume Conversation<br/>-r, --resume<br/>Continue previous conversation]
 
@@ -28,8 +27,7 @@ flowchart LR
     AUDIO --> GIA
     CLIPBOARD --> GIA
     STDIN --> GIA
-    TEXTFILES --> GIA
-    MEDIAFILES --> GIA
+    FILES --> GIA
     ROLES --> GIA
     RESUME --> GIA
 
@@ -45,7 +43,7 @@ flowchart LR
     classDef core fill:#fff3e0,stroke:#e65100,stroke-width:3px,color:#000000
     classDef storage fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px,color:#000000
 
-    class CMD,AUDIO,CLIPBOARD,STDIN,TEXTFILES,MEDIAFILES,ROLES,RESUME inputSource
+    class CMD,AUDIO,CLIPBOARD,STDIN,FILES,ROLES,RESUME inputSource
     class STDOUT,CLIPOUT,BROWSER,TTS outputDest
     class GIA core
 ```
