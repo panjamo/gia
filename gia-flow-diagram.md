@@ -9,7 +9,7 @@ flowchart LR
     AUDIO[Audio Recording<br/>-a, --record-audio<br/>Uses ffmpeg]
     CLIPBOARD[Clipboard Content<br/>-c, --clipboard-input<br/>Auto-detects text vs images]
     STDIN[Standard Input<br/>Auto-detected when piped]
-    FILES[Files or Folders<br/>-f, --file<br/>Any extension and<br/>JPEG, PNG, WebP, HEIC, PDF<br/>OGG, OPUS, MP3, M4A, MP4]
+    FILES[Files<br/>-f, --file<br/>Auto-detects: Text & Media<br/>JPEG, PNG, WebP, HEIC, PDF<br/>OGG, OPUS, MP3, M4A, MP4]
     ROLES[Roles & Tasks<br/>-t, --role<br/>From ~/.gia/roles/ or ~/.gia/tasks/]
     RESUME[Resume Conversation<br/>-r, --resume<br/>Continue previous conversation]
 
@@ -54,10 +54,9 @@ flowchart LR
 2. **Audio Recording** (-a) - Record audio using ffmpeg, auto-generates prompt
 3. **Clipboard Content** (-c) - Auto-detects text vs images
 4. **Standard Input** - Automatically detected when piped
-5. **Text Files** (-f) - Any file extension, content added to prompt
-6. **Media Files** (-i) - Images, audio, video files for AI analysis
-7. **Roles & Tasks** (-t) - Load AI personas and instructions from markdown files
-8. **Resume Conversation** (-r) - Continue previous conversations with context
+5. **Files** (-f) - Auto-detects text and media files (images, audio, video, PDFs)
+6. **Roles & Tasks** (-t) - Load AI personas and instructions from markdown files
+7. **Resume Conversation** (-r) - Continue previous conversations with context
 
 ## Output Destinations
 
@@ -79,7 +78,7 @@ flowchart LR
 
 ```bash
 # Multiple inputs to clipboard output
-gia "Analyze this code and documentation" -f README.md -f main.rs -i diagram.png -o
+gia "Analyze this code and documentation" -f README.md -f main.rs -f diagram.png -o
 
 # Audio + text with browser preview
 gia -a "Also consider this context" -c -b
@@ -88,7 +87,7 @@ gia -a "Also consider this context" -c -b
 gia --resume "Continue with this new data" -f data.csv
 
 # Role-based analysis with multiple sources
-gia -t code-review "Review this implementation" -f src/ -i architecture.png
+gia -t code-review "Review this implementation" -f src/ -f architecture.png
 
 # Generate conventional commit message from git diff
 git diff --cached | gia 'Generate conventional commit message. Use Emojis in subject (Gitmoji). Do NOT explain your Procedure.'
