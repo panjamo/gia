@@ -7,7 +7,7 @@ use crate::conversation::TokenUsage;
 use crate::conversation::{Conversation, ConversationManager, ResourceInfo, ResourceType};
 use crate::input::get_input_text;
 use crate::logging::{log_error, log_info, setup_conversation_file_logging};
-use crate::output::output_text_with_usage;
+use crate::output::{output_text_with_usage, show_startup_notification_if_needed};
 use crate::provider::{ProviderConfig, ProviderFactory};
 use crate::spinner::SpinnerProcess;
 
@@ -40,6 +40,9 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     } else {
         None
     };
+
+    // Show startup notification if audio recording is enabled and spinner is not active
+    show_startup_notification_if_needed(&config);
 
     // Get input content (this may modify config to add clipboard images)
     get_input_text(&mut config, Some(&final_prompt)).context("Failed to get input text")?;
