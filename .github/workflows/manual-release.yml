@@ -114,6 +114,32 @@ jobs:
         path: target/x86_64-apple-darwin/release/giagui
         retention-days: 1
 
+    - name: Prepare Package Build Directories
+      run: |
+        mkdir -p packages/bin
+        mkdir -p packages/macos/payload/bin
+
+    - name: Copy Binaries for Package
+      run: |
+        cp target/x86_64-apple-darwin/release/gia packages/bin/gia
+        cp target/x86_64-apple-darwin/release/giagui packages/bin/giagui
+
+    - name: Build macOS Package
+      run: |
+        cd packages/macos
+        # Get version from git (consistent with workflow version detection)
+        COMMIT_COUNT=$(git rev-list --count HEAD)
+        VERSION="0.1.$COMMIT_COUNT"
+        echo "Building package with version: $VERSION"
+        ./build-package.sh "$VERSION"
+
+    - name: Upload macOS Intel Package
+      uses: actions/upload-artifact@v4
+      with:
+        name: gia-macos-intel-pkg
+        path: packages/gia-*.pkg
+        retention-days: 1
+
   build-macos-arm:
     runs-on: macos-latest  # ARM runner
     steps:
@@ -200,6 +226,12 @@ jobs:
         name: giagui-macos-intel
         path: ./artifacts/macos-intel
 
+    - name: Download macOS Intel Package
+      uses: actions/download-artifact@v4
+      with:
+        name: gia-macos-intel-pkg
+        path: ./artifacts/macos-intel-pkg
+
     - name: Download macOS ARM gia Binary
       uses: actions/download-artifact@v4
       with:
@@ -251,10 +283,11 @@ jobs:
         cp ./artifacts/macos-arm/gia ./gia-macos-aarch64
         cp ./artifacts/macos-arm/giagui ./giagui-macos-aarch64
 
-        # Copy macOS package (keep original name with version)
-        cp ./artifacts/macos-arm-pkg/*.pkg ./
+        # Copy macOS packages (keep original names with version)
+        cp ./artifacts/macos-intel-pkg/*.pkg ./gia-intel-installer.pkg
+        cp ./artifacts/macos-arm-pkg/*.pkg ./gia-arm-installer.pkg
 
-        # Upload binaries and package
+        # Upload binaries and packages
         gh release upload "${{ needs.detect-version.outputs.version }}" \
           ./gia-windows-x86_64.exe \
           ./giagui-windows-x86_64.exe \
@@ -262,4 +295,5 @@ jobs:
           ./giagui-macos-x86_64 \
           ./gia-macos-aarch64 \
           ./giagui-macos-aarch64 \
-          ./gia-*-installer.pkg
+          ./gia-intel-installer.pkg \
+          ./gia-arm-installer.pkg
