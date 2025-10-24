@@ -144,6 +144,32 @@ jobs:
         path: target/aarch64-apple-darwin/release/giagui
         retention-days: 1
 
+    - name: Prepare Package Build Directories
+      run: |
+        mkdir -p packages/bin
+        mkdir -p packages/macos/payload/bin
+
+    - name: Copy Binaries for Package
+      run: |
+        cp target/aarch64-apple-darwin/release/gia packages/bin/gia
+        cp target/aarch64-apple-darwin/release/giagui packages/bin/giagui
+
+    - name: Build macOS Package
+      run: |
+        cd packages/macos
+        # Get version from git (consistent with workflow version detection)
+        COMMIT_COUNT=$(git rev-list --count HEAD)
+        VERSION="0.1.$COMMIT_COUNT"
+        echo "Building package with version: $VERSION"
+        ./build-package.sh "$VERSION"
+
+    - name: Upload macOS ARM Package
+      uses: actions/upload-artifact@v4
+      with:
+        name: gia-macos-arm-pkg
+        path: packages/gia-*.pkg
+        retention-days: 1
+
   create-release:
     needs: [detect-version, build-windows, build-macos-intel, build-macos-arm]
     runs-on: ubuntu-latest
@@ -186,6 +212,12 @@ jobs:
         name: giagui-macos-arm
         path: ./artifacts/macos-arm
 
+    - name: Download macOS ARM Package
+      uses: actions/download-artifact@v4
+      with:
+        name: gia-macos-arm-pkg
+        path: ./artifacts/macos-arm-pkg
+
     - name: Create Release and Upload Assets
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -219,11 +251,15 @@ jobs:
         cp ./artifacts/macos-arm/gia ./gia-macos-aarch64
         cp ./artifacts/macos-arm/giagui ./giagui-macos-aarch64
 
-        # Upload binaries
+        # Copy macOS package (keep original name with version)
+        cp ./artifacts/macos-arm-pkg/*.pkg ./
+
+        # Upload binaries and package
         gh release upload "${{ needs.detect-version.outputs.version }}" \
           ./gia-windows-x86_64.exe \
           ./giagui-windows-x86_64.exe \
           ./gia-macos-x86_64 \
           ./giagui-macos-x86_64 \
           ./gia-macos-aarch64 \
-          ./giagui-macos-aarch64
+          ./giagui-macos-aarch64 \
+          ./gia-*-installer.pkg

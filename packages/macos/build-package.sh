@@ -5,9 +5,15 @@
 
 set -e
 
+# Accept version as first argument, or use default
+if [ -n "$1" ]; then
+    PACKAGE_VERSION="$1"
+else
+    PACKAGE_VERSION="0.1.182"
+fi
+
 # Configuration
 PACKAGE_NAME="gia"
-PACKAGE_VERSION="0.1.182"
 PACKAGE_IDENTIFIER="com.gia.cli"
 BUILD_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$BUILD_DIR")"
@@ -87,7 +93,7 @@ cat > "${DISTRIBUTION_XML}.tmp" << 'EOF'
     <choice id="com.gia.cli" visible="false">
         <pkg-ref id="com.gia.cli"/>
     </choice>
-    <pkg-ref id="com.gia.cli" version="0.1.182" onConclusion="none">gia-component.pkg</pkg-ref>
+    <pkg-ref id="com.gia.cli" version="$PACKAGE_VERSION" onConclusion="none">gia-component.pkg</pkg-ref>
 </installer-gui-script>
 EOF
 
