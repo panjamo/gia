@@ -114,6 +114,32 @@ jobs:
         path: target/x86_64-apple-darwin/release/giagui
         retention-days: 1
 
+    - name: Prepare Package Build Directories
+      run: |
+        mkdir -p packages/bin
+        mkdir -p packages/macos/payload/bin
+
+    - name: Copy Binaries for Package
+      run: |
+        cp target/x86_64-apple-darwin/release/gia packages/bin/gia
+        cp target/x86_64-apple-darwin/release/giagui packages/bin/giagui
+
+    - name: Build macOS Package
+      run: |
+        cd packages/macos
+        # Get version from git (consistent with workflow version detection)
+        COMMIT_COUNT=$(git rev-list --count HEAD)
+        VERSION="0.1.$COMMIT_COUNT"
+        echo "Building package with version: $VERSION"
+        ./build-package.sh "$VERSION"
+
+    - name: Upload macOS Intel Package
+      uses: actions/upload-artifact@v4
+      with:
+        name: gia-macos-intel-pkg
+        path: packages/gia-*.pkg
+        retention-days: 1
+
   build-macos-arm:
     runs-on: macos-latest  # ARM runner
     steps:
@@ -142,6 +168,32 @@ jobs:
       with:
         name: giagui-macos-arm
         path: target/aarch64-apple-darwin/release/giagui
+        retention-days: 1
+
+    - name: Prepare Package Build Directories
+      run: |
+        mkdir -p packages/bin
+        mkdir -p packages/macos/payload/bin
+
+    - name: Copy Binaries for Package
+      run: |
+        cp target/aarch64-apple-darwin/release/gia packages/bin/gia
+        cp target/aarch64-apple-darwin/release/giagui packages/bin/giagui
+
+    - name: Build macOS Package
+      run: |
+        cd packages/macos
+        # Get version from git (consistent with workflow version detection)
+        COMMIT_COUNT=$(git rev-list --count HEAD)
+        VERSION="0.1.$COMMIT_COUNT"
+        echo "Building package with version: $VERSION"
+        ./build-package.sh "$VERSION"
+
+    - name: Upload macOS ARM Package
+      uses: actions/upload-artifact@v4
+      with:
+        name: gia-macos-arm-pkg
+        path: packages/gia-*.pkg
         retention-days: 1
 
   create-release:
@@ -174,6 +226,12 @@ jobs:
         name: giagui-macos-intel
         path: ./artifacts/macos-intel
 
+    - name: Download macOS Intel Package
+      uses: actions/download-artifact@v4
+      with:
+        name: gia-macos-intel-pkg
+        path: ./artifacts/macos-intel-pkg
+
     - name: Download macOS ARM gia Binary
       uses: actions/download-artifact@v4
       with:
@@ -185,6 +243,12 @@ jobs:
       with:
         name: giagui-macos-arm
         path: ./artifacts/macos-arm
+
+    - name: Download macOS ARM Package
+      uses: actions/download-artifact@v4
+      with:
+        name: gia-macos-arm-pkg
+        path: ./artifacts/macos-arm-pkg
 
     - name: Create Release and Upload Assets
       env:
@@ -219,11 +283,17 @@ jobs:
         cp ./artifacts/macos-arm/gia ./gia-macos-aarch64
         cp ./artifacts/macos-arm/giagui ./giagui-macos-aarch64
 
-        # Upload binaries
+        # Copy macOS packages (keep original names with version)
+        cp ./artifacts/macos-intel-pkg/*.pkg ./gia-intel-installer.pkg
+        cp ./artifacts/macos-arm-pkg/*.pkg ./gia-arm-installer.pkg
+
+        # Upload binaries and packages
         gh release upload "${{ needs.detect-version.outputs.version }}" \
           ./gia-windows-x86_64.exe \
           ./giagui-windows-x86_64.exe \
           ./gia-macos-x86_64 \
           ./giagui-macos-x86_64 \
           ./gia-macos-aarch64 \
-          ./giagui-macos-aarch64
+          ./giagui-macos-aarch64 \
+          ./gia-intel-installer.pkg \
+          ./gia-arm-installer.pkg

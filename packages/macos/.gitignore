@@ -1,0 +1,10 @@
+# Build artifacts
+*.pkg
+Distribution.xml
+*.html
+
+# Payload binaries (copied during build)
+payload/bin/gia
+
+# macOS metadata
+.DS_Store
