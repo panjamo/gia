@@ -26,6 +26,12 @@ pub trait AiProvider: Debug + Send + Sync {
 
     /// Get provider-specific information (e.g., "Gemini", "OpenAI", etc.)
     fn provider_name(&self) -> &str;
+
+    /// Get the current API key index (for caching), if applicable
+    #[allow(dead_code)]
+    fn current_api_key_index(&self) -> Option<usize> {
+        None
+    }
 }
 
 /// Configuration for creating AI providers
@@ -33,6 +39,7 @@ pub trait AiProvider: Debug + Send + Sync {
 pub struct ProviderConfig {
     pub model: String,
     pub api_keys: Vec<String>,
+    pub preferred_api_key_index: usize,
 }
 
 /// Factory for creating AI providers
@@ -52,8 +59,11 @@ impl ProviderFactory {
 
         match provider_name.to_lowercase().as_str() {
             "gemini" => {
-                let client =
-                    crate::gemini::GeminiClient::new(model_name.to_string(), config.api_keys)?;
+                let client = crate::gemini::GeminiClient::new(
+                    model_name.to_string(),
+                    config.api_keys,
+                    config.preferred_api_key_index,
+                )?;
                 Ok(Box::new(client))
             }
             "ollama" => {
@@ -79,6 +89,7 @@ mod tests {
         let config = ProviderConfig {
             model: "ollama::llama3.2".to_string(),
             api_keys: Vec::new(),
+            preferred_api_key_index: 0,
         };
         let result = ProviderFactory::create_provider(config);
         assert!(result.is_ok());
@@ -90,8 +101,45 @@ mod tests {
         let config = ProviderConfig {
             model: "unknown::model".to_string(),
             api_keys: Vec::new(),
+            preferred_api_key_index: 0,
         };
         let result = ProviderFactory::create_provider(config);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_provider_config_with_api_key_index() {
+        // Test that ProviderConfig correctly stores API key index
+        let config = ProviderConfig {
+            model: "gemini-2.5-pro".to_string(),
+            api_keys: vec![
+                "AIzaSyKey1ForTesting123456789012345".to_string(),
+                "AIzaSyKey2ForTesting123456789012345".to_string(),
+                "AIzaSyKey3ForTesting123456789012345".to_string(),
+            ],
+            preferred_api_key_index: 2,
+        };
+
+        assert_eq!(config.preferred_api_key_index, 2);
+        assert_eq!(config.api_keys.len(), 3);
+    }
+
+    #[test]
+    fn test_provider_config_cloning() {
+        // Test that ProviderConfig can be cloned and preserves API key index
+        let original = ProviderConfig {
+            model: "gemini-2.5-flash".to_string(),
+            api_keys: vec!["AIzaSyKey1ForTesting123456789012345".to_string()],
+            preferred_api_key_index: 1,
+        };
+
+        let cloned = original.clone();
+
+        assert_eq!(cloned.model, original.model);
+        assert_eq!(cloned.api_keys, original.api_keys);
+        assert_eq!(
+            cloned.preferred_api_key_index,
+            original.preferred_api_key_index
+        );
     }
 }

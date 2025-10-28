@@ -126,7 +126,8 @@ fn show_audio_completion_notification(output_mode: &OutputMode) {
 
 /// Show a system notification when audio recording starts
 fn show_audio_startup_notification() {
-    let message = "GIA is now running and ready to record. The recording window will appear shortly.";
+    let message =
+        "GIA is now running and ready to record. The recording window will appear shortly.";
 
     #[cfg(target_os = "macos")]
     {
