@@ -586,8 +586,6 @@ impl ConversationManager {
 #[derive(Debug)]
 pub struct ConversationSummary {
     pub id: String,
-    #[allow(dead_code)]
-    pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub message_count: usize,
     pub first_user_message: Option<String>,
@@ -611,7 +609,6 @@ impl ConversationSummary {
 
         Self {
             id: conversation.id.clone(),
-            created_at: conversation.created_at,
             updated_at: conversation.updated_at,
             message_count: conversation.messages.len(),
             first_user_message,
