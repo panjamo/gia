@@ -41,17 +41,11 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     setup_conversation_file_logging(&conversation.id)
         .context("Failed to setup conversation file logging")?;
 
-    // Start spinner if requested (before any potentially time-consuming operations)
-    let _spinner = if config.spinner {
-        Some(SpinnerProcess::start())
-    } else {
-        None
-    };
-
     // Show startup notification if audio recording is enabled and spinner is not active
     show_startup_notification_if_needed(&config);
 
     // Get input content (this may modify config to add clipboard images)
+    // Note: Audio recording happens here, so spinner must start AFTER this
     get_input_text(&mut config, Some(&final_prompt)).context("Failed to get input text")?;
 
     if config.ordered_content.is_empty() {
@@ -66,6 +60,13 @@ pub async fn run_app(mut config: Config) -> Result<()> {
         "Processing prompt with {} content source(s)",
         config.ordered_content.len()
     ));
+
+    // Start spinner now (after audio recording completes, before AI operations)
+    let _spinner = if config.spinner {
+        Some(SpinnerProcess::start())
+    } else {
+        None
+    };
 
     // Truncate conversation if it's getting too long
     conversation.truncate_if_needed(get_context_window_limit());
