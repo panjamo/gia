@@ -12,7 +12,7 @@ This workspace contains two binaries:
 
 - Uses command line arguments as the main prompt
 - **Roles & Tasks** - Load AI role definitions and task instructions from markdown files
-- **Audio recording** - Record audio prompts using ffmpeg with `-a` flag
+- **Audio recording** - Record audio prompts natively with `-a` flag (no external dependencies)
 - **Smart file support** - Include any files or directories
   - `-f` flag: Automatically detects media files (JPEG, PNG, WebP, HEIC, PDF, OGG, OPUS, MP3, M4A, MP4) vs text files
   - Supports directories (processes all files recursively with auto-detection)
@@ -29,11 +29,7 @@ This workspace contains two binaries:
 
 1. Clone this repository
 2. Install Rust if you haven't already
-3. For audio recording support, install ffmpeg:
-   - **Windows**: Download from https://ffmpeg.org/download.html and add to PATH
-   - **macOS**: `brew install ffmpeg`
-   - **Linux**: `sudo apt install ffmpeg` (Ubuntu/Debian) or equivalent for your distribution
-4. Build the project:
+3. Build the project:
    ```bash
    # Build both binaries
    cargo build --release
@@ -102,24 +98,7 @@ Configure the context window limit (default: 8000):
 export CONTEXT_WINDOW_LIMIT=10000
 ```
 
-For audio recording, optionally set your preferred audio device:
 
-**Windows:**
-```cmd
-set GIA_AUDIO_DEVICE=Headset (WH-1000XM2)
-```
-
-**macOS:**
-```bash
-# Use device index (0, 1, 2, etc.) - run with RUST_LOG=debug to see available devices
-export GIA_AUDIO_DEVICE="0"
-```
-
-**Linux:**
-```bash
-# Use device name or "default"
-export GIA_AUDIO_DEVICE="default"
-```
 
 ## Environment Variables & Help
 
@@ -127,7 +106,6 @@ export GIA_AUDIO_DEVICE="default"
 - `GEMINI_API_KEY` - Gemini API key(s), pipe-separated for fallback: `key1|key2|key3`
 - `GIA_DEFAULT_MODEL` - Default AI model (default: `gemini-2.5-flash-lite`)
 - `CONTEXT_WINDOW_LIMIT` - Context window size limit (default: 8000)
-- `GIA_AUDIO_DEVICE` - Audio recording device name or index
 - `RUST_LOG` - Logging level: `debug`, `info`, `error` (outputs to stderr)
 - `GIA_LOG_TO_FILE` - Enable per-conversation file logging: `1`
 
@@ -141,7 +119,7 @@ gia -h              # Short help with basic usage
 
 GIA automatically combines input from multiple sources:
 - **Command line**: Main prompt (required, except when using `-a` alone)
-- **Audio recording**: With `-a` flag (requires ffmpeg)
+- **Audio recording**: With `-a` flag (native recording, no external dependencies)
 - **Stdin**: Automatically detected when piped
 - **Clipboard**: With `-c` flag only
 - **Text files**: With `-f` flag (any extension)
