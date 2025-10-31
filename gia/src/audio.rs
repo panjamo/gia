@@ -1,11 +1,12 @@
 use anyhow::{Context, Result};
-use cpal::traits::{DeviceTrait, HostTrait};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use native_dialog::MessageDialog;
 use regex::Regex;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -40,6 +41,210 @@ fn validate_audio_device(device: &str) -> Result<String> {
     Ok(device.to_string())
 }
 
+/// Record audio natively using cpal (fast recording to WAV, then quick FFmpeg conversion)
+/// Returns the path to the recorded Opus file
+pub fn record_audio_native() -> Result<String> {
+    log_debug("Starting native audio recording with cpal");
+
+    // Generate unique filenames for WAV and Opus
+    let temp_dir = std::env::temp_dir();
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let wav_file = temp_dir.join(format!("{timestamp}-prompt.wav"));
+    let opus_file = temp_dir.join(format!("{timestamp}-prompt.opus"));
+    let wav_path = wav_file.to_string_lossy().to_string();
+    let opus_path = opus_file.to_string_lossy().to_string();
+
+    log_debug(&format!("Recording to: {wav_path}"));
+
+    // Get audio device and configuration
+    let host = cpal::default_host();
+    let device = host
+        .default_input_device()
+        .ok_or_else(|| anyhow::anyhow!("No default input device available"))?;
+
+    let device_name = device.name().unwrap_or_else(|_| "Unknown".to_string());
+    log_info(&format!("Using audio device: {device_name}"));
+    eprintln!("🎙️  Recording audio from device: {device_name}");
+
+    let config = device
+        .default_input_config()
+        .context("Failed to get default input config")?;
+
+    log_debug(&format!(
+        "Audio config - Sample rate: {}, Channels: {}, Format: {:?}",
+        config.sample_rate().0,
+        config.channels(),
+        config.sample_format()
+    ));
+
+    // Create WAV writer
+    let spec = hound::WavSpec {
+        channels: config.channels(),
+        sample_rate: config.sample_rate().0,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+
+    let writer = Arc::new(Mutex::new(
+        hound::WavWriter::create(&wav_path, spec).context("Failed to create WAV writer")?,
+    ));
+    let writer_clone = Arc::clone(&writer);
+
+    log_debug("WAV writer created successfully");
+
+    // Flag to signal recording stop
+    let recording = Arc::new(Mutex::new(true));
+    let recording_clone = Arc::clone(&recording);
+
+    // Build input stream based on sample format - write directly to WAV
+    let stream = match config.sample_format() {
+        cpal::SampleFormat::F32 => device.build_input_stream(
+            &config.into(),
+            move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                if *recording_clone.lock().unwrap() {
+                    let mut writer = writer_clone.lock().unwrap();
+                    for &sample in data {
+                        let _ = writer.write_sample((sample * 32767.0) as i16);
+                    }
+                }
+            },
+            |err| log_debug(&format!("Stream error: {err}")),
+            None,
+        ),
+        cpal::SampleFormat::I16 => device.build_input_stream(
+            &config.into(),
+            move |data: &[i16], _: &cpal::InputCallbackInfo| {
+                if *recording_clone.lock().unwrap() {
+                    let mut writer = writer_clone.lock().unwrap();
+                    for &sample in data {
+                        let _ = writer.write_sample(sample);
+                    }
+                }
+            },
+            |err| log_debug(&format!("Stream error: {err}")),
+            None,
+        ),
+        cpal::SampleFormat::U16 => device.build_input_stream(
+            &config.into(),
+            move |data: &[u16], _: &cpal::InputCallbackInfo| {
+                if *recording_clone.lock().unwrap() {
+                    let mut writer = writer_clone.lock().unwrap();
+                    for &sample in data {
+                        let _ = writer.write_sample((sample as i32 - 32768) as i16);
+                    }
+                }
+            },
+            |err| log_debug(&format!("Stream error: {err}")),
+            None,
+        ),
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Unsupported sample format: {:?}",
+                config.sample_format()
+            ))
+        }
+    }
+    .context("Failed to build input stream")?;
+
+    // Start recording
+    stream.play().context("Failed to start audio stream")?;
+    log_debug("Audio stream started");
+
+    // Wait a bit for stream to initialize
+    thread::sleep(Duration::from_millis(100));
+
+    // Show message dialog to stop recording
+    log_debug("Showing message dialog to stop recording");
+    let dialog_text = format!(
+        "🎙️  Recording in progress from device:\n{}\n\nClick Yes to stop and continue, or No to abort.",
+        device_name
+    );
+    let user_confirmed = MessageDialog::new()
+        .set_title("Stop Recording")
+        .set_text(&dialog_text)
+        .set_type(native_dialog::MessageType::Info)
+        .show_confirm()
+        .context("Failed to show recording dialog")?;
+
+    if !user_confirmed {
+        log_debug("User pressed Cancel, aborting");
+        *recording.lock().unwrap() = false;
+        drop(stream);
+        return Err(anyhow::anyhow!("Recording cancelled by user"));
+    }
+
+    log_debug("User clicked OK, stopping recording");
+
+    // Stop recording
+    *recording.lock().unwrap() = false;
+    drop(stream);
+
+    // Finalize WAV file
+    Arc::try_unwrap(writer)
+        .map_err(|_| anyhow::anyhow!("Failed to unwrap WAV writer Arc"))?
+        .into_inner()
+        .map_err(|_| anyhow::anyhow!("Failed to unwrap WAV writer Mutex"))?
+        .finalize()
+        .context("Failed to finalize WAV file")?;
+
+    log_debug("WAV file finalized");
+
+    // Check WAV file size
+    let wav_size = fs::metadata(&wav_path)
+        .context("Failed to get WAV file metadata")?
+        .len();
+
+    if wav_size == 0 {
+        return Err(anyhow::anyhow!("WAV file is empty - no audio recorded"));
+    }
+
+    log_info(&format!("✅ Recorded WAV file: {wav_size} bytes"));
+
+    // Convert WAV to Opus using FFmpeg (fast since WAV is already recorded)
+    log_debug("Converting WAV to Opus with FFmpeg...");
+    eprintln!("🔄 Converting to Opus format...");
+
+    let output = Command::new("ffmpeg")
+        .args([
+            "-i",
+            &wav_path,
+            "-c:a",
+            "libopus",
+            "-b:a",
+            "32k",
+            "-y", // Overwrite output file
+            &opus_path,
+        ])
+        .output()
+        .context("Failed to run FFmpeg for WAV to Opus conversion")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        log_debug(&format!("FFmpeg conversion failed: {stderr}"));
+        return Err(anyhow::anyhow!("FFmpeg conversion to Opus failed"));
+    }
+
+    // Clean up WAV file
+    let _ = fs::remove_file(&wav_path);
+
+    // Verify Opus file
+    let opus_size = fs::metadata(&opus_path)
+        .context("Failed to get Opus file metadata")?
+        .len();
+
+    if opus_size == 0 {
+        return Err(anyhow::anyhow!("Opus conversion failed - output file is empty"));
+    }
+
+    log_info(&format!("✅ Converted to Opus: {opus_size} bytes"));
+    eprintln!("✅ Audio recording complete!");
+
+    Ok(opus_path)
+}
+
 /// Get the default audio input device using cpal
 /// Returns the device name if detected, None otherwise
 fn get_cpal_default_device() -> Option<String> {
@@ -59,8 +264,30 @@ fn get_cpal_default_device() -> Option<String> {
     None
 }
 
-/// Record audio using ffmpeg and return the path to the recorded file
+/// Record audio using native Rust implementation (cpal + opus)
+/// Falls back to FFmpeg if native recording fails
 pub fn record_audio() -> Result<String> {
+    // Try native recording first (faster, no external dependencies)
+    log_debug("Attempting native audio recording...");
+    match record_audio_native() {
+        Ok(path) => {
+            log_info("Native audio recording successful");
+            return Ok(path);
+        }
+        Err(e) => {
+            log_debug(&format!(
+                "Native recording failed: {e}, falling back to FFmpeg"
+            ));
+            eprintln!("⚠️  Native recording unavailable, using FFmpeg fallback...");
+        }
+    }
+
+    // Fallback to FFmpeg
+    record_audio_ffmpeg()
+}
+
+/// Record audio using ffmpeg and return the path to the recorded file
+pub fn record_audio_ffmpeg() -> Result<String> {
     // Kill any existing ffmpeg processes that might interfere with recording
     log_debug("Checking for and terminating any existing ffmpeg processes...");
 
