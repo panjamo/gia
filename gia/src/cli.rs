@@ -139,7 +139,7 @@ impl Config {
                 Arg::new("record-audio")
                     .short('a')
                     .long("record-audio")
-                    .help("Record audio input using ffmpeg (requires ffmpeg to be installed)")
+                    .help("Record audio input natively (no external dependencies required)")
                     .action(clap::ArgAction::SetTrue),
             )
             .arg(

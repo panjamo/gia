@@ -6,7 +6,7 @@ This diagram visualizes all the different input sources and output destinations 
 flowchart LR
     %% Input Sources (Left Side)
     CMD[Command Line Arguments<br/>Main Prompt Text]
-    AUDIO[Audio Recording<br/>-a, --record-audio<br/>Uses ffmpeg]
+    AUDIO[Audio Recording<br/>-a, --record-audio<br/>Native recording]
     CLIPBOARD[Clipboard Content<br/>-c, --clipboard-input<br/>Auto-detects text vs images]
     STDIN[Standard Input<br/>Auto-detected when piped]
     FILES[Files<br/>-f, --file<br/>Auto-detects: Text & Media<br/>JPEG, PNG, WebP, HEIC, PDF<br/>OGG, OPUS, MP3, M4A, MP4]
@@ -51,7 +51,7 @@ flowchart LR
 ## Input Sources
 
 1. **Command Line Arguments** - Main prompt text (required, except audio-only)
-2. **Audio Recording** (-a) - Record audio using ffmpeg, auto-generates prompt
+2. **Audio Recording** (-a) - Record audio natively, auto-generates prompt
 3. **Clipboard Content** (-c) - Auto-detects text vs images
 4. **Standard Input** - Automatically detected when piped
 5. **Files** (-f) - Auto-detects text and media files (images, audio, video, PDFs)
