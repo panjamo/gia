@@ -105,6 +105,7 @@ export CONTEXT_WINDOW_LIMIT=10000
 ### Environment Variables
 - `GEMINI_API_KEY` - Gemini API key(s), pipe-separated for fallback: `key1|key2|key3`
 - `GIA_DEFAULT_MODEL` - Default AI model (default: `gemini-2.5-flash-lite`)
+- `GIA_AUDIO_DEVICE` - Default audio input device for recording
 - `CONTEXT_WINDOW_LIMIT` - Context window size limit (default: 8000)
 - `RUST_LOG` - Logging level: `debug`, `info`, `error` (outputs to stderr)
 - `GIA_LOG_TO_FILE` - Enable per-conversation file logging: `1`
@@ -176,6 +177,11 @@ gia -a  # Short option
 
 # Audio recording with custom prompt:
 gia --record-audio "Transcribe and summarize this audio"
+
+# Audio recording with specific device:
+gia --list-audio-devices                                    # List available devices
+gia --audio-device "Microphone Array" --record-audio        # Use specific device
+GIA_AUDIO_DEVICE="Microphone Array" gia --record-audio     # Use env var
 
 # Transcribe-only mode (no conversation history saved):
 gia --record-audio --role EN --no-save         # English transcription only
@@ -298,7 +304,9 @@ gia -s -b                         # Show latest conversation (file + browser)
 
 - `[PROMPT_TEXT]` - Prompt text for the AI (main input)
 - `-t, --role <NAME>` - Load role/task from ~/.gia/roles/ or ~/.gia/tasks/ (can be used multiple times)
-- `-a, --record-audio` - Record audio input using ffmpeg (auto-generates prompt if no text provided)
+- `-a, --record-audio` - Record audio input natively (auto-generates prompt if no text provided)
+- `--audio-device <DEVICE>` - Specify audio input device for recording (overrides GIA_AUDIO_DEVICE)
+- `--list-audio-devices` - List all available audio input devices and exit
 - `-c, --clipboard-input` - Add clipboard content to prompt (auto-detects images vs text)
 - `-f, --file <FILE_OR_DIR>` - Add file or directory to prompt (auto-detects media vs text; directories processed recursively)
 - `-o, --clipboard-output` - Write response to clipboard instead of stdout
@@ -311,6 +319,12 @@ gia -s -b                         # Show latest conversation (file + browser)
 - `--no-save` - Don't save to conversation history (transcribe-only mode)
   - Gemini models: see https://ai.google.dev/gemini-api/docs/models
   - Ollama models: use `ollama::model-name` format (e.g., `ollama::llama3.2`)
+
+#### Audio Device Selection Priority
+Device selection follows this priority (highest to lowest):
+1. `--audio-device` CLI parameter
+2. `GIA_AUDIO_DEVICE` environment variable
+3. Default system audio input device
 
 ## Logging
 

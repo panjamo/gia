@@ -286,7 +286,7 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
     // 2. Audio recording when present
     if config.record_audio {
         log_info("Audio recording requested");
-        match record_audio() {
+        match record_audio(config.audio_device.as_deref()) {
             Ok(audio_path) => {
                 log_info(&format!("Audio recorded to: {audio_path}"));
                 config
