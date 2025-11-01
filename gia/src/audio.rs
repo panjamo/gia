@@ -163,9 +163,9 @@ pub fn record_audio_native(device_name: Option<&str>) -> Result<String> {
         sample_format: hound::SampleFormat::Int,
     };
 
-    let writer = Arc::new(Mutex::new(
+    let writer = Arc::new(Mutex::new(Some(
         hound::WavWriter::create(&wav_path, spec).context("Failed to create WAV writer")?,
-    ));
+    )));
     let writer_clone = Arc::clone(&writer);
 
     log_debug("WAV writer created successfully");
@@ -180,9 +180,10 @@ pub fn record_audio_native(device_name: Option<&str>) -> Result<String> {
             &config.into(),
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
                 if *recording_clone.lock().unwrap() {
-                    let mut writer = writer_clone.lock().unwrap();
-                    for &sample in data {
-                        let _ = writer.write_sample((sample * 32767.0) as i16);
+                    if let Some(ref mut writer) = *writer_clone.lock().unwrap() {
+                        for &sample in data {
+                            let _ = writer.write_sample((sample * 32767.0) as i16);
+                        }
                     }
                 }
             },
@@ -193,9 +194,10 @@ pub fn record_audio_native(device_name: Option<&str>) -> Result<String> {
             &config.into(),
             move |data: &[i16], _: &cpal::InputCallbackInfo| {
                 if *recording_clone.lock().unwrap() {
-                    let mut writer = writer_clone.lock().unwrap();
-                    for &sample in data {
-                        let _ = writer.write_sample(sample);
+                    if let Some(ref mut writer) = *writer_clone.lock().unwrap() {
+                        for &sample in data {
+                            let _ = writer.write_sample(sample);
+                        }
                     }
                 }
             },
@@ -206,9 +208,10 @@ pub fn record_audio_native(device_name: Option<&str>) -> Result<String> {
             &config.into(),
             move |data: &[u16], _: &cpal::InputCallbackInfo| {
                 if *recording_clone.lock().unwrap() {
-                    let mut writer = writer_clone.lock().unwrap();
-                    for &sample in data {
-                        let _ = writer.write_sample((sample as i32 - 32768) as i16);
+                    if let Some(ref mut writer) = *writer_clone.lock().unwrap() {
+                        for &sample in data {
+                            let _ = writer.write_sample((sample as i32 - 32768) as i16);
+                        }
                     }
                 }
             },
@@ -258,10 +261,12 @@ pub fn record_audio_native(device_name: Option<&str>) -> Result<String> {
     drop(stream);
 
     // Finalize WAV file
-    Arc::try_unwrap(writer)
-        .map_err(|_| anyhow::anyhow!("Failed to unwrap WAV writer Arc"))?
-        .into_inner()
-        .map_err(|_| anyhow::anyhow!("Failed to unwrap WAV writer Mutex"))?
+    // Extract the writer from the Option without unwrapping the Arc (cpal pattern)
+    writer
+        .lock()
+        .unwrap()
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("WAV writer was already taken"))?
         .finalize()
         .context("Failed to finalize WAV file")?;
 
