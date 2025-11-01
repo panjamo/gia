@@ -92,12 +92,14 @@ pub fn list_audio_devices() -> Result<()> {
     println!("Available audio input devices:");
     println!();
 
-    // Get default device first
-    if let Some(default_device) = host.default_input_device() {
-        let device_name = default_device
-            .name()
-            .unwrap_or_else(|_| "Unknown".to_string());
-        println!("  [DEFAULT] {}", device_name);
+    // Get default device name once before the loop
+    let default_device_name = host
+        .default_input_device()
+        .and_then(|d| d.name().ok());
+
+    // Print default device if available
+    if let Some(ref name) = default_device_name {
+        println!("  [DEFAULT] {}", name);
     }
 
     // List all input devices
@@ -109,19 +111,16 @@ pub fn list_audio_devices() -> Result<()> {
     for device in devices {
         let device_name = device.name().unwrap_or_else(|_| "Unknown".to_string());
         // Skip default device as we already printed it
-        if let Some(default_device) = host.default_input_device() {
-            let default_name = default_device
-                .name()
-                .unwrap_or_else(|_| "Unknown".to_string());
-            if device_name == default_name {
-                continue;
-            }
+        if let Some(ref default_name) = default_device_name
+            && device_name == *default_name
+        {
+            continue;
         }
         println!("  {}", device_name);
         count += 1;
     }
 
-    if count == 0 && host.default_input_device().is_none() {
+    if count == 0 && default_device_name.is_none() {
         println!("  No audio input devices found");
     }
 
@@ -131,6 +130,23 @@ pub fn list_audio_devices() -> Result<()> {
     println!("  GIA_AUDIO_DEVICE=\"Device Name\" gia --record-audio \"your prompt\"");
 
     Ok(())
+}
+
+/// Helper function to find a device by name
+fn find_device_by_name(host: &cpal::Host, target_name: &str) -> Result<Option<cpal::Device>> {
+    let devices = host
+        .input_devices()
+        .context("Failed to enumerate audio input devices")?;
+
+    for device in devices {
+        if let Ok(dev_name) = device.name()
+            && dev_name == target_name
+        {
+            return Ok(Some(device));
+        }
+    }
+
+    Ok(None)
 }
 
 /// Get the audio device to use based on priority: CLI param > env var > default
@@ -143,17 +159,10 @@ fn get_audio_device(device_name: Option<&str>) -> Result<cpal::Device> {
             "Looking for audio device from CLI parameter: {}",
             name
         ));
-        let devices = host
-            .input_devices()
-            .context("Failed to enumerate audio input devices")?;
 
-        for device in devices {
-            if let Ok(dev_name) = device.name()
-                && dev_name == name
-            {
-                log_info(&format!("Using audio device from CLI parameter: {}", name));
-                return Ok(device);
-            }
+        if let Some(device) = find_device_by_name(&host, name)? {
+            log_info(&format!("Using audio device from CLI parameter: {}", name));
+            return Ok(device);
         }
 
         return Err(anyhow::anyhow!(
@@ -168,20 +177,13 @@ fn get_audio_device(device_name: Option<&str>) -> Result<cpal::Device> {
             "Looking for audio device from GIA_AUDIO_DEVICE: {}",
             env_device
         ));
-        let devices = host
-            .input_devices()
-            .context("Failed to enumerate audio input devices")?;
 
-        for device in devices {
-            if let Ok(dev_name) = device.name()
-                && dev_name == env_device
-            {
-                log_info(&format!(
-                    "Using audio device from GIA_AUDIO_DEVICE: {}",
-                    env_device
-                ));
-                return Ok(device);
-            }
+        if let Some(device) = find_device_by_name(&host, &env_device)? {
+            log_info(&format!(
+                "Using audio device from GIA_AUDIO_DEVICE: {}",
+                env_device
+            ));
+            return Ok(device);
         }
 
         return Err(anyhow::anyhow!(
