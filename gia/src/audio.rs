@@ -8,9 +8,120 @@ use std::time::Duration;
 
 use crate::logging::{log_debug, log_info};
 
+/// List all available audio input devices
+pub fn list_audio_devices() -> Result<()> {
+    let host = cpal::default_host();
+
+    println!("Available audio input devices:");
+    println!();
+
+    // Get default device first
+    if let Some(default_device) = host.default_input_device() {
+        let device_name = default_device
+            .name()
+            .unwrap_or_else(|_| "Unknown".to_string());
+        println!("  [DEFAULT] {}", device_name);
+    }
+
+    // List all input devices
+    let devices = host
+        .input_devices()
+        .context("Failed to enumerate audio input devices")?;
+
+    let mut count = 0;
+    for device in devices {
+        let device_name = device.name().unwrap_or_else(|_| "Unknown".to_string());
+        // Skip default device as we already printed it
+        if let Some(default_device) = host.default_input_device() {
+            let default_name = default_device
+                .name()
+                .unwrap_or_else(|_| "Unknown".to_string());
+            if device_name == default_name {
+                continue;
+            }
+        }
+        println!("  {}", device_name);
+        count += 1;
+    }
+
+    if count == 0 && host.default_input_device().is_none() {
+        println!("  No audio input devices found");
+    }
+
+    println!();
+    println!("Usage:");
+    println!("  gia --audio-device \"Device Name\" --record-audio \"your prompt\"");
+    println!("  GIA_AUDIO_DEVICE=\"Device Name\" gia --record-audio \"your prompt\"");
+
+    Ok(())
+}
+
+/// Get the audio device to use based on priority: CLI param > env var > default
+fn get_audio_device(device_name: Option<&str>) -> Result<cpal::Device> {
+    let host = cpal::default_host();
+
+    // Priority 1: CLI parameter
+    if let Some(name) = device_name {
+        log_debug(&format!(
+            "Looking for audio device from CLI parameter: {}",
+            name
+        ));
+        let devices = host
+            .input_devices()
+            .context("Failed to enumerate audio input devices")?;
+
+        for device in devices {
+            if let Ok(dev_name) = device.name()
+                && dev_name == name
+            {
+                log_info(&format!("Using audio device from CLI parameter: {}", name));
+                return Ok(device);
+            }
+        }
+
+        return Err(anyhow::anyhow!(
+            "Audio device '{}' not found. Use --list-audio-devices to see available devices.",
+            name
+        ));
+    }
+
+    // Priority 2: Environment variable
+    if let Ok(env_device) = std::env::var("GIA_AUDIO_DEVICE") {
+        log_debug(&format!(
+            "Looking for audio device from GIA_AUDIO_DEVICE: {}",
+            env_device
+        ));
+        let devices = host
+            .input_devices()
+            .context("Failed to enumerate audio input devices")?;
+
+        for device in devices {
+            if let Ok(dev_name) = device.name()
+                && dev_name == env_device
+            {
+                log_info(&format!(
+                    "Using audio device from GIA_AUDIO_DEVICE: {}",
+                    env_device
+                ));
+                return Ok(device);
+            }
+        }
+
+        return Err(anyhow::anyhow!(
+            "Audio device '{}' (from GIA_AUDIO_DEVICE) not found. Use --list-audio-devices to see available devices.",
+            env_device
+        ));
+    }
+
+    // Priority 3: Default device
+    log_debug("Using default audio input device");
+    host.default_input_device()
+        .ok_or_else(|| anyhow::anyhow!("No default input device available"))
+}
+
 /// Record audio natively using cpal (fast recording to WAV, then quick ogg-opus conversion)
 /// Returns the path to the recorded Opus file
-pub fn record_audio_native() -> Result<String> {
+pub fn record_audio_native(device_name: Option<&str>) -> Result<String> {
     log_debug("Starting native audio recording with cpal");
 
     // Generate unique filenames for WAV and Opus
@@ -26,15 +137,12 @@ pub fn record_audio_native() -> Result<String> {
 
     log_debug(&format!("Recording to: {wav_path}"));
 
-    // Get audio device and configuration
-    let host = cpal::default_host();
-    let device = host
-        .default_input_device()
-        .ok_or_else(|| anyhow::anyhow!("No default input device available"))?;
+    // Get audio device and configuration (priority: CLI param > env var > default)
+    let device = get_audio_device(device_name)?;
 
-    let device_name = device.name().unwrap_or_else(|_| "Unknown".to_string());
-    log_info(&format!("Using audio device: {device_name}"));
-    eprintln!("🎙️  Recording audio from device: {device_name}");
+    let device_display_name = device.name().unwrap_or_else(|_| "Unknown".to_string());
+    log_info(&format!("Using audio device: {device_display_name}"));
+    eprintln!("🎙️  Recording audio from device: {device_display_name}");
 
     let config = device
         .default_input_config()
@@ -127,7 +235,7 @@ pub fn record_audio_native() -> Result<String> {
     log_debug("Showing message dialog to stop recording");
     let dialog_text = format!(
         "🎙️  Recording in progress from device:\n{}\n\nClick Yes to stop and continue, or No to abort.",
-        device_name
+        device_display_name
     );
     let user_confirmed = MessageDialog::new()
         .set_title("Stop Recording")
@@ -226,9 +334,14 @@ pub fn record_audio_native() -> Result<String> {
 
 /// Record audio using native Rust implementation (cpal + ogg-opus)
 /// No external dependencies required
-pub fn record_audio() -> Result<String> {
+///
+/// Priority for device selection:
+/// 1. device_name parameter (from CLI --audio-device)
+/// 2. GIA_AUDIO_DEVICE environment variable
+/// 3. Default system audio input device
+pub fn record_audio(device_name: Option<&str>) -> Result<String> {
     log_debug("Starting native audio recording...");
-    record_audio_native()
+    record_audio_native(device_name)
 }
 
 #[cfg(test)]

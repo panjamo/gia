@@ -12,6 +12,11 @@ use crate::provider::{ProviderConfig, ProviderFactory};
 use crate::spinner::SpinnerProcess;
 
 pub async fn run_app(mut config: Config) -> Result<()> {
+    // Handle list audio devices command
+    if config.list_audio_devices {
+        return crate::audio::list_audio_devices();
+    }
+
     // Initialize conversation manager
     let conversation_manager =
         ConversationManager::new().context("Failed to initialize conversation manager")?;
