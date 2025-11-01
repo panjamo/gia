@@ -124,36 +124,6 @@ fn show_audio_completion_notification(output_mode: &OutputMode) {
     }
 }
 
-/// Show a system notification when audio recording starts
-fn show_audio_startup_notification() {
-    let message =
-        "GIA is now running and ready to record. The recording window will appear shortly.";
-
-    #[cfg(target_os = "macos")]
-    {
-        // On macOS, use osascript to show notification
-        let _ = std::process::Command::new("osascript")
-            .arg("-e")
-            .arg(format!(
-                "display notification \"{}\" with title \"GIA Audio Recording\"",
-                message
-            ))
-            .output();
-        log_info("Showed macOS notification for audio recording startup");
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        // On Windows and Linux, use notify-rust
-        let _ = Notification::new()
-            .summary("GIA Audio Recording")
-            .body(message)
-            .icon("microphone")
-            .show();
-        log_info("Showed system notification for audio recording startup");
-    }
-}
-
 fn build_footer_metadata(config: &Config, token_usage: Option<TokenUsage>) -> FooterMetadata {
     // Parse provider and model from config.model
     let (provider_name, model_name) = if config.model.contains("::") {
@@ -307,14 +277,6 @@ pub fn output_text_with_usage(
     }
 
     result
-}
-
-/// Show startup notification if audio recording is enabled and spinner is not active
-pub fn show_startup_notification_if_needed(config: &Config) {
-    // Show notification only if audio recording is enabled AND spinner is not active
-    if config.record_audio && !config.spinner {
-        show_audio_startup_notification();
-    }
 }
 
 // Function removed - now in conversation.rs as Conversation::extract_prompt_section()

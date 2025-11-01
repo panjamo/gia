@@ -7,7 +7,7 @@ use crate::conversation::TokenUsage;
 use crate::conversation::{Conversation, ConversationManager, ResourceInfo, ResourceType};
 use crate::input::get_input_text;
 use crate::logging::{log_error, log_info, setup_conversation_file_logging};
-use crate::output::{output_text_with_usage, show_startup_notification_if_needed};
+use crate::output::output_text_with_usage;
 use crate::provider::{ProviderConfig, ProviderFactory};
 use crate::spinner::SpinnerProcess;
 
@@ -45,9 +45,6 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     // Setup file logging for this conversation if GIA_LOG_TO_FILE is set
     setup_conversation_file_logging(&conversation.id)
         .context("Failed to setup conversation file logging")?;
-
-    // Show startup notification if audio recording is enabled and spinner is not active
-    show_startup_notification_if_needed(&config);
 
     // Get input content (this may modify config to add clipboard images)
     // Note: Audio recording happens here, so spinner must start AFTER this
