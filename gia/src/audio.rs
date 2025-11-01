@@ -1,12 +1,89 @@
 use anyhow::{Context, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use native_dialog::MessageDialog;
+use rubato::{
+    Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
+};
 use std::fs;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 use crate::logging::{log_debug, log_info};
+
+/// Resample audio data to a target sample rate
+/// Returns resampled data and the target sample rate
+fn resample_audio(audio_data: Vec<i16>, from_rate: u32, channels: u16) -> Result<(Vec<i16>, u32)> {
+    // Supported rates by ogg-opus in order of preference
+    const SUPPORTED_RATES: [u32; 5] = [48000, 24000, 16000, 12000, 8000];
+
+    // If already supported, return as-is
+    if SUPPORTED_RATES.contains(&from_rate) {
+        return Ok((audio_data, from_rate));
+    }
+
+    // Choose target rate (prefer 48000 Hz for quality)
+    let to_rate = 48000u32;
+
+    log_info(&format!(
+        "Resampling audio from {} Hz to {} Hz ({} channels)",
+        from_rate, to_rate, channels
+    ));
+    eprintln!(
+        "🔄 Resampling audio from {} Hz to {} Hz...",
+        from_rate, to_rate
+    );
+
+    // Convert i16 samples to f32 for resampling
+    let mut samples_f32: Vec<Vec<f32>> = vec![Vec::new(); channels as usize];
+
+    for (i, &sample) in audio_data.iter().enumerate() {
+        let channel = i % channels as usize;
+        samples_f32[channel].push(sample as f32 / 32768.0);
+    }
+
+    // Create resampler with high-quality settings
+    let params = SincInterpolationParameters {
+        sinc_len: 256,
+        f_cutoff: 0.95,
+        interpolation: SincInterpolationType::Linear,
+        oversampling_factor: 256,
+        window: WindowFunction::BlackmanHarris2,
+    };
+
+    let mut resampler = SincFixedIn::<f32>::new(
+        to_rate as f64 / from_rate as f64,
+        2.0,
+        params,
+        samples_f32[0].len(),
+        channels as usize,
+    )
+    .context("Failed to create resampler")?;
+
+    // Resample each channel
+    let resampled = resampler
+        .process(&samples_f32, None)
+        .context("Failed to resample audio")?;
+
+    // Interleave channels back to i16
+    let mut output = Vec::new();
+    let sample_count = resampled[0].len();
+
+    for i in 0..sample_count {
+        for (_channel, channel_data) in resampled.iter().enumerate().take(channels as usize) {
+            let sample = (channel_data[i] * 32768.0).clamp(-32768.0, 32767.0) as i16;
+            output.push(sample);
+        }
+    }
+
+    log_info(&format!(
+        "Resampling complete: {} samples -> {} samples",
+        audio_data.len() / channels as usize,
+        output.len() / channels as usize
+    ));
+
+    Ok((output, to_rate))
+}
 
 /// List all available audio input devices
 pub fn list_audio_devices() -> Result<()> {
@@ -179,11 +256,11 @@ pub fn record_audio_native(device_name: Option<&str>) -> Result<String> {
         cpal::SampleFormat::F32 => device.build_input_stream(
             &config.into(),
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                if *recording_clone.lock().unwrap() {
-                    if let Some(ref mut writer) = *writer_clone.lock().unwrap() {
-                        for &sample in data {
-                            let _ = writer.write_sample((sample * 32767.0) as i16);
-                        }
+                if *recording_clone.lock().unwrap()
+                    && let Some(ref mut writer) = *writer_clone.lock().unwrap()
+                {
+                    for &sample in data {
+                        let _ = writer.write_sample((sample * 32767.0) as i16);
                     }
                 }
             },
@@ -193,11 +270,11 @@ pub fn record_audio_native(device_name: Option<&str>) -> Result<String> {
         cpal::SampleFormat::I16 => device.build_input_stream(
             &config.into(),
             move |data: &[i16], _: &cpal::InputCallbackInfo| {
-                if *recording_clone.lock().unwrap() {
-                    if let Some(ref mut writer) = *writer_clone.lock().unwrap() {
-                        for &sample in data {
-                            let _ = writer.write_sample(sample);
-                        }
+                if *recording_clone.lock().unwrap()
+                    && let Some(ref mut writer) = *writer_clone.lock().unwrap()
+                {
+                    for &sample in data {
+                        let _ = writer.write_sample(sample);
                     }
                 }
             },
@@ -207,11 +284,11 @@ pub fn record_audio_native(device_name: Option<&str>) -> Result<String> {
         cpal::SampleFormat::U16 => device.build_input_stream(
             &config.into(),
             move |data: &[u16], _: &cpal::InputCallbackInfo| {
-                if *recording_clone.lock().unwrap() {
-                    if let Some(ref mut writer) = *writer_clone.lock().unwrap() {
-                        for &sample in data {
-                            let _ = writer.write_sample((sample as i32 - 32768) as i16);
-                        }
+                if *recording_clone.lock().unwrap()
+                    && let Some(ref mut writer) = *writer_clone.lock().unwrap()
+                {
+                    for &sample in data {
+                        let _ = writer.write_sample((sample as i32 - 32768) as i16);
                     }
                 }
             },
@@ -298,21 +375,25 @@ pub fn record_audio_native(device_name: Option<&str>) -> Result<String> {
         .collect::<Result<Vec<i16>, _>>()
         .context("Failed to read audio samples from WAV file")?;
 
+    // Resample if necessary (handles any sample rate -> supported rate)
+    let (resampled_data, target_rate) =
+        resample_audio(audio_data, wav_spec.sample_rate, wav_spec.channels)?;
+
     // Encode to Opus based on sample rate and channel count
-    let opus_data = match (wav_spec.sample_rate, wav_spec.channels) {
-        (16000, 1) => ogg_opus::encode::<16000, 1>(&audio_data),
-        (16000, 2) => ogg_opus::encode::<16000, 2>(&audio_data),
-        (8000, 1) => ogg_opus::encode::<8000, 1>(&audio_data),
-        (8000, 2) => ogg_opus::encode::<8000, 2>(&audio_data),
-        (12000, 1) => ogg_opus::encode::<12000, 1>(&audio_data),
-        (12000, 2) => ogg_opus::encode::<12000, 2>(&audio_data),
-        (24000, 1) => ogg_opus::encode::<24000, 1>(&audio_data),
-        (24000, 2) => ogg_opus::encode::<24000, 2>(&audio_data),
-        (48000, 1) => ogg_opus::encode::<48000, 1>(&audio_data),
-        (48000, 2) => ogg_opus::encode::<48000, 2>(&audio_data),
+    let opus_data = match (target_rate, wav_spec.channels) {
+        (16000, 1) => ogg_opus::encode::<16000, 1>(&resampled_data),
+        (16000, 2) => ogg_opus::encode::<16000, 2>(&resampled_data),
+        (8000, 1) => ogg_opus::encode::<8000, 1>(&resampled_data),
+        (8000, 2) => ogg_opus::encode::<8000, 2>(&resampled_data),
+        (12000, 1) => ogg_opus::encode::<12000, 1>(&resampled_data),
+        (12000, 2) => ogg_opus::encode::<12000, 2>(&resampled_data),
+        (24000, 1) => ogg_opus::encode::<24000, 1>(&resampled_data),
+        (24000, 2) => ogg_opus::encode::<24000, 2>(&resampled_data),
+        (48000, 1) => ogg_opus::encode::<48000, 1>(&resampled_data),
+        (48000, 2) => ogg_opus::encode::<48000, 2>(&resampled_data),
         _ => return Err(anyhow::anyhow!(
-            "Unsupported WAV format: {} Hz, {} channels (supported: 8k/12k/16k/24k/48k Hz, 1-2 channels)",
-            wav_spec.sample_rate,
+            "Unsupported WAV format after resampling: {} Hz, {} channels (supported: 8k/12k/16k/24k/48k Hz, 1-2 channels)",
+            target_rate,
             wav_spec.channels
         )),
     }.context("Failed to encode audio to Opus format")?;
