@@ -91,8 +91,9 @@ jobs:
       with:
         fetch-depth: 0  # Needed for build.rs version generation
 
-    - name: Install Opus library
-      run: brew install opus
+    - name: Install Opus library and autotools
+      run: |
+        brew install opus autoconf automake libtool
 
     - name: Setup Rust
       uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -101,7 +102,9 @@ jobs:
         target: x86_64-apple-darwin
 
     - name: Build macOS Intel Release
-      run: cargo build --release --target x86_64-apple-darwin
+      run: |
+        export PKG_CONFIG_PATH="/usr/local/opt/opus/lib/pkgconfig:$PKG_CONFIG_PATH"
+        cargo build --release --target x86_64-apple-darwin
 
     - name: Upload macOS Intel gia Binary
       uses: actions/upload-artifact@v4
@@ -190,8 +193,9 @@ jobs:
       with:
         fetch-depth: 0  # Needed for build.rs version generation
 
-    - name: Install Opus library
-      run: brew install opus
+    - name: Install Opus library and autotools
+      run: |
+        brew install opus autoconf automake libtool
 
     - name: Setup Rust
       uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -200,7 +204,9 @@ jobs:
         target: aarch64-apple-darwin
 
     - name: Build macOS ARM Release
-      run: cargo build --release --target aarch64-apple-darwin
+      run: |
+        export PKG_CONFIG_PATH="/opt/homebrew/opt/opus/lib/pkgconfig:$PKG_CONFIG_PATH"
+        cargo build --release --target aarch64-apple-darwin
 
     - name: Upload macOS ARM gia Binary
       uses: actions/upload-artifact@v4
