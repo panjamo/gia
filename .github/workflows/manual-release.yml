@@ -104,6 +104,8 @@ jobs:
     - name: Build macOS Intel Release
       run: |
         export PKG_CONFIG_PATH="/usr/local/opt/opus/lib/pkgconfig:$PKG_CONFIG_PATH"
+        export LIBRARY_PATH="/usr/local/opt/opus/lib:$LIBRARY_PATH"
+        export RUSTFLAGS="-L /usr/local/opt/opus/lib"
         cargo build --release --target x86_64-apple-darwin
 
     - name: Upload macOS Intel gia Binary
@@ -206,6 +208,8 @@ jobs:
     - name: Build macOS ARM Release
       run: |
         export PKG_CONFIG_PATH="/opt/homebrew/opt/opus/lib/pkgconfig:$PKG_CONFIG_PATH"
+        export LIBRARY_PATH="/opt/homebrew/opt/opus/lib:$LIBRARY_PATH"
+        export RUSTFLAGS="-L /opt/homebrew/opt/opus/lib"
         cargo build --release --target aarch64-apple-darwin
 
     - name: Upload macOS ARM gia Binary
