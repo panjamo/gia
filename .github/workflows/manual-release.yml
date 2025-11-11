@@ -117,6 +117,42 @@ jobs:
         path: target/x86_64-apple-darwin/release/giagui
         retention-days: 1
 
+    - name: Create macOS Intel tar.gz Archive
+      run: |
+        COMMIT_COUNT=$(git rev-list --count HEAD)
+        VERSION="v0.1.$COMMIT_COUNT"
+        ARCHIVE_NAME="gia-macos-x86_64-${VERSION}.tar.gz"
+
+        # Create temporary directory for archive contents
+        mkdir -p /tmp/gia-archive
+
+        # Copy binaries
+        cp target/x86_64-apple-darwin/release/gia /tmp/gia-archive/
+        cp target/x86_64-apple-darwin/release/giagui /tmp/gia-archive/
+
+        # Make binaries executable
+        chmod +x /tmp/gia-archive/gia
+        chmod +x /tmp/gia-archive/giagui
+
+        # Create tar.gz archive
+        tar -czf "$ARCHIVE_NAME" -C /tmp/gia-archive .
+
+        # Move to predictable location for artifact upload
+        mkdir -p archives
+        mv "$ARCHIVE_NAME" archives/
+
+        # Cleanup
+        rm -rf /tmp/gia-archive
+
+        echo "Created archive: archives/$ARCHIVE_NAME"
+
+    - name: Upload macOS Intel tar.gz Archive
+      uses: actions/upload-artifact@v4
+      with:
+        name: gia-macos-intel-tarball
+        path: archives/*.tar.gz
+        retention-days: 1
+
     - name: Prepare Package Build Directories
       run: |
         mkdir -p packages/bin
@@ -135,6 +171,10 @@ jobs:
         VERSION="0.1.$COMMIT_COUNT"
         echo "Building package with version: $VERSION"
         ./build-package.sh "$VERSION"
+
+        # Rename package with version number
+        cd ../..
+        mv packages/gia-*.pkg packages/gia-intel-installer-v${VERSION}.pkg
 
     - name: Upload macOS Intel Package
       uses: actions/upload-artifact@v4
@@ -176,6 +216,42 @@ jobs:
         path: target/aarch64-apple-darwin/release/giagui
         retention-days: 1
 
+    - name: Create macOS ARM tar.gz Archive
+      run: |
+        COMMIT_COUNT=$(git rev-list --count HEAD)
+        VERSION="v0.1.$COMMIT_COUNT"
+        ARCHIVE_NAME="gia-macos-aarch64-${VERSION}.tar.gz"
+
+        # Create temporary directory for archive contents
+        mkdir -p /tmp/gia-archive
+
+        # Copy binaries
+        cp target/aarch64-apple-darwin/release/gia /tmp/gia-archive/
+        cp target/aarch64-apple-darwin/release/giagui /tmp/gia-archive/
+
+        # Make binaries executable
+        chmod +x /tmp/gia-archive/gia
+        chmod +x /tmp/gia-archive/giagui
+
+        # Create tar.gz archive
+        tar -czf "$ARCHIVE_NAME" -C /tmp/gia-archive .
+
+        # Move to predictable location for artifact upload
+        mkdir -p archives
+        mv "$ARCHIVE_NAME" archives/
+
+        # Cleanup
+        rm -rf /tmp/gia-archive
+
+        echo "Created archive: archives/$ARCHIVE_NAME"
+
+    - name: Upload macOS ARM tar.gz Archive
+      uses: actions/upload-artifact@v4
+      with:
+        name: gia-macos-arm-tarball
+        path: archives/*.tar.gz
+        retention-days: 1
+
     - name: Prepare Package Build Directories
       run: |
         mkdir -p packages/bin
@@ -194,6 +270,10 @@ jobs:
         VERSION="0.1.$COMMIT_COUNT"
         echo "Building package with version: $VERSION"
         ./build-package.sh "$VERSION"
+
+        # Rename package with version number
+        cd ../..
+        mv packages/gia-*.pkg packages/gia-arm-installer-v${VERSION}.pkg
 
     - name: Upload macOS ARM Package
       uses: actions/upload-artifact@v4
@@ -256,6 +336,18 @@ jobs:
         name: gia-macos-arm-pkg
         path: ./artifacts/macos-arm-pkg
 
+    - name: Download macOS Intel tar.gz Archive
+      uses: actions/download-artifact@v4
+      with:
+        name: gia-macos-intel-tarball
+        path: ./artifacts/macos-intel-tarball
+
+    - name: Download macOS ARM tar.gz Archive
+      uses: actions/download-artifact@v4
+      with:
+        name: gia-macos-arm-tarball
+        path: ./artifacts/macos-arm-tarball
+
     - name: Create Release and Upload Assets
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -276,10 +368,12 @@ jobs:
         echo "Final release notes:"
         cat release_notes.txt
 
-        # Create release
+        # Create release (explicitly publish to trigger downstream workflows)
         gh release create "${{ needs.detect-version.outputs.version }}" \
           --title "Release ${{ needs.detect-version.outputs.version }}" \
-          --notes-file "release_notes.txt"
+          --notes-file "release_notes.txt" \
+          --verify-tag \
+          --latest
 
         # Rename binaries with platform-specific names
         cp ./artifacts/windows/gia.exe ./gia-windows-x86_64.exe
@@ -289,11 +383,15 @@ jobs:
         cp ./artifacts/macos-arm/gia ./gia-macos-aarch64
         cp ./artifacts/macos-arm/giagui ./giagui-macos-aarch64
 
-        # Copy macOS packages (keep original names with version)
-        cp ./artifacts/macos-intel-pkg/*.pkg ./gia-intel-installer.pkg
-        cp ./artifacts/macos-arm-pkg/*.pkg ./gia-arm-installer.pkg
+        # Copy macOS packages (preserve version in filename)
+        cp ./artifacts/macos-intel-pkg/*.pkg ./
+        cp ./artifacts/macos-arm-pkg/*.pkg ./
 
-        # Upload binaries and packages
+        # Copy tar.gz archives (preserve version in filename)
+        cp ./artifacts/macos-intel-tarball/*.tar.gz ./
+        cp ./artifacts/macos-arm-tarball/*.tar.gz ./
+
+        # Upload binaries, packages, and tar.gz archives
         gh release upload "${{ needs.detect-version.outputs.version }}" \
           ./gia-windows-x86_64.exe \
           ./giagui-windows-x86_64.exe \
@@ -301,5 +399,26 @@ jobs:
           ./giagui-macos-x86_64 \
           ./gia-macos-aarch64 \
           ./giagui-macos-aarch64 \
-          ./gia-intel-installer.pkg \
-          ./gia-arm-installer.pkg
+          ./gia-intel-installer-*.pkg \
+          ./gia-arm-installer-*.pkg \
+          ./gia-macos-x86_64-*.tar.gz \
+          ./gia-macos-aarch64-*.tar.gz
+
+    - name: Trigger tap repository update
+      env:
+        VERSION: ${{ needs.detect-version.outputs.version }}
+      run: |
+        VERSION_NUM="${VERSION#v}"
+        echo "Triggering Homebrew tap update with version: $VERSION_NUM"
+
+        # Clean the token (remove any whitespace/newlines)
+        GH_TOKEN=$(echo "${{ secrets.GH_PERSONAL_TOKEN }}" | tr -d '[:space:]')
+        export GH_TOKEN
+
+        # Use gh CLI for workflow dispatch (more reliable than raw curl)
+        gh workflow run update-formula.yml \
+          --repo panjamo/homebrew-gia \
+          --ref main \
+          --field version="$VERSION_NUM" \
+          --field formula="gia"
+
