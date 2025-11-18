@@ -27,9 +27,42 @@ This workspace contains two binaries:
 
 ## Installation
 
+### MacOS
+
+#### Homebrew
+
+First add the tap with:
+`brew tap panjamo/gia`
+
+and then install with:
+`brew install gia`
+
+Update with:
+`brew upgrade gia`
+
+Uninstall with:
+`brew uninstall gia`
+
+Remove the tap with:
+`brew untap gia`
+
+For more information on Homebrew, visit:
+`brew help`, `man brew` or check [Homebrew's documentation](https://docs.brew.sh).
+
+#### Installer packages
+
+Download the .pkg file according your macOS architecture from the [releases page](https://github.com/panjamo/gia/releases) and install it.
+
+
+### Windows
+
+tbd
+
+### Manual Installation
+
 1. Clone this repository
-2. Install Rust if you haven't already
-3. Build the project:
+3. Install Rust if you haven't already
+4. Build the project:
    ```bash
    # Build both binaries
    cargo build --release
