@@ -813,9 +813,10 @@ impl GiaApp {
             args.push(self.prompt.clone());
         }
 
-        // Clear task and role selections, uncheck clipboard, and enable resume after sending
+        // Clear task and role selections, uncheck clipboard, clear options, and enable resume after sending
         self.task.clear();
         self.role.clear();
+        self.options.clear();
         self.use_clipboard = false;
         self.resume = true;
 
