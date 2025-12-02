@@ -88,8 +88,8 @@ fn fetch_ollama_models() -> Vec<String> {
                 Vec::new()
             }
         },
-        Err(e) => {
-            eprintln!("Ollama: connection failed: {}", e);
+        Err(_) => {
+            // Silently fail - Ollama may not be running
             Vec::new()
         }
     }
