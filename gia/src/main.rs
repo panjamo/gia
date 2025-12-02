@@ -34,7 +34,7 @@ async fn main() -> Result<()> {
     }
 
     let config = Config::from_args();
-    
+
     // Run app and catch any errors to show in notification
     if let Err(e) = run_app(config.clone()).await {
         // Get the root cause (last in the chain)
@@ -44,10 +44,11 @@ async fn main() -> Result<()> {
             last_cause = cause.to_string();
             source = cause.source();
         }
-        
+
         // Extract the most relevant part of the error message
         // Look for "Request failed with status code" pattern
-        let error_msg = if let Some(start_idx) = last_cause.find("Request failed with status code") {
+        let error_msg = if let Some(start_idx) = last_cause.find("Request failed with status code")
+        {
             if let Some(end_idx) = last_cause[start_idx..].find(". Response body:") {
                 format!("Error: {}", &last_cause[start_idx..start_idx + end_idx + 1])
             } else {
@@ -56,7 +57,7 @@ async fn main() -> Result<()> {
         } else {
             format!("Error: {}", last_cause)
         };
-        
+
         // Clear clipboard if output mode is clipboard
         if matches!(config.output_mode, crate::cli::OutputMode::Clipboard) {
             use arboard::Clipboard;
@@ -64,7 +65,7 @@ async fn main() -> Result<()> {
                 let _ = clipboard.clear();
             }
         }
-        
+
         // Show error notification
         #[cfg(target_os = "macos")]
         {
@@ -85,10 +86,10 @@ async fn main() -> Result<()> {
                 .icon("dialog-error")
                 .show();
         }
-        
+
         // Also return the error for CLI users
         return Err(e);
     }
-    
+
     Ok(())
 }

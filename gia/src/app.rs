@@ -347,6 +347,12 @@ fn resolve_conversation(
         Conversation::new_with_prompt(model.to_string(), &config.prompt, api_key_index)
     };
 
+    // If --no-save flag is set, always create a new conversation with random key
+    if config.no_save {
+        log_info("--no-save flag set, creating new conversation with random API key");
+        return Ok((create_new_conversation(), config.prompt.clone()));
+    }
+
     if config.resume_last {
         // Resume latest conversation with -R flag
         log_info("Attempting to resume latest conversation (-R flag)");

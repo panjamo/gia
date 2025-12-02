@@ -93,9 +93,7 @@ pub fn list_audio_devices() -> Result<()> {
     println!();
 
     // Get default device name once before the loop
-    let default_device_name = host
-        .default_input_device()
-        .and_then(|d| d.name().ok());
+    let default_device_name = host.default_input_device().and_then(|d| d.name().ok());
 
     // Print default device if available
     if let Some(ref name) = default_device_name {
@@ -434,8 +432,6 @@ pub fn record_audio(device_name: Option<&str>) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     // All FFmpeg-related tests have been removed
     // The audio recording now uses native Rust implementation only (cpal + ogg-opus)
 }

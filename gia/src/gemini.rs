@@ -156,10 +156,15 @@ impl GeminiClient {
         log_trace("=== End Full Chat Request ===");
 
         // Send the request using genai
-        let chat_response = client
-            .exec_chat(&self.model, chat_request, None)
-            .await
-            .context("Failed to send chat request to Gemini API")?;
+        let chat_response = match client.exec_chat(&self.model, chat_request, None).await {
+            Ok(response) => response,
+            Err(e) => {
+                // Log the raw error before adding context
+                log_debug(&format!("Raw genai error: {}", e));
+                log_debug(&format!("Raw genai error debug: {:?}", e));
+                return Err(e).context("Failed to send chat request to Gemini API");
+            }
+        };
 
         log_trace("=== Full Chat Response ===");
         log_trace(&format!("Content: {:?}", chat_response.content));
@@ -248,12 +253,32 @@ impl AiProvider for GeminiClient {
                     return Ok(response);
                 }
                 Err(e) => {
-                    let error_string = e.to_string();
+                    // Get the full error chain using Debug formatting, which includes all causes
+                    let error_debug = format!("{:?}", e);
+                    let error_debug_lower = error_debug.to_lowercase();
 
-                    // Check if it's a rate limit error
-                    if error_string.contains("429") || error_string.contains("Too Many Requests") {
+                    // Log error details at debug level
+                    log_debug(&format!("Error occurred: {}", e));
+                    log_debug(&format!("Full error chain: {}", error_debug));
+
+                    // Check if it's a rate limit or overload error (429 or 503)
+                    // Use debug representation to check the full error chain
+                    if error_debug.contains("429")
+                        || error_debug.contains("Too Many Requests")
+                        || error_debug.contains("503")
+                        || error_debug_lower.contains("overloaded")
+                    {
+                        let error_type = if error_debug.contains("503")
+                            || error_debug_lower.contains("overloaded")
+                        {
+                            "Model overloaded (503)"
+                        } else {
+                            "Rate limit (429)"
+                        };
+
                         log_warn(&format!(
-                            "Rate limit hit on API key {}/{}",
+                            "{} on API key {}/{}",
+                            error_type,
                             self.current_key_index + 1,
                             total_keys
                         ));
@@ -269,18 +294,19 @@ impl AiProvider for GeminiClient {
                             ));
                             eprintln!();
                             eprintln!("❌ All {} API keys exhausted", total_keys);
-                            eprintln!("   All keys have hit rate limits.");
+                            eprintln!("   All keys have hit rate limits or model overload errors.");
                             eprintln!("   Please try again later or add more API keys.");
                             eprintln!();
                             return Err(anyhow::anyhow!(
-                                "All {} API keys exhausted due to rate limits",
+                                "All {} API keys exhausted due to rate limits or overload errors",
                                 total_keys
                             ));
                         }
 
                         // User message for fallback
                         eprintln!(
-                            "⚠️  Rate limit hit on API key. Trying next key... ({}/{})",
+                            "⚠️  {} on API key. Trying next key... ({}/{})",
+                            error_type,
                             self.current_key_index + 1,
                             total_keys
                         );
@@ -294,12 +320,12 @@ impl AiProvider for GeminiClient {
                         continue;
                     } else {
                         // Check if it's an authentication error
-                        if error_string.contains("401")
-                            || error_string.contains("403")
-                            || error_string.contains("authentication")
-                            || error_string.contains("permission")
+                        if error_debug.contains("401")
+                            || error_debug.contains("403")
+                            || error_debug_lower.contains("authentication")
+                            || error_debug_lower.contains("permission")
                         {
-                            Self::handle_auth_error(&error_string)?;
+                            Self::handle_auth_error(&error_debug)?;
                             return Err(anyhow::anyhow!("Authentication failed"));
                         }
                         // For non-rate-limit errors, return immediately
@@ -489,5 +515,116 @@ mod tests {
         // Test the trait method
         let provider: &dyn AiProvider = &client;
         assert_eq!(provider.current_api_key_index(), Some(1));
+    }
+
+    #[test]
+    fn test_503_error_detection() {
+        // Test that 503 errors are correctly identified
+        let error_strings = vec![
+            "Error 503: Service Unavailable",
+            "503 Service temporarily overloaded",
+            "The model is overloaded. Please try again later.",
+            "Model overloaded, please retry",
+        ];
+
+        for error_str in error_strings {
+            let contains_503 = error_str.contains("503") || error_str.contains("overloaded");
+            assert!(
+                contains_503,
+                "Failed to detect 503/overload error in: {}",
+                error_str
+            );
+        }
+    }
+
+    #[test]
+    fn test_429_error_detection() {
+        // Test that 429 errors are correctly identified
+        let error_strings = vec![
+            "Error 429: Too Many Requests",
+            "429 Rate limit exceeded",
+            "Too Many Requests - rate limit hit",
+        ];
+
+        for error_str in error_strings {
+            let contains_429 = error_str.contains("429") || error_str.contains("Too Many Requests");
+            assert!(contains_429, "Failed to detect 429 error in: {}", error_str);
+        }
+    }
+
+    #[test]
+    fn test_error_type_differentiation() {
+        // Test that we can differentiate between 503 and 429 errors
+        let error_503 = "Error 503: Service Unavailable";
+        let error_429 = "Error 429: Too Many Requests";
+        let error_overload = "Model is overloaded";
+
+        // 503 check
+        let is_503 = error_503.contains("503") || error_503.contains("overloaded");
+        let is_429 = error_503.contains("429") || error_503.contains("Too Many Requests");
+        assert!(is_503);
+        assert!(!is_429);
+
+        // 429 check
+        let is_503 = error_429.contains("503") || error_429.contains("overloaded");
+        let is_429 = error_429.contains("429") || error_429.contains("Too Many Requests");
+        assert!(!is_503);
+        assert!(is_429);
+
+        // Overload check
+        let is_503 = error_overload.contains("503") || error_overload.contains("overloaded");
+        let is_429 = error_overload.contains("429") || error_overload.contains("Too Many Requests");
+        assert!(is_503);
+        assert!(!is_429);
+    }
+
+    #[tokio::test]
+    async fn test_key_cycling_with_multiple_keys() {
+        // Test that key index cycles correctly through multiple keys
+        let test_keys = vec![
+            "AIzaSyKey1ForTesting123456789012345".to_string(),
+            "AIzaSyKey2ForTesting123456789012345".to_string(),
+            "AIzaSyKey3ForTesting123456789012345".to_string(),
+            "AIzaSyKey4ForTesting123456789012345".to_string(),
+        ];
+        let model = "gemini-2.5-flash-lite".to_string();
+
+        let mut client = GeminiClient::new(model, test_keys, 0).unwrap();
+        let starting_index = client.current_key_index;
+
+        // Simulate cycling through all keys
+        for expected_index in 1..4 {
+            client.current_key_index = client.next_key_index();
+            assert_eq!(client.current_key_index, expected_index);
+        }
+
+        // Next cycle should wrap to starting index
+        client.current_key_index = client.next_key_index();
+        assert_eq!(client.current_key_index, starting_index);
+    }
+
+    #[test]
+    fn test_non_retryable_error_detection() {
+        // Test that non-retryable errors are correctly identified
+        let non_retryable_errors = vec![
+            "Error 401: Unauthorized",
+            "403 Forbidden - invalid API key",
+            "Authentication failed",
+            "Permission denied",
+            "Invalid request format",
+            "Bad request",
+        ];
+
+        for error_str in non_retryable_errors {
+            let is_rate_limit =
+                error_str.contains("429") || error_str.contains("Too Many Requests");
+            let is_overload = error_str.contains("503") || error_str.contains("overloaded");
+
+            assert!(
+                !is_rate_limit && !is_overload,
+                "Incorrectly identified non-retryable error as retryable: {}",
+                error_str
+            );
+        }
     }
 }

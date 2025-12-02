@@ -777,8 +777,11 @@ mod tests {
 
     #[test]
     fn test_new_with_prompt() {
-        let conversation =
-            Conversation::new_with_prompt("test-model".to_string(), "Debug the clipboard handling");
+        let conversation = Conversation::new_with_prompt(
+            "test-model".to_string(),
+            "Debug the clipboard handling",
+            0,
+        );
 
         // Should contain slug and hash
         assert!(conversation.id.contains("debug"));
@@ -794,7 +797,7 @@ mod tests {
     #[test]
     fn test_conversation_id_format() {
         let conversation =
-            Conversation::new_with_prompt("test-model".to_string(), "Fix API rate limiting");
+            Conversation::new_with_prompt("test-model".to_string(), "Fix API rate limiting", 0);
 
         // ID format: {slug}-{hash4}
         // Should match pattern: word-word-word-xxxx
