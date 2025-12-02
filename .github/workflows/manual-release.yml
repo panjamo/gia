@@ -14,6 +14,13 @@ jobs:
       prev_tag: ${{ steps.changelog.outputs.prev_tag }}
       changelog: ${{ steps.changelog.outputs.changelog }}
     steps:
+    - name: Verify branch is master
+      if: github.ref != 'refs/heads/master'
+      run: |
+        echo "❌ This workflow can only be run on the master branch"
+        echo "Current branch: ${{ github.ref }}"
+        exit 1
+
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0  # Fetch all history for tags
