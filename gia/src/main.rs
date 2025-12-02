@@ -27,6 +27,11 @@ use crate::logging::init_logging;
 async fn main() -> Result<()> {
     init_logging();
 
+    // Ensure default task files exist (EN.md and DE.md)
+    if let Err(e) = role::ensure_default_tasks() {
+        eprintln!("Warning: Failed to create default task files: {}", e);
+    }
+
     let config = Config::from_args();
     run_app(config).await
 }

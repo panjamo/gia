@@ -4,6 +4,37 @@ use std::path::PathBuf;
 
 use crate::logging::{log_info, log_warn};
 
+// Default task definitions embedded in the binary
+const DEFAULT_EN_TASK: &str = r"
+transscript
+
+translate to englisch
+
+correct the englisch
+
+no time codes
+
+no markdown
+
+only one version
+
+no explanations
+";
+
+const DEFAULT_DE_TASK: &str = r"
+übersetze ins Deutsche wenn nötig
+
+korregiere mein Deutsch wenn nötig
+
+KEINE Zeitstempel
+
+KEIN markdown
+
+KEINE Erklärungen
+
+einfach nur eine Version
+";
+
 #[cfg(test)]
 use crate::logging::log_debug;
 #[cfg(test)]
@@ -136,6 +167,37 @@ fn get_role_path(role_name: &str) -> Result<PathBuf> {
 /// Get the path to a task definition file
 fn get_task_path(task_name: &str) -> Result<PathBuf> {
     get_definition_path(task_name, "tasks")
+}
+
+/// Ensure default task files exist, creating them if needed
+/// This is called at startup to ensure EN.md and DE.md exist
+pub fn ensure_default_tasks() -> Result<()> {
+    let home_dir =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
+
+    let tasks_dir = home_dir.join(".gia").join("tasks");
+
+    // Create tasks directory if it doesn't exist
+    if !tasks_dir.exists() {
+        fs::create_dir_all(&tasks_dir)?;
+        log_info(&format!("Created tasks directory: {}", tasks_dir.display()));
+    }
+
+    // Ensure EN.md exists
+    let en_path = tasks_dir.join("EN.md");
+    if !en_path.exists() {
+        fs::write(&en_path, DEFAULT_EN_TASK)?;
+        log_info(&format!("Created default task file: {}", en_path.display()));
+    }
+
+    // Ensure DE.md exists
+    let de_path = tasks_dir.join("DE.md");
+    if !de_path.exists() {
+        fs::write(&de_path, DEFAULT_DE_TASK)?;
+        log_info(&format!("Created default task file: {}", de_path.display()));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
