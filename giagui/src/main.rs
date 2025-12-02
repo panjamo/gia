@@ -899,7 +899,15 @@ impl GiaApp {
 
         thread::spawn(move || {
             let result = match Command::new("gia")
-                .args(["--record-audio", "--role", &role, "--no-save", &prompt])
+                .args([
+                    "--record-audio",
+                    "--role",
+                    &role,
+                    "--no-save",
+                    "--model",
+                    "gemini-2.0-flash-lite",
+                    &prompt,
+                ])
                 .output()
             {
                 Ok(output) => {
