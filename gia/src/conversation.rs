@@ -57,6 +57,7 @@ pub struct ConversationMetadata {
     pub model_used: String,
     #[serde(default)]
     pub token_usage_per_message: Vec<TokenUsage>,
+    pub api_key_index: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -113,7 +114,7 @@ impl Conversation {
     }
 
     /// Create a new conversation with a slug-hash ID based on the first prompt
-    pub fn new_with_prompt(model_name: String, first_prompt: &str) -> Self {
+    pub fn new_with_prompt(model_name: String, first_prompt: &str, api_key_index: usize) -> Self {
         let now = Utc::now();
         let uuid = Uuid::new_v4();
         let slug = Self::generate_slug(first_prompt);
@@ -129,6 +130,7 @@ impl Conversation {
                 resources_per_message: Vec::new(),
                 model_used: model_name,
                 token_usage_per_message: Vec::new(),
+                api_key_index,
             },
         }
     }
@@ -136,7 +138,7 @@ impl Conversation {
     #[cfg(test)]
     pub fn new(model_name: String) -> Self {
         // Fallback for tests and cases where we don't have a prompt yet
-        Self::new_with_prompt(model_name, "conversation")
+        Self::new_with_prompt(model_name, "conversation", 0)
     }
 
     pub fn add_message_with_usage(
@@ -772,8 +774,11 @@ mod tests {
 
     #[test]
     fn test_new_with_prompt() {
-        let conversation =
-            Conversation::new_with_prompt("test-model".to_string(), "Debug the clipboard handling");
+        let conversation = Conversation::new_with_prompt(
+            "test-model".to_string(),
+            "Debug the clipboard handling",
+            0,
+        );
 
         // Should contain slug and hash
         assert!(conversation.id.contains("debug"));
@@ -789,7 +794,7 @@ mod tests {
     #[test]
     fn test_conversation_id_format() {
         let conversation =
-            Conversation::new_with_prompt("test-model".to_string(), "Fix API rate limiting");
+            Conversation::new_with_prompt("test-model".to_string(), "Fix API rate limiting", 0);
 
         // ID format: {slug}-{hash4}
         // Should match pattern: word-word-word-xxxx
@@ -804,5 +809,60 @@ mod tests {
         for c in conversation.id.chars() {
             assert!(c.is_lowercase() || c.is_numeric() || c == '-');
         }
+    }
+
+    #[test]
+    fn test_conversation_stores_api_key_index() {
+        // Test that conversation stores the provided API key index
+        let conversation =
+            Conversation::new_with_prompt("test-model".to_string(), "Test prompt", 2);
+
+        assert_eq!(conversation.metadata.api_key_index, 2);
+    }
+
+    #[test]
+    fn test_conversation_with_zero_api_key_index() {
+        // Test that conversation correctly stores index 0
+        let conversation =
+            Conversation::new_with_prompt("test-model".to_string(), "Test prompt", 0);
+
+        assert_eq!(conversation.metadata.api_key_index, 0);
+    }
+
+    #[test]
+    fn test_conversation_serialization_with_api_key_index() {
+        // Test that API key index is properly serialized and deserialized
+        let conversation =
+            Conversation::new_with_prompt("test-model".to_string(), "Test prompt", 3);
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&conversation).expect("Failed to serialize");
+
+        // Verify the JSON contains the api_key_index field
+        assert!(json.contains("api_key_index"));
+        assert!(json.contains("\"api_key_index\":3"));
+
+        // Deserialize back
+        let deserialized: Conversation =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+
+        assert_eq!(deserialized.metadata.api_key_index, 3);
+        assert_eq!(deserialized.id, conversation.id);
+    }
+
+    #[test]
+    fn test_multiple_conversations_with_different_api_keys() {
+        // Test that multiple conversations can have different API key indices
+        let conv1 = Conversation::new_with_prompt("model1".to_string(), "First conversation", 0);
+        let conv2 = Conversation::new_with_prompt("model2".to_string(), "Second conversation", 1);
+        let conv3 = Conversation::new_with_prompt("model3".to_string(), "Third conversation", 2);
+
+        assert_eq!(conv1.metadata.api_key_index, 0);
+        assert_eq!(conv2.metadata.api_key_index, 1);
+        assert_eq!(conv3.metadata.api_key_index, 2);
+
+        // Ensure they have different IDs
+        assert_ne!(conv1.id, conv2.id);
+        assert_ne!(conv2.id, conv3.id);
     }
 }

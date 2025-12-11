@@ -44,12 +44,23 @@ fn test_error_without_prompt() {
     let config = TestConfig::new();
     let output = config
         .gia_command()
+        .stdin(std::process::Stdio::null()) // Explicitly ensure no stdin
         .output()
         .expect("Failed to execute gia");
 
     assert!(!output.status.success());
     let stderr = str::from_utf8(&output.stderr).unwrap();
-    assert!(stderr.contains("No input content provided") || stderr.contains("error"));
+
+    // The command should fail with either:
+    // - No input content error (if API key is set)
+    // - API key missing error (if no API key is set)
+    // Both are valid error cases for running gia without arguments
+    assert!(
+        stderr.contains("No input content provided")
+            || stderr.contains("Error:")
+            || stderr.contains("API keys are required")
+            || stderr.contains("Failed to get API keys")
+    );
 }
 
 #[test]

@@ -40,6 +40,9 @@ chardetng = "0.1"
 tts = "0.26"
 notify-rust = "4.11"
 cpal = "0.15"
+hound = "3.5"
+ogg-opus = "0.1"
+rubato = "0.16"
 
 [dev-dependencies]
 tempfile = "3.0"

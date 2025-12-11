@@ -12,7 +12,7 @@ This workspace contains two binaries:
 
 - Uses command line arguments as the main prompt
 - **Roles & Tasks** - Load AI role definitions and task instructions from markdown files
-- **Audio recording** - Record audio prompts using ffmpeg with `-a` flag
+- **Audio recording** - Record audio prompts natively with `-a` flag (no external dependencies)
 - **Smart file support** - Include any files or directories
   - `-f` flag: Automatically detects media files (JPEG, PNG, WebP, HEIC, PDF, OGG, OPUS, MP3, M4A, MP4) vs text files
   - Supports directories (processes all files recursively with auto-detection)
@@ -27,12 +27,41 @@ This workspace contains two binaries:
 
 ## Installation
 
+### MacOS
+
+#### Homebrew
+
+First add the tap with:
+`brew tap panjamo/gia`
+
+and then install with:
+`brew install gia`
+
+Update with:
+`brew upgrade gia`
+
+Uninstall with:
+`brew uninstall gia`
+
+Remove the tap with:
+`brew untap gia`
+
+For more information on Homebrew, visit:
+`brew help`, `man brew` or check [Homebrew's documentation](https://docs.brew.sh).
+
+#### Installer packages
+
+Download the .pkg file according your macOS architecture from the [releases page](https://github.com/panjamo/gia/releases) and install it.
+
+
+### Windows
+
+tbd
+
+### Manual Installation
+
 1. Clone this repository
-2. Install Rust if you haven't already
-3. For audio recording support, install ffmpeg:
-   - **Windows**: Download from https://ffmpeg.org/download.html and add to PATH
-   - **macOS**: `brew install ffmpeg`
-   - **Linux**: `sudo apt install ffmpeg` (Ubuntu/Debian) or equivalent for your distribution
+3. Install Rust if you haven't already
 4. Build the project:
    ```bash
    # Build both binaries
@@ -128,33 +157,15 @@ Configure the context window limit (default: 8000):
 export CONTEXT_WINDOW_LIMIT=10000
 ```
 
-For audio recording, optionally set your preferred audio device:
 
-**Windows:**
-```cmd
-set GIA_AUDIO_DEVICE=Headset (WH-1000XM2)
-```
-
-**macOS:**
-```bash
-# Use device index (0, 1, 2, etc.) - run with RUST_LOG=debug to see available devices
-export GIA_AUDIO_DEVICE="0"
-```
-
-**Linux:**
-```bash
-# Use device name or "default"
-export GIA_AUDIO_DEVICE="default"
-```
 
 ## Environment Variables & Help
 
 ### Environment Variables
-- `GIA_DEFAULT_MODEL` - Default AI model (default: `gemini-2.5-flash-lite`). Use `ollama::model-name` for Ollama models
-- `OLLAMA_BASE_URL` - Ollama server URL (default: `http://localhost:11434`)
-- `GEMINI_API_KEY` - Gemini API key(s), pipe-separated for fallback: `key1|key2|key3` (not required when using Ollama)
+- `GEMINI_API_KEY` - Gemini API key(s), pipe-separated for fallback: `key1|key2|key3`
+- `GIA_DEFAULT_MODEL` - Default AI model (default: `gemini-2.5-flash-lite`)
+- `GIA_AUDIO_DEVICE` - Default audio input device for recording
 - `CONTEXT_WINDOW_LIMIT` - Context window size limit (default: 8000)
-- `GIA_AUDIO_DEVICE` - Audio recording device name or index
 - `RUST_LOG` - Logging level: `debug`, `info`, `error` (outputs to stderr)
 - `GIA_LOG_TO_FILE` - Enable per-conversation file logging: `1`
 
@@ -168,7 +179,7 @@ gia -h              # Short help with basic usage
 
 GIA automatically combines input from multiple sources:
 - **Command line**: Main prompt (required, except when using `-a` alone)
-- **Audio recording**: With `-a` flag (requires ffmpeg)
+- **Audio recording**: With `-a` flag (native recording, no external dependencies)
 - **Stdin**: Automatically detected when piped
 - **Clipboard**: With `-c` flag only
 - **Text files**: With `-f` flag (any extension)
@@ -225,6 +236,16 @@ gia -a  # Short option
 
 # Audio recording with custom prompt:
 gia --record-audio "Transcribe and summarize this audio"
+
+# Audio recording with specific device:
+gia --list-audio-devices                                    # List available devices
+gia --audio-device "Microphone Array" --record-audio        # Use specific device
+GIA_AUDIO_DEVICE="Microphone Array" gia --record-audio     # Use env var
+
+# Transcribe-only mode (no conversation history saved):
+gia --record-audio --role EN --no-save         # English transcription only
+gia --record-audio --role DE --no-save         # German transcription only
+gia "Transcribe this" --record-audio --no-save # Custom prompt transcription
 
 # With clipboard input:
 gia "Summarize this text" -c
@@ -342,7 +363,9 @@ gia -s -b                         # Show latest conversation (file + browser)
 
 - `[PROMPT_TEXT]` - Prompt text for the AI (main input)
 - `-t, --role <NAME>` - Load role/task from ~/.gia/roles/ or ~/.gia/tasks/ (can be used multiple times)
-- `-a, --record-audio` - Record audio input using ffmpeg (auto-generates prompt if no text provided)
+- `-a, --record-audio` - Record audio input natively (auto-generates prompt if no text provided)
+- `--audio-device <DEVICE>` - Specify audio input device for recording (overrides GIA_AUDIO_DEVICE)
+- `--list-audio-devices` - List all available audio input devices and exit
 - `-c, --clipboard-input` - Add clipboard content to prompt (auto-detects images vs text)
 - `-f, --file <FILE_OR_DIR>` - Add file or directory to prompt (auto-detects media vs text; directories processed recursively)
 - `-o, --clipboard-output` - Write response to clipboard instead of stdout
@@ -352,8 +375,15 @@ gia -s -b                         # Show latest conversation (file + browser)
 - `-l, --list-conversations [NUMBER]` - List saved conversations (optionally limit number)
 - `-s, --show-conversation [ID]` - Show conversation (follows output options: stdout/clipboard/file+browser)
 - `-m, --model <MODEL>` - Specify model (default: gemini-2.5-flash-lite)
+- `--no-save` - Don't save to conversation history (transcribe-only mode)
   - Gemini models: see https://ai.google.dev/gemini-api/docs/models
   - Ollama models: use `ollama::model-name` format (e.g., `ollama::llama3.2`)
+
+#### Audio Device Selection Priority
+Device selection follows this priority (highest to lowest):
+1. `--audio-device` CLI parameter
+2. `GIA_AUDIO_DEVICE` environment variable
+3. Default system audio input device
 
 ## Logging
 
@@ -414,3 +444,4 @@ gia "Rewrite this professionally" -c -o
 ## License
 
 MIT License
+

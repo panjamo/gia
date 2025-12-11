@@ -6,11 +6,10 @@ This diagram visualizes all the different input sources and output destinations 
 flowchart LR
     %% Input Sources (Left Side)
     CMD[Command Line Arguments<br/>Main Prompt Text]
-    AUDIO[Audio Recording<br/>-a, --record-audio<br/>Uses ffmpeg]
+    AUDIO[Audio Recording<br/>-a, --record-audio<br/>Native recording]
     CLIPBOARD[Clipboard Content<br/>-c, --clipboard-input<br/>Auto-detects text vs images]
     STDIN[Standard Input<br/>Auto-detected when piped]
-    TEXTFILES[Text Files<br/>-f, --file<br/>Any extension]
-    MEDIAFILES[Media Files<br/>-i, --image<br/>JPEG, PNG, WebP, HEIC, PDF<br/>OGG, OPUS, MP3, M4A, MP4]
+    FILES[Files<br/>-f, --file<br/>Auto-detects: Text & Media<br/>JPEG, PNG, WebP, HEIC, PDF<br/>OGG, OPUS, MP3, M4A, MP4]
     ROLES[Roles & Tasks<br/>-t, --role<br/>From ~/.gia/roles/ or ~/.gia/tasks/]
     RESUME[Resume Conversation<br/>-r, --resume<br/>Continue previous conversation]
 
@@ -28,8 +27,7 @@ flowchart LR
     AUDIO --> GIA
     CLIPBOARD --> GIA
     STDIN --> GIA
-    TEXTFILES --> GIA
-    MEDIAFILES --> GIA
+    FILES --> GIA
     ROLES --> GIA
     RESUME --> GIA
 
@@ -45,7 +43,7 @@ flowchart LR
     classDef core fill:#fff3e0,stroke:#e65100,stroke-width:3px,color:#000000
     classDef storage fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px,color:#000000
 
-    class CMD,AUDIO,CLIPBOARD,STDIN,TEXTFILES,MEDIAFILES,ROLES,RESUME inputSource
+    class CMD,AUDIO,CLIPBOARD,STDIN,FILES,ROLES,RESUME inputSource
     class STDOUT,CLIPOUT,BROWSER,TTS outputDest
     class GIA core
 ```
@@ -53,13 +51,12 @@ flowchart LR
 ## Input Sources
 
 1. **Command Line Arguments** - Main prompt text (required, except audio-only)
-2. **Audio Recording** (-a) - Record audio using ffmpeg, auto-generates prompt
+2. **Audio Recording** (-a) - Record audio natively, auto-generates prompt
 3. **Clipboard Content** (-c) - Auto-detects text vs images
 4. **Standard Input** - Automatically detected when piped
-5. **Text Files** (-f) - Any file extension, content added to prompt
-6. **Media Files** (-i) - Images, audio, video files for AI analysis
-7. **Roles & Tasks** (-t) - Load AI personas and instructions from markdown files
-8. **Resume Conversation** (-r) - Continue previous conversations with context
+5. **Files** (-f) - Auto-detects text and media files (images, audio, video, PDFs)
+6. **Roles & Tasks** (-t) - Load AI personas and instructions from markdown files
+7. **Resume Conversation** (-r) - Continue previous conversations with context
 
 ## Output Destinations
 
@@ -81,7 +78,7 @@ flowchart LR
 
 ```bash
 # Multiple inputs to clipboard output
-gia "Analyze this code and documentation" -f README.md -f main.rs -i diagram.png -o
+gia "Analyze this code and documentation" -f README.md -f main.rs -f diagram.png -o
 
 # Audio + text with browser preview
 gia -a "Also consider this context" -c -b
@@ -90,7 +87,7 @@ gia -a "Also consider this context" -c -b
 gia --resume "Continue with this new data" -f data.csv
 
 # Role-based analysis with multiple sources
-gia -t code-review "Review this implementation" -f src/ -i architecture.png
+gia -t code-review "Review this implementation" -f src/ -f architecture.png
 
 # Generate conventional commit message from git diff
 git diff --cached | gia 'Generate conventional commit message. Use Emojis in subject (Gitmoji). Do NOT explain your Procedure.'

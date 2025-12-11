@@ -12,6 +12,11 @@ use crate::provider::{ProviderConfig, ProviderFactory};
 use crate::spinner::SpinnerProcess;
 
 pub async fn run_app(mut config: Config) -> Result<()> {
+    // Handle list audio devices command
+    if config.list_audio_devices {
+        return crate::audio::list_audio_devices();
+    }
+
     // Initialize conversation manager
     let conversation_manager =
         ConversationManager::new().context("Failed to initialize conversation manager")?;
@@ -26,15 +31,23 @@ pub async fn run_app(mut config: Config) -> Result<()> {
         return handle_show_conversation(&conversation_manager, conversation_id, &config);
     }
 
+    // Get API keys - only required for non-Ollama providers
+    let api_keys = if config.model.to_lowercase().starts_with("ollama::") {
+        Vec::new()
+    } else {
+        crate::api_key::get_api_keys().context("Failed to get API keys")?
+    };
+
     // Determine conversation mode and adjust prompt if needed
     let (mut conversation, final_prompt) =
-        resolve_conversation(&config, &conversation_manager, &config.model)?;
+        resolve_conversation(&config, &conversation_manager, &config.model, &api_keys)?;
 
     // Setup file logging for this conversation if GIA_LOG_TO_FILE is set
     setup_conversation_file_logging(&conversation.id)
         .context("Failed to setup conversation file logging")?;
 
     // Get input content (this may modify config to add clipboard images)
+    // Note: Audio recording happens here, so spinner must start AFTER this
     get_input_text(&mut config, Some(&final_prompt)).context("Failed to get input text")?;
 
     if config.ordered_content.is_empty() {
@@ -50,20 +63,21 @@ pub async fn run_app(mut config: Config) -> Result<()> {
         config.ordered_content.len()
     ));
 
+    // Start spinner now (after audio recording completes, before AI operations)
+    let _spinner = if config.spinner {
+        Some(SpinnerProcess::start())
+    } else {
+        None
+    };
+
     // Truncate conversation if it's getting too long
     conversation.truncate_if_needed(get_context_window_limit());
 
-    // Get API keys - only required for non-Ollama providers
-    let api_keys = if config.model.to_lowercase().starts_with("ollama::") {
-        Vec::new()
-    } else {
-        crate::api_key::get_api_keys().context("Failed to get API keys")?
-    };
-
-    // Initialize AI provider
+    // Initialize AI provider with preferred API key index from conversation (for caching)
     let provider_config = ProviderConfig {
         model: config.model.clone(),
-        api_keys,
+        api_keys: api_keys.clone(),
+        preferred_api_key_index: conversation.metadata.api_key_index,
     };
 
     let mut provider = ProviderFactory::create_provider(provider_config)
@@ -102,12 +116,7 @@ pub async fn run_app(mut config: Config) -> Result<()> {
         provider.model_name()
     ));
 
-    // Start spinner if requested
-    let _spinner = if config.spinner {
-        Some(SpinnerProcess::start())
-    } else {
-        None
-    };
+    // Spinner already started earlier if requested
 
     let ai_response = provider
         .generate_content_with_chat_messages(all_genai_messages)
@@ -176,15 +185,17 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     conversation.add_message_with_usage(new_user_message_wrapper, resources, TokenUsage::default());
     conversation.add_message_with_usage(assistant_message_wrapper, Vec::new(), usage);
 
-    // Save conversation
-    conversation_manager
-        .save_conversation(&conversation)
-        .context("Failed to save conversation")?;
+    // Save conversation (only if no_save flag is not set)
+    if !config.no_save {
+        conversation_manager
+            .save_conversation(&conversation)
+            .context("Failed to save conversation")?;
 
-    // Save markdown
-    conversation_manager
-        .save_markdown(&conversation)
-        .context("Failed to save markdown")?;
+        // Save markdown
+        conversation_manager
+            .save_markdown(&conversation)
+            .context("Failed to save markdown")?;
+    }
 
     // Output response
     output_text_with_usage(&response, &config, Some(usage), &conversation.id)
@@ -321,7 +332,27 @@ fn resolve_conversation(
     config: &Config,
     conversation_manager: &ConversationManager,
     model: &str,
+    api_keys: &[String],
 ) -> Result<(Conversation, String)> {
+    // Helper to create new conversation with random API key index
+    let create_new_conversation = || {
+        let api_key_index = if api_keys.is_empty() {
+            0
+        } else {
+            // Select a random key index for new conversations
+            use rand::prelude::*;
+            let mut rng = rand::thread_rng();
+            (0..api_keys.len()).choose(&mut rng).unwrap_or(0)
+        };
+        Conversation::new_with_prompt(model.to_string(), &config.prompt, api_key_index)
+    };
+
+    // If --no-save flag is set, always create a new conversation with random key
+    if config.no_save {
+        log_info("--no-save flag set, creating new conversation with random API key");
+        return Ok((create_new_conversation(), config.prompt.clone()));
+    }
+
     if config.resume_last {
         // Resume latest conversation with -R flag
         log_info("Attempting to resume latest conversation (-R flag)");
@@ -330,7 +361,7 @@ fn resolve_conversation(
             conv
         } else {
             log_info("No previous conversations found, starting new conversation");
-            Conversation::new_with_prompt(model.to_string(), &config.prompt)
+            create_new_conversation()
         };
         return Ok((conv, config.prompt.clone()));
     }
@@ -339,10 +370,7 @@ fn resolve_conversation(
         None => {
             // New conversation
             log_info("Starting new conversation");
-            Ok((
-                Conversation::new_with_prompt(model.to_string(), &config.prompt),
-                config.prompt.clone(),
-            ))
+            Ok((create_new_conversation(), config.prompt.clone()))
         }
         Some(id) if id.is_empty() => {
             // Resume latest conversation
@@ -352,7 +380,7 @@ fn resolve_conversation(
                 conv
             } else {
                 log_info("No previous conversations found, starting new conversation");
-                Conversation::new_with_prompt(model.to_string(), &config.prompt)
+                create_new_conversation()
             };
             Ok((conv, config.prompt.clone()))
         }

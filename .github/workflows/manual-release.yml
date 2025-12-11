@@ -14,6 +14,13 @@ jobs:
       prev_tag: ${{ steps.changelog.outputs.prev_tag }}
       changelog: ${{ steps.changelog.outputs.changelog }}
     steps:
+    - name: Verify branch is master
+      if: github.ref != 'refs/heads/master'
+      run: |
+        echo "❌ This workflow can only be run on the master branch"
+        echo "Current branch: ${{ github.ref }}"
+        exit 1
+
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0  # Fetch all history for tags
@@ -85,11 +92,15 @@ jobs:
         retention-days: 1
 
   build-macos-intel:
-    runs-on: macos-13  # Intel runner
+    runs-on: macos-15-intel  # Intel runner
     steps:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0  # Needed for build.rs version generation
+
+    - name: Install Opus library and autotools
+      run: |
+        brew install opus autoconf automake libtool
 
     - name: Setup Rust
       uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -98,7 +109,11 @@ jobs:
         target: x86_64-apple-darwin
 
     - name: Build macOS Intel Release
-      run: cargo build --release --target x86_64-apple-darwin
+      run: |
+        export PKG_CONFIG_PATH="/usr/local/opt/opus/lib/pkgconfig:$PKG_CONFIG_PATH"
+        export LIBRARY_PATH="/usr/local/opt/opus/lib:$LIBRARY_PATH"
+        export RUSTFLAGS="-L /usr/local/opt/opus/lib"
+        cargo build --release --target x86_64-apple-darwin
 
     - name: Upload macOS Intel gia Binary
       uses: actions/upload-artifact@v4
@@ -114,12 +129,82 @@ jobs:
         path: target/x86_64-apple-darwin/release/giagui
         retention-days: 1
 
+    - name: Create macOS Intel tar.gz Archive
+      run: |
+        COMMIT_COUNT=$(git rev-list --count HEAD)
+        VERSION="v0.1.$COMMIT_COUNT"
+        ARCHIVE_NAME="gia-macos-x86_64-${VERSION}.tar.gz"
+
+        # Create temporary directory for archive contents
+        mkdir -p /tmp/gia-archive
+
+        # Copy binaries
+        cp target/x86_64-apple-darwin/release/gia /tmp/gia-archive/
+        cp target/x86_64-apple-darwin/release/giagui /tmp/gia-archive/
+
+        # Make binaries executable
+        chmod +x /tmp/gia-archive/gia
+        chmod +x /tmp/gia-archive/giagui
+
+        # Create tar.gz archive
+        tar -czf "$ARCHIVE_NAME" -C /tmp/gia-archive .
+
+        # Move to predictable location for artifact upload
+        mkdir -p archives
+        mv "$ARCHIVE_NAME" archives/
+
+        # Cleanup
+        rm -rf /tmp/gia-archive
+
+        echo "Created archive: archives/$ARCHIVE_NAME"
+
+    - name: Upload macOS Intel tar.gz Archive
+      uses: actions/upload-artifact@v4
+      with:
+        name: gia-macos-intel-tarball
+        path: archives/*.tar.gz
+        retention-days: 1
+
+    - name: Prepare Package Build Directories
+      run: |
+        mkdir -p packages/bin
+        mkdir -p packages/macos/payload/bin
+
+    - name: Copy Binaries for Package
+      run: |
+        cp target/x86_64-apple-darwin/release/gia packages/bin/gia
+        cp target/x86_64-apple-darwin/release/giagui packages/bin/giagui
+
+    - name: Build macOS Package
+      run: |
+        cd packages/macos
+        # Get version from git (consistent with workflow version detection)
+        COMMIT_COUNT=$(git rev-list --count HEAD)
+        VERSION="0.1.$COMMIT_COUNT"
+        echo "Building package with version: $VERSION"
+        ./build-package.sh "$VERSION"
+
+        # Rename package with version number
+        cd ../..
+        mv packages/gia-*.pkg packages/gia-intel-installer-v${VERSION}.pkg
+
+    - name: Upload macOS Intel Package
+      uses: actions/upload-artifact@v4
+      with:
+        name: gia-macos-intel-pkg
+        path: packages/gia-*.pkg
+        retention-days: 1
+
   build-macos-arm:
     runs-on: macos-latest  # ARM runner
     steps:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0  # Needed for build.rs version generation
+
+    - name: Install Opus library and autotools
+      run: |
+        brew install opus autoconf automake libtool
 
     - name: Setup Rust
       uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -128,7 +213,11 @@ jobs:
         target: aarch64-apple-darwin
 
     - name: Build macOS ARM Release
-      run: cargo build --release --target aarch64-apple-darwin
+      run: |
+        export PKG_CONFIG_PATH="/opt/homebrew/opt/opus/lib/pkgconfig:$PKG_CONFIG_PATH"
+        export LIBRARY_PATH="/opt/homebrew/opt/opus/lib:$LIBRARY_PATH"
+        export RUSTFLAGS="-L /opt/homebrew/opt/opus/lib"
+        cargo build --release --target aarch64-apple-darwin
 
     - name: Upload macOS ARM gia Binary
       uses: actions/upload-artifact@v4
@@ -142,6 +231,72 @@ jobs:
       with:
         name: giagui-macos-arm
         path: target/aarch64-apple-darwin/release/giagui
+        retention-days: 1
+
+    - name: Create macOS ARM tar.gz Archive
+      run: |
+        COMMIT_COUNT=$(git rev-list --count HEAD)
+        VERSION="v0.1.$COMMIT_COUNT"
+        ARCHIVE_NAME="gia-macos-aarch64-${VERSION}.tar.gz"
+
+        # Create temporary directory for archive contents
+        mkdir -p /tmp/gia-archive
+
+        # Copy binaries
+        cp target/aarch64-apple-darwin/release/gia /tmp/gia-archive/
+        cp target/aarch64-apple-darwin/release/giagui /tmp/gia-archive/
+
+        # Make binaries executable
+        chmod +x /tmp/gia-archive/gia
+        chmod +x /tmp/gia-archive/giagui
+
+        # Create tar.gz archive
+        tar -czf "$ARCHIVE_NAME" -C /tmp/gia-archive .
+
+        # Move to predictable location for artifact upload
+        mkdir -p archives
+        mv "$ARCHIVE_NAME" archives/
+
+        # Cleanup
+        rm -rf /tmp/gia-archive
+
+        echo "Created archive: archives/$ARCHIVE_NAME"
+
+    - name: Upload macOS ARM tar.gz Archive
+      uses: actions/upload-artifact@v4
+      with:
+        name: gia-macos-arm-tarball
+        path: archives/*.tar.gz
+        retention-days: 1
+
+    - name: Prepare Package Build Directories
+      run: |
+        mkdir -p packages/bin
+        mkdir -p packages/macos/payload/bin
+
+    - name: Copy Binaries for Package
+      run: |
+        cp target/aarch64-apple-darwin/release/gia packages/bin/gia
+        cp target/aarch64-apple-darwin/release/giagui packages/bin/giagui
+
+    - name: Build macOS Package
+      run: |
+        cd packages/macos
+        # Get version from git (consistent with workflow version detection)
+        COMMIT_COUNT=$(git rev-list --count HEAD)
+        VERSION="0.1.$COMMIT_COUNT"
+        echo "Building package with version: $VERSION"
+        ./build-package.sh "$VERSION"
+
+        # Rename package with version number
+        cd ../..
+        mv packages/gia-*.pkg packages/gia-arm-installer-v${VERSION}.pkg
+
+    - name: Upload macOS ARM Package
+      uses: actions/upload-artifact@v4
+      with:
+        name: gia-macos-arm-pkg
+        path: packages/gia-*.pkg
         retention-days: 1
 
   create-release:
@@ -174,6 +329,12 @@ jobs:
         name: giagui-macos-intel
         path: ./artifacts/macos-intel
 
+    - name: Download macOS Intel Package
+      uses: actions/download-artifact@v4
+      with:
+        name: gia-macos-intel-pkg
+        path: ./artifacts/macos-intel-pkg
+
     - name: Download macOS ARM gia Binary
       uses: actions/download-artifact@v4
       with:
@@ -185,6 +346,24 @@ jobs:
       with:
         name: giagui-macos-arm
         path: ./artifacts/macos-arm
+
+    - name: Download macOS ARM Package
+      uses: actions/download-artifact@v4
+      with:
+        name: gia-macos-arm-pkg
+        path: ./artifacts/macos-arm-pkg
+
+    - name: Download macOS Intel tar.gz Archive
+      uses: actions/download-artifact@v4
+      with:
+        name: gia-macos-intel-tarball
+        path: ./artifacts/macos-intel-tarball
+
+    - name: Download macOS ARM tar.gz Archive
+      uses: actions/download-artifact@v4
+      with:
+        name: gia-macos-arm-tarball
+        path: ./artifacts/macos-arm-tarball
 
     - name: Create Release and Upload Assets
       env:
@@ -206,10 +385,12 @@ jobs:
         echo "Final release notes:"
         cat release_notes.txt
 
-        # Create release
+        # Create release (explicitly publish to trigger downstream workflows)
         gh release create "${{ needs.detect-version.outputs.version }}" \
           --title "Release ${{ needs.detect-version.outputs.version }}" \
-          --notes-file "release_notes.txt"
+          --notes-file "release_notes.txt" \
+          --verify-tag \
+          --latest
 
         # Rename binaries with platform-specific names
         cp ./artifacts/windows/gia.exe ./gia-windows-x86_64.exe
@@ -219,11 +400,42 @@ jobs:
         cp ./artifacts/macos-arm/gia ./gia-macos-aarch64
         cp ./artifacts/macos-arm/giagui ./giagui-macos-aarch64
 
-        # Upload binaries
+        # Copy macOS packages (preserve version in filename)
+        cp ./artifacts/macos-intel-pkg/*.pkg ./
+        cp ./artifacts/macos-arm-pkg/*.pkg ./
+
+        # Copy tar.gz archives (preserve version in filename)
+        cp ./artifacts/macos-intel-tarball/*.tar.gz ./
+        cp ./artifacts/macos-arm-tarball/*.tar.gz ./
+
+        # Upload binaries, packages, and tar.gz archives
         gh release upload "${{ needs.detect-version.outputs.version }}" \
           ./gia-windows-x86_64.exe \
           ./giagui-windows-x86_64.exe \
           ./gia-macos-x86_64 \
           ./giagui-macos-x86_64 \
           ./gia-macos-aarch64 \
-          ./giagui-macos-aarch64
+          ./giagui-macos-aarch64 \
+          ./gia-intel-installer-*.pkg \
+          ./gia-arm-installer-*.pkg \
+          ./gia-macos-x86_64-*.tar.gz \
+          ./gia-macos-aarch64-*.tar.gz
+
+    - name: Trigger tap repository update
+      env:
+        VERSION: ${{ needs.detect-version.outputs.version }}
+      run: |
+        VERSION_NUM="${VERSION#v}"
+        echo "Triggering Homebrew tap update with version: $VERSION_NUM"
+
+        # Clean the token (remove any whitespace/newlines)
+        GH_TOKEN=$(echo "${{ secrets.GH_PERSONAL_TOKEN }}" | tr -d '[:space:]')
+        export GH_TOKEN
+
+        # Use gh CLI for workflow dispatch (more reliable than raw curl)
+        gh workflow run update-formula.yml \
+          --repo panjamo/homebrew-gia \
+          --ref main \
+          --field version="$VERSION_NUM" \
+          --field formula="gia"
+

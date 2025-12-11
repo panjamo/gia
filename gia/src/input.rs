@@ -286,7 +286,7 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
     // 2. Audio recording when present
     if config.record_audio {
         log_info("Audio recording requested");
-        match record_audio() {
+        match record_audio(config.audio_device.as_deref()) {
             Ok(audio_path) => {
                 log_info(&format!("Audio recorded to: {audio_path}"));
                 config
@@ -519,6 +519,9 @@ mod tests {
             roles: vec![],
             ordered_content: Vec::new(),
             spinner: false,
+            audio_device: None,
+            list_audio_devices: false,
+            no_save: false,
         };
 
         get_input_text(&mut config, None).unwrap();
@@ -609,6 +612,9 @@ mod tests {
             roles: vec![],
             ordered_content: Vec::new(),
             spinner: false,
+            audio_device: None,
+            list_audio_devices: false,
+            no_save: false,
         };
 
         let result = get_input_text(&mut config, None);
@@ -634,6 +640,9 @@ mod tests {
             roles: vec![],
             ordered_content: Vec::new(),
             spinner: false,
+            audio_device: None,
+            list_audio_devices: false,
+            no_save: false,
         };
 
         let result = get_input_text(&mut config, Some("Override prompt"));
@@ -775,6 +784,9 @@ mod tests {
             roles: vec![],
             ordered_content: Vec::new(),
             spinner: false,
+            audio_device: None,
+            list_audio_devices: false,
+            no_save: false,
         };
 
         get_input_text(&mut config, None).unwrap();
@@ -833,7 +845,10 @@ mod tests {
         let mut config = Config {
             prompt: "Test prompt".to_string(),
             use_clipboard_input: false,
-            text_files: vec![],
+            text_files: vec![
+                temp_text_file.path().to_str().unwrap().to_string(),
+                temp_binary_file.path().to_str().unwrap().to_string(),
+            ],
             output_mode: OutputMode::Stdout,
             resume_conversation: None,
             resume_last: false,
@@ -844,6 +859,9 @@ mod tests {
             roles: vec![],
             ordered_content: Vec::new(),
             spinner: false,
+            audio_device: None,
+            list_audio_devices: false,
+            no_save: false,
         };
 
         get_input_text(&mut config, None).unwrap();
@@ -898,6 +916,9 @@ mod tests {
             roles: vec![],
             ordered_content: Vec::new(),
             spinner: false,
+            audio_device: None,
+            list_audio_devices: false,
+            no_save: false,
         };
 
         get_input_text(&mut config, None).unwrap();

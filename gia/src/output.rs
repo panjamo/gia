@@ -453,6 +453,9 @@ mod tests {
                 ContentSource::ClipboardText("clipboard".to_string()),
             ],
             spinner: false,
+            audio_device: None,
+            list_audio_devices: false,
+            no_save: false,
         };
 
         let metadata = build_footer_metadata(&config, None);
@@ -481,6 +484,9 @@ mod tests {
             roles: vec![],
             ordered_content: vec![],
             spinner: false,
+            audio_device: None,
+            list_audio_devices: false,
+            no_save: false,
         };
 
         let metadata = build_footer_metadata(&config, None);

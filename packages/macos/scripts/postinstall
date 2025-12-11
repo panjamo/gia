@@ -1,0 +1,146 @@
+#!/bin/bash
+
+# GIA Postinstall Script
+# This script installs gia and giagui to ~/bin
+# It also configures PATH and removes quarantine attributes
+# Requires admin privileges to run
+
+set -e
+
+echo "=========================================="
+echo "GIA Postinstall Script"
+echo "=========================================="
+echo "Starting GIA installation..."
+echo ""
+
+# Get the actual user who is installing (not root)
+# Multiple methods to detect the real user since installer runs as root
+ACTUAL_USER=""
+
+# Method 1: Check if we're not running as root (unlikely with admin install)
+if [ -n "$USER" ] && [ "$USER" != "root" ]; then
+    ACTUAL_USER="$USER"
+    echo "Detected user from USER variable: $ACTUAL_USER"
+# Method 2: Get user from console (most reliable for GUI installer)
+elif [ -n "$(stat -f "%Su" /dev/console 2>/dev/null)" ]; then
+    ACTUAL_USER=$(stat -f "%Su" /dev/console)
+    echo "Detected user from console: $ACTUAL_USER"
+# Method 3: Check SUDO_USER (for command-line installation with sudo)
+elif [ -n "$SUDO_USER" ]; then
+    ACTUAL_USER="$SUDO_USER"
+    echo "Detected user from SUDO_USER: $ACTUAL_USER"
+else
+    echo "ERROR: Could not detect user. Installation failed."
+    exit 1
+fi
+
+# Verify we got a valid user
+if [ -z "$ACTUAL_USER" ] || [ "$ACTUAL_USER" = "root" ]; then
+    echo "ERROR: Invalid user detected: '$ACTUAL_USER'. Installation failed."
+    exit 1
+fi
+
+# Get the user's home directory
+USER_HOME=$(eval echo ~"$ACTUAL_USER")
+
+# Verify home directory exists
+if [ ! -d "$USER_HOME" ]; then
+    echo "ERROR: User home directory not found: $USER_HOME"
+    exit 1
+fi
+
+echo "Installing for user: $ACTUAL_USER"
+echo "User home directory: $USER_HOME"
+echo ""
+
+# Create ~/bin directory if it doesn't exist
+BIN_DIR="$USER_HOME/bin"
+if [ ! -d "$BIN_DIR" ]; then
+    echo "[1/4] Creating $BIN_DIR directory..."
+    sudo -u "$ACTUAL_USER" mkdir -p "$BIN_DIR"
+else
+    echo "[1/4] Directory $BIN_DIR already exists"
+fi
+
+# Copy gia to ~/bin
+echo "[2/4] Installing gia to $BIN_DIR/gia..."
+cp "$2/bin/gia" "$BIN_DIR/gia"
+chown "$ACTUAL_USER" "$BIN_DIR/gia"
+chmod +x "$BIN_DIR/gia"
+echo "      ✓ gia installed successfully"
+
+# Copy giagui to ~/bin
+echo "[3/4] Installing giagui to $BIN_DIR/giagui..."
+cp "$2/bin/giagui" "$BIN_DIR/giagui"
+chown "$ACTUAL_USER" "$BIN_DIR/giagui"
+chmod +x "$BIN_DIR/giagui"
+echo "      ✓ giagui installed successfully"
+
+# Remove quarantine attributes
+echo "[4/4] Removing quarantine attributes..."
+xattr -d com.apple.quarantine "$BIN_DIR/gia" 2>/dev/null && echo "      ✓ Removed quarantine from gia" || echo "      ℹ No quarantine attribute on gia"
+xattr -d com.apple.quarantine "$BIN_DIR/giagui" 2>/dev/null && echo "      ✓ Removed quarantine from giagui" || echo "      ℹ No quarantine attribute on giagui"
+echo ""
+
+# Function to add PATH to shell profile if not already present
+add_to_path_in_profile() {
+    local profile_file="$1"
+    local path_export='export PATH="$HOME/bin:$PATH"'
+
+    if [ -f "$profile_file" ]; then
+        # Check if ~/bin is already in PATH in this file
+        if ! grep -q '$HOME/bin' "$profile_file" && ! grep -q '~/bin' "$profile_file"; then
+            echo "" >> "$profile_file"
+            echo "# Added by GIA installer" >> "$profile_file"
+            echo "$path_export" >> "$profile_file"
+            echo "Added PATH configuration to $profile_file"
+        else
+            echo "PATH already configured in $profile_file"
+        fi
+    else
+        # Create the file with PATH export
+        echo "# Added by GIA installer" > "$profile_file"
+        echo "$path_export" >> "$profile_file"
+        chown "$ACTUAL_USER" "$profile_file"
+        echo "Created $profile_file with PATH configuration"
+    fi
+}
+
+# Add to shell profiles
+echo "Configuring PATH in shell profiles..."
+
+# For zsh (default on modern macOS)
+ZSHRC="$USER_HOME/.zshrc"
+add_to_path_in_profile "$ZSHRC"
+
+# For bash
+BASH_PROFILE="$USER_HOME/.bash_profile"
+add_to_path_in_profile "$BASH_PROFILE"
+
+# Also add to .profile as fallback
+PROFILE="$USER_HOME/.profile"
+add_to_path_in_profile "$PROFILE"
+
+echo ""
+echo "=========================================="
+echo "GIA Installation Complete!"
+echo "=========================================="
+echo ""
+echo "Installed files:"
+echo "  - gia:    $BIN_DIR/gia"
+echo "  - giagui: $BIN_DIR/giagui"
+echo ""
+echo "PATH has been configured in your shell profiles."
+echo ""
+echo "To start using gia immediately, either:"
+echo "  1. Open a new terminal window, or"
+echo "  2. Run: source ~/.zshrc (or source ~/.bash_profile)"
+echo ""
+echo "Verify installation:"
+echo "  gia --version"
+echo ""
+echo "For help:"
+echo "  gia --help"
+echo "=========================================="
+
+exit 0

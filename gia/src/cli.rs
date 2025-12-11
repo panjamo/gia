@@ -36,9 +36,12 @@ pub struct Config {
     pub show_conversation: Option<String>, // Some(id) = show specific conversation
     pub model: String,
     pub record_audio: bool,                  // true = record audio input
+    pub audio_device: Option<String>,        // None = default/env, Some(name) = specific device
+    pub list_audio_devices: bool,            // true = list audio devices and exit
     pub roles: Vec<String>,                  // role names to load from ~/.gia/<role>.md
     pub ordered_content: Vec<ContentSource>, // ordered content for multimodal requests
     pub spinner: bool,                       // true = show spinner during AI request
+    pub no_save: bool, // true = don't save to conversation history (transcribe-only mode)
 }
 
 impl Config {
@@ -101,9 +104,12 @@ impl Config {
             show_conversation: matches.get_one::<String>("show-conversation").cloned(),
             model: matches.get_one::<String>("model").unwrap().clone(),
             record_audio: matches.get_flag("record-audio"),
+            audio_device: matches.get_one::<String>("audio-device").cloned(),
+            list_audio_devices: matches.get_flag("list-audio-devices"),
             roles,
             ordered_content: Vec::new(), // will be populated in input.rs
             spinner: matches.get_flag("spinner"),
+            no_save: matches.get_flag("no-save"),
         }
     }
 
@@ -137,7 +143,20 @@ impl Config {
                 Arg::new("record-audio")
                     .short('a')
                     .long("record-audio")
-                    .help("Record audio input using ffmpeg (requires ffmpeg to be installed)")
+                    .help("Record audio input natively (no external dependencies required)")
+                    .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("audio-device")
+                    .long("audio-device")
+                    .help("Specify audio input device name for recording. Overrides GIA_AUDIO_DEVICE environment variable. Use --list-audio-devices to see available devices.")
+                    .value_name("DEVICE")
+                    .action(clap::ArgAction::Set),
+            )
+            .arg(
+                Arg::new("list-audio-devices")
+                    .long("list-audio-devices")
+                    .help("List all available audio input devices and exit")
                     .action(clap::ArgAction::SetTrue),
             )
             .arg(
@@ -217,7 +236,7 @@ impl Config {
                     .long("model")
                     .help("Specify the model to use. Format: 'provider::model' or just 'model' for Gemini (e.g., 'ollama::llama3.2', 'gemini-2.5-flash-lite'). Can be set via GIA_DEFAULT_MODEL environment variable.")
                     .value_name("MODEL")
-                    .default_value(&get_default_model())
+                    .default_value(get_default_model())
                     .action(clap::ArgAction::Set),
             )
             .arg(
@@ -230,6 +249,12 @@ impl Config {
                 Arg::new("spinner")
                     .long("spinner")
                     .help("Show visual spinner during AI request (requires giagui)")
+                    .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("no-save")
+                    .long("no-save")
+                    .help("Don't save to conversation history (transcribe-only mode)")
                     .action(clap::ArgAction::SetTrue),
             )
             .arg(
@@ -359,9 +384,12 @@ mod tests {
                 show_conversation: matches.get_one::<String>("show-conversation").cloned(),
                 model: matches.get_one::<String>("model").unwrap().clone(),
                 record_audio: matches.get_flag("record-audio"),
+                audio_device: matches.get_one::<String>("audio-device").cloned(),
+                list_audio_devices: matches.get_flag("list-audio-devices"),
                 roles,
                 ordered_content: Vec::new(),
                 spinner: matches.get_flag("spinner"),
+                no_save: matches.get_flag("no-save"),
             }
         }
     }
