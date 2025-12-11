@@ -85,7 +85,9 @@ cargo run -- "Transcribe this" --record-audio --no-save # Custom prompt transcri
 ```
 
 ### Environment Setup
-Set API key(s):
+
+#### Gemini API Keys
+Set API key(s) for Gemini (not required if using Ollama):
 ```bash
 # Single key
 export GEMINI_API_KEY="your_api_key_here"
@@ -100,12 +102,34 @@ set GEMINI_API_KEY=your_api_key_here
 set GEMINI_API_KEY=key1|key2|key3
 ```
 
+#### Ollama Configuration
 For Ollama: Install from https://ollama.ai and run `ollama serve`
+
+```bash
+# Set default Ollama model
+export GIA_DEFAULT_MODEL="ollama::llama3.2"
+
+# Set custom Ollama server URL (optional, defaults to http://localhost:11434)
+export OLLAMA_BASE_URL="http://192.168.1.100:11434"
+
+# Windows
+set GIA_DEFAULT_MODEL=ollama::llama3.2
+set OLLAMA_BASE_URL=http://192.168.1.100:11434
+```
+
+With `GIA_DEFAULT_MODEL` set to Ollama, you can use gia without any arguments:
+```bash
+# Just set the environment variable once
+export GIA_DEFAULT_MODEL="ollama::llama3.2"
+
+# Now you can use gia directly without -m flag or GEMINI_API_KEY
+gia "What is the capital of France?"
+```
 
 ### Default Model Configuration
 Set default AI model:
 ```bash
-# Set default model globally
+# Set default Gemini model
 export GIA_DEFAULT_MODEL="gemini-2.5-pro"
 
 # Use Ollama model as default
@@ -114,6 +138,10 @@ export GIA_DEFAULT_MODEL="ollama::llama3.2"
 # Windows
 set GIA_DEFAULT_MODEL=gemini-2.5-pro
 ```
+
+**Priority:** `-m` flag > `GIA_DEFAULT_MODEL` > `gemini-2.5-flash-lite`
+
+*Note: The `-m` command-line flag always takes precedence. Set `GIA_DEFAULT_MODEL` to `ollama::model-name` to use Ollama without needing Gemini API keys.*
 
 ### Logging
 ```bash

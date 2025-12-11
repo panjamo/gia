@@ -101,10 +101,32 @@ To get an API key, visit: https://makersuite.google.com/app/apikey
 
 ### Using Ollama (Local Models)
 
-Install and start Ollama from https://ollama.ai, then use the `-m` flag:
+Install and start Ollama from https://ollama.ai
 
+**Quick setup (no Gemini API key needed):**
+```bash
+# Set your preferred Ollama model once
+export GIA_DEFAULT_MODEL="ollama::llama3.2"
+
+# Now use gia without any flags
+gia "your prompt here"
+```
+
+**Windows:**
+```cmd
+set GIA_DEFAULT_MODEL=ollama::llama3.2
+gia "your prompt here"
+```
+
+**Alternative method using `-m` flag:**
 ```bash
 gia -m "ollama::llama3.2" "your prompt here"
+```
+
+**Custom Ollama server:**
+```bash
+# If Ollama is running on a different machine or port
+export OLLAMA_BASE_URL="http://192.168.1.100:11434"
 ```
 
 ### Optional Configuration
@@ -112,7 +134,7 @@ gia -m "ollama::llama3.2" "your prompt here"
 Configure the default AI model (default: gemini-2.5-flash-lite):
 
 ```bash
-# Set default model globally
+# Set default model globally (overrides OLLAMA_MODEL)
 export GIA_DEFAULT_MODEL="gemini-2.5-pro"
 
 # Use Ollama model as default
@@ -124,6 +146,10 @@ export GIA_DEFAULT_MODEL="ollama::llama3.2"
 set GIA_DEFAULT_MODEL=gemini-2.5-pro
 set GIA_DEFAULT_MODEL=ollama::llama3.2
 ```
+
+**Priority:** `-m` flag > `GIA_DEFAULT_MODEL` > `gemini-2.5-flash-lite`
+
+*Note: The `-m` command-line flag always takes precedence. Set `GIA_DEFAULT_MODEL` to `ollama::model-name` to use Ollama without needing Gemini API keys.*
 
 Configure the context window limit (default: 8000):
 
