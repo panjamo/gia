@@ -43,6 +43,7 @@ cpal = "0.15"
 hound = "3.5"
 ogg-opus = "0.1"
 rubato = "0.16"
+futures = "0.3"
 
 [dev-dependencies]
 tempfile = "3.0"

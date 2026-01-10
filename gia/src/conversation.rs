@@ -21,6 +21,8 @@ pub enum ResourceType {
     Stdin,
     Role,
     Task,
+    ToolCall,
+    ToolResult,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
@@ -343,6 +345,20 @@ impl Conversation {
                                         "✅ Task".to_string()
                                     }
                                 }
+                                ResourceType::ToolCall => {
+                                    if let Some(tool_name) = &resource.path {
+                                        format!("🔧 Tool Call: {}", tool_name)
+                                    } else {
+                                        "🔧 Tool Call".to_string()
+                                    }
+                                }
+                                ResourceType::ToolResult => {
+                                    if let Some(tool_name) = &resource.path {
+                                        format!("✅ Tool Result: {}", tool_name)
+                                    } else {
+                                        "✅ Tool Result".to_string()
+                                    }
+                                }
                             };
                             let escaped_resource = html_escape::encode_text(&resource_text);
                             resources_html.push_str(&format!("<li>{}</li>", escaped_resource));
@@ -363,24 +379,62 @@ impl Conversation {
                 }
                 "Assistant" => {
                     let text_content = Self::extract_text_content(message);
-                    markdown.push_str("**Assistant:** ");
-                    markdown.push_str(&text_content);
 
-                    // Add token usage information for assistant responses
-                    if usage.prompt_tokens.is_some()
-                        || usage.completion_tokens.is_some()
-                        || usage.total_tokens.is_some()
-                    {
-                        markdown.push_str(&format!(
-                            "\n\n<small>📊 **Tokens:** {}</small>",
-                            usage.format_short()
-                        ));
+                    // Check if this is a tool call response (no text, but has tool call resources)
+                    let has_tool_calls = resources
+                        .iter()
+                        .any(|r| matches!(r.resource_type, ResourceType::ToolCall));
+
+                    if has_tool_calls && text_content.trim().is_empty() {
+                        // Tool call message - display tool calls
+                        for resource in resources {
+                            if let ResourceType::ToolCall = resource.resource_type {
+                                if let Some(tool_name) = &resource.path {
+                                    markdown
+                                        .push_str(&format!("**🔧 Tool Call:** {}\n", tool_name));
+                                } else {
+                                    markdown.push_str("**🔧 Tool Call**\n");
+                                }
+                            }
+                        }
+                    } else {
+                        // Regular assistant response
+                        markdown.push_str("**Assistant:** ");
+                        markdown.push_str(&text_content);
+
+                        // Add token usage information for assistant responses
+                        if usage.prompt_tokens.is_some()
+                            || usage.completion_tokens.is_some()
+                            || usage.total_tokens.is_some()
+                        {
+                            markdown.push_str(&format!(
+                                "\n\n<small>📊 **Tokens:** {}</small>",
+                                usage.format_short()
+                            ));
+                        }
+
+                        markdown.push('\n');
+                    }
+                }
+                "Tool" => {
+                    // Tool result message
+                    for resource in resources {
+                        if let ResourceType::ToolResult = resource.resource_type {
+                            if let Some(tool_name) = &resource.path {
+                                markdown.push_str(&format!("**✅ Tool Result:** {}\n", tool_name));
+                            } else {
+                                markdown.push_str("**✅ Tool Result**\n");
+                            }
+                        }
                     }
 
-                    markdown.push('\n');
+                    let text_content = Self::extract_text_content(message);
+                    if !text_content.trim().is_empty() {
+                        markdown.push_str(&format!("```\n{}\n```\n", text_content));
+                    }
                 }
                 _ => {
-                    // Ignore System/Tool messages in markdown output
+                    // Ignore System messages in markdown output
                 }
             }
 

@@ -12,7 +12,7 @@ use crate::provider::{AiProvider, AiResponse};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use genai::Client;
-use genai::chat::{ChatMessage, ChatRequest};
+use genai::chat::{ChatMessage, ChatRequest, ChatResponse};
 
 #[derive(Debug)]
 pub struct OllamaClient {
@@ -66,6 +66,18 @@ impl AiProvider for OllamaClient {
         let usage = TokenUsage::default();
 
         Ok(AiResponse { content, usage })
+    }
+
+    async fn generate_content_with_request(
+        &mut self,
+        chat_request: ChatRequest,
+    ) -> Result<ChatResponse> {
+        let client = Client::default();
+        let response = client
+            .exec_chat(&self.model, chat_request, None)
+            .await
+            .context("Failed to send chat request to Ollama")?;
+        Ok(response)
     }
 
     fn model_name(&self) -> &str {
