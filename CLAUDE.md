@@ -82,6 +82,22 @@ cargo run -- "Tell me a joke" -T                         # Uses default: de-DE
 cargo run -- --record-audio --role EN --no-save         # English transcription only
 cargo run -- --record-audio --role DE --no-save         # German transcription only
 cargo run -- "Transcribe this" --record-audio --no-save # Custom prompt transcription
+
+# Tool calling (function calling) - enable AI to use tools
+cargo run -- --enable-tools --tool-allow-cwd "analyze this codebase and summarize the architecture"
+cargo run -- --enable-tools --tool-allow-cwd "search the web for rust async best practices"
+cargo run -- --enable-tools --tool-allowed-dir /tmp "create a summary of important files in /tmp"
+
+# Tool calling with specific tools disabled
+cargo run -- --enable-tools --tool-disable search_web --tool-allow-cwd "analyze files only"
+cargo run -- --enable-tools --tool-disable write_file,execute_command --tool-allow-cwd "read-only analysis"
+
+# Tool calling with command execution (dangerous - requires confirmation)
+cargo run -- --enable-tools --allow-command-execution --confirm-commands --tool-allow-cwd "run git status and summarize changes"
+
+# Web search with different providers
+cargo run -- --enable-tools "search for latest Rust news"  # Uses DuckDuckGo (default)
+GIA_SEARCH_API=brave GIA_BRAVE_API_KEY=your_key cargo run -- --enable-tools "search for AI developments"
 ```
 
 ### Environment Setup
@@ -114,6 +130,25 @@ export GIA_DEFAULT_MODEL="ollama::llama3.2"
 # Windows
 set GIA_DEFAULT_MODEL=gemini-2.5-pro
 ```
+
+### Web Search Configuration (Tool Calling)
+Configure search provider for tool calling:
+```bash
+# DuckDuckGo (default - free, no API key required)
+# No configuration needed - works out of the box when --enable-tools is used
+
+# Brave Search (optional - requires free API key from https://brave.com/search/api/)
+export GIA_SEARCH_API="brave"
+export GIA_BRAVE_API_KEY="your_brave_api_key_here"
+
+# Windows
+set GIA_SEARCH_API=brave
+set GIA_BRAVE_API_KEY=your_brave_api_key_here
+```
+
+**Search Provider Options:**
+- **DuckDuckGo** (default): Free, no authentication, good for general queries
+- **Brave Search**: Requires API key, more comprehensive results (2000 free queries/month)
 
 ### Logging
 ```bash

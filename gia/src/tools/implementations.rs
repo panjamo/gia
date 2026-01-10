@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::io::{self, Write};
+use std::time::Duration;
 use tokio::process::Command;
 
 use super::registry::GiaTool;
@@ -248,6 +249,219 @@ impl GiaTool for ListDirectoryTool {
 // SearchWebTool
 // ============================================================================
 
+#[derive(Debug)]
+enum SearchProvider {
+    DuckDuckGo,
+    Brave { api_key: String },
+}
+
+impl SearchProvider {
+    fn from_env() -> Result<Self> {
+        match std::env::var("GIA_SEARCH_API").ok().as_deref() {
+            Some("brave") => {
+                let api_key = std::env::var("GIA_BRAVE_API_KEY")
+                    .context("GIA_BRAVE_API_KEY not set (required for Brave search)")?;
+                Ok(Self::Brave { api_key })
+            }
+            _ => Ok(Self::DuckDuckGo),
+        }
+    }
+
+    async fn search(&self, query: &str) -> Result<String> {
+        match self {
+            Self::DuckDuckGo => search_duckduckgo(query).await,
+            Self::Brave { api_key } => search_brave(query, api_key).await,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct DuckDuckGoResponse {
+    #[serde(rename = "AbstractText")]
+    abstract_text: String,
+    #[serde(rename = "AbstractURL")]
+    abstract_url: String,
+    #[serde(rename = "RelatedTopics")]
+    related_topics: Vec<RelatedTopic>,
+    #[serde(rename = "Heading")]
+    heading: String,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum RelatedTopic {
+    Topic {
+        #[serde(rename = "Text")]
+        text: String,
+        #[serde(rename = "FirstURL")]
+        first_url: String,
+    },
+    Topics {
+        #[serde(rename = "Topics")]
+        topics: Vec<RelatedTopic>,
+    },
+}
+
+#[derive(Deserialize)]
+struct BraveResponse {
+    web: BraveWebResults,
+}
+
+#[derive(Deserialize)]
+struct BraveWebResults {
+    results: Vec<BraveResult>,
+}
+
+#[derive(Deserialize)]
+struct BraveResult {
+    title: String,
+    description: String,
+    url: String,
+}
+
+async fn search_duckduckgo(query: &str) -> Result<String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .user_agent("gia-cli/1.0")
+        .build()
+        .context("Failed to create HTTP client")?;
+
+    let url = format!(
+        "https://api.duckduckgo.com/?q={}&format=json",
+        urlencoding::encode(query)
+    );
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .context("Failed to send search request")?;
+
+    if !response.status().is_success() {
+        return Err(anyhow!("Search failed with HTTP {}", response.status()));
+    }
+
+    let body_bytes = response
+        .bytes()
+        .await
+        .context("Failed to read response body")?;
+
+    if body_bytes.len() > 2 * 1024 * 1024 {
+        return Err(anyhow!("Search response too large"));
+    }
+
+    let search_result: DuckDuckGoResponse = serde_json::from_slice(&body_bytes)
+        .context("Failed to parse search results")?;
+
+    Ok(format_duckduckgo_results(&search_result, query))
+}
+
+async fn search_brave(query: &str, api_key: &str) -> Result<String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .user_agent("gia-cli/1.0")
+        .build()
+        .context("Failed to create HTTP client")?;
+
+    let url = format!(
+        "https://api.search.brave.com/res/v1/web/search?q={}",
+        urlencoding::encode(query)
+    );
+
+    let response = client
+        .get(&url)
+        .header("X-Subscription-Token", api_key)
+        .send()
+        .await
+        .context("Failed to send search request")?;
+
+    if !response.status().is_success() {
+        return Err(anyhow!("Search failed with HTTP {}", response.status()));
+    }
+
+    let body_bytes = response
+        .bytes()
+        .await
+        .context("Failed to read response body")?;
+
+    if body_bytes.len() > 2 * 1024 * 1024 {
+        return Err(anyhow!("Search response too large"));
+    }
+
+    let search_result: BraveResponse = serde_json::from_slice(&body_bytes)
+        .context("Failed to parse search results")?;
+
+    Ok(format_brave_results(&search_result, query))
+}
+
+fn format_duckduckgo_results(response: &DuckDuckGoResponse, query: &str) -> String {
+    let mut result = format!("Search results for '{}':\n\n", query);
+
+    if !response.heading.is_empty() {
+        result.push_str(&format!("## {}\n\n", response.heading));
+    }
+
+    if !response.abstract_text.is_empty() {
+        result.push_str(&format!("{}\n", response.abstract_text));
+        if !response.abstract_url.is_empty() {
+            result.push_str(&format!("Source: {}\n\n", response.abstract_url));
+        }
+    }
+
+    if !response.related_topics.is_empty() {
+        result.push_str("### Related Information:\n\n");
+        let mut count = 0;
+        for topic in &response.related_topics {
+            if count >= 5 {
+                break;
+            }
+            if let Some((text, url)) = extract_topic_info(topic) {
+                count += 1;
+                result.push_str(&format!("{}. {}\n   {}\n\n", count, text, url));
+            }
+        }
+    }
+
+    if response.abstract_text.is_empty() && response.related_topics.is_empty() {
+        result.push_str("No detailed results found. Try different keywords.\n");
+    }
+
+    result
+}
+
+fn format_brave_results(response: &BraveResponse, query: &str) -> String {
+    let mut result = format!("Search results for '{}':\n\n", query);
+
+    if response.web.results.is_empty() {
+        result.push_str("No search results found. Try different keywords.\n");
+        return result;
+    }
+
+    result.push_str("### Top Results:\n\n");
+    for (i, res) in response.web.results.iter().take(5).enumerate() {
+        result.push_str(&format!("{}. {}\n", i + 1, res.title));
+        if !res.description.is_empty() {
+            result.push_str(&format!("   {}\n", res.description));
+        }
+        result.push_str(&format!("   {}\n\n", res.url));
+    }
+
+    result
+}
+
+fn extract_topic_info(topic: &RelatedTopic) -> Option<(String, String)> {
+    match topic {
+        RelatedTopic::Topic { text, first_url } => {
+            if !text.is_empty() && !first_url.is_empty() {
+                Some((text.clone(), first_url.clone()))
+            } else {
+                None
+            }
+        }
+        RelatedTopic::Topics { topics } => topics.first().and_then(extract_topic_info),
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 struct SearchWebArgs {
     query: String,
@@ -288,18 +502,12 @@ impl GiaTool for SearchWebTool {
         let args: SearchWebArgs =
             serde_json::from_value(args).context("Invalid arguments for search_web")?;
 
-        // Placeholder implementation for MVP
-        // TODO: Integrate with DuckDuckGo, Brave Search, or SearxNG API
-        Ok(format!(
-            "Web search for '{}': This feature requires integration with a search API. \
-             Consider using DuckDuckGo Instant Answer API, Brave Search API, or SearxNG.\n\n\
-             To implement real web search:\n\
-             1. Choose a search API (DuckDuckGo is free and doesn't require auth)\n\
-             2. Add reqwest crate for HTTP requests\n\
-             3. Parse and format search results\n\n\
-             For now, this is a placeholder that confirms the tool calling system works.",
-            args.query
-        ))
+        if args.query.len() > 500 {
+            return Err(anyhow!("Search query too long (max 500 characters)"));
+        }
+
+        let provider = SearchProvider::from_env()?;
+        provider.search(&args.query).await
     }
 }
 
@@ -549,5 +757,120 @@ mod tests {
         assert!(!context.is_command_allowed("dd if=/dev/zero"));
         assert!(context.is_command_allowed("ls -la"));
         assert!(context.is_command_allowed("git status"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_search_provider_default() {
+        unsafe {
+            env::remove_var("GIA_SEARCH_API");
+            env::remove_var("GIA_BRAVE_API_KEY");
+        }
+        let provider = SearchProvider::from_env().unwrap();
+        assert!(matches!(provider, SearchProvider::DuckDuckGo));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_search_provider_brave_missing_key() {
+        unsafe {
+            env::set_var("GIA_SEARCH_API", "brave");
+            env::remove_var("GIA_BRAVE_API_KEY");
+        }
+        let result = SearchProvider::from_env();
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("GIA_BRAVE_API_KEY"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_search_provider_brave_with_key() {
+        unsafe {
+            env::set_var("GIA_SEARCH_API", "brave");
+            env::set_var("GIA_BRAVE_API_KEY", "test_key");
+        }
+        let provider = SearchProvider::from_env().unwrap();
+        assert!(matches!(provider, SearchProvider::Brave { .. }));
+        unsafe {
+            env::remove_var("GIA_SEARCH_API");
+            env::remove_var("GIA_BRAVE_API_KEY");
+        }
+    }
+
+    #[test]
+    fn test_format_duckduckgo_results() {
+        let response = DuckDuckGoResponse {
+            abstract_text: "Rust is a programming language".to_string(),
+            abstract_url: "https://rust-lang.org".to_string(),
+            related_topics: vec![RelatedTopic::Topic {
+                text: "Rust tutorial".to_string(),
+                first_url: "https://example.com/tutorial".to_string(),
+            }],
+            heading: "Rust Programming".to_string(),
+        };
+
+        let formatted = format_duckduckgo_results(&response, "rust programming");
+        assert!(formatted.contains("Rust Programming"));
+        assert!(formatted.contains("Rust is a programming language"));
+        assert!(formatted.contains("https://rust-lang.org"));
+        assert!(formatted.contains("Rust tutorial"));
+    }
+
+    #[test]
+    fn test_format_brave_results() {
+        let response = BraveResponse {
+            web: BraveWebResults {
+                results: vec![
+                    BraveResult {
+                        title: "Rust Programming".to_string(),
+                        description: "Learn Rust".to_string(),
+                        url: "https://rust-lang.org".to_string(),
+                    },
+                    BraveResult {
+                        title: "Rust Tutorial".to_string(),
+                        description: "Step by step guide".to_string(),
+                        url: "https://example.com/tutorial".to_string(),
+                    },
+                ],
+            },
+        };
+
+        let formatted = format_brave_results(&response, "rust programming");
+        assert!(formatted.contains("Rust Programming"));
+        assert!(formatted.contains("Learn Rust"));
+        assert!(formatted.contains("https://rust-lang.org"));
+        assert!(formatted.contains("Rust Tutorial"));
+    }
+
+    #[tokio::test]
+    async fn test_search_web_query_too_long() {
+        let tool = SearchWebTool;
+        let long_query = "a".repeat(501);
+        let args = json!({ "query": long_query });
+        let context = SecurityContext::new();
+
+        let result = tool.execute(args, &context).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Search query too long"));
+    }
+
+    #[tokio::test]
+    async fn test_search_web_disabled() {
+        let tool = SearchWebTool;
+        let args = json!({ "query": "test" });
+        let context = SecurityContext::new().with_allow_web_search(false);
+
+        let result = tool.execute(args, &context).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Web search is disabled"));
     }
 }
