@@ -77,11 +77,6 @@ impl ToolRegistry {
     pub fn len(&self) -> usize {
         self.tools.len()
     }
-
-    /// Check if the registry is empty
-    pub fn is_empty(&self) -> bool {
-        self.tools.is_empty()
-    }
 }
 
 impl Default for ToolRegistry {

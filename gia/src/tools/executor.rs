@@ -81,9 +81,4 @@ impl ToolExecutor {
     pub fn registry(&self) -> &ToolRegistry {
         &self.registry
     }
-
-    /// Get a reference to the security context
-    pub fn security_context(&self) -> &SecurityContext {
-        &self.security_context
-    }
 }

@@ -257,13 +257,18 @@ enum SearchProvider {
 
 impl SearchProvider {
     fn from_env() -> Result<Self> {
-        match std::env::var("GIA_SEARCH_API").ok().as_deref() {
+        match std::env::var("GIA_SEARCH_MODE").ok().as_deref() {
             Some("brave") => {
                 let api_key = std::env::var("GIA_BRAVE_API_KEY")
                     .context("GIA_BRAVE_API_KEY not set (required for Brave search)")?;
                 Ok(Self::Brave { api_key })
             }
-            _ => Ok(Self::DuckDuckGo),
+            Some("duckduckgo") | Some("") => Ok(Self::DuckDuckGo),
+            None => Ok(Self::DuckDuckGo),
+            Some(other) => Err(anyhow!(
+                "Invalid GIA_SEARCH_MODE: '{}'. Valid options: 'duckduckgo', 'brave'",
+                other
+            )),
         }
     }
 
@@ -350,8 +355,8 @@ async fn search_duckduckgo(query: &str) -> Result<String> {
         return Err(anyhow!("Search response too large"));
     }
 
-    let search_result: DuckDuckGoResponse = serde_json::from_slice(&body_bytes)
-        .context("Failed to parse search results")?;
+    let search_result: DuckDuckGoResponse =
+        serde_json::from_slice(&body_bytes).context("Failed to parse search results")?;
 
     Ok(format_duckduckgo_results(&search_result, query))
 }
@@ -388,8 +393,8 @@ async fn search_brave(query: &str, api_key: &str) -> Result<String> {
         return Err(anyhow!("Search response too large"));
     }
 
-    let search_result: BraveResponse = serde_json::from_slice(&body_bytes)
-        .context("Failed to parse search results")?;
+    let search_result: BraveResponse =
+        serde_json::from_slice(&body_bytes).context("Failed to parse search results")?;
 
     Ok(format_brave_results(&search_result, query))
 }
@@ -763,7 +768,7 @@ mod tests {
     #[serial_test::serial]
     fn test_search_provider_default() {
         unsafe {
-            env::remove_var("GIA_SEARCH_API");
+            env::remove_var("GIA_SEARCH_MODE");
             env::remove_var("GIA_BRAVE_API_KEY");
         }
         let provider = SearchProvider::from_env().unwrap();
@@ -772,31 +777,63 @@ mod tests {
 
     #[test]
     #[serial_test::serial]
+    fn test_search_provider_duckduckgo_explicit() {
+        unsafe {
+            env::set_var("GIA_SEARCH_MODE", "duckduckgo");
+        }
+        let provider = SearchProvider::from_env().unwrap();
+        assert!(matches!(provider, SearchProvider::DuckDuckGo));
+        unsafe {
+            env::remove_var("GIA_SEARCH_MODE");
+        }
+    }
+
+    #[test]
+    #[serial_test::serial]
     fn test_search_provider_brave_missing_key() {
         unsafe {
-            env::set_var("GIA_SEARCH_API", "brave");
+            env::set_var("GIA_SEARCH_MODE", "brave");
             env::remove_var("GIA_BRAVE_API_KEY");
         }
         let result = SearchProvider::from_env();
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("GIA_BRAVE_API_KEY"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("GIA_BRAVE_API_KEY")
+        );
+        unsafe {
+            env::remove_var("GIA_SEARCH_MODE");
+        }
     }
 
     #[test]
     #[serial_test::serial]
     fn test_search_provider_brave_with_key() {
         unsafe {
-            env::set_var("GIA_SEARCH_API", "brave");
+            env::set_var("GIA_SEARCH_MODE", "brave");
             env::set_var("GIA_BRAVE_API_KEY", "test_key");
         }
         let provider = SearchProvider::from_env().unwrap();
         assert!(matches!(provider, SearchProvider::Brave { .. }));
         unsafe {
-            env::remove_var("GIA_SEARCH_API");
+            env::remove_var("GIA_SEARCH_MODE");
             env::remove_var("GIA_BRAVE_API_KEY");
+        }
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_search_provider_invalid_mode() {
+        unsafe {
+            env::set_var("GIA_SEARCH_MODE", "invalid");
+        }
+        let result = SearchProvider::from_env();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid"));
+        unsafe {
+            env::remove_var("GIA_SEARCH_MODE");
         }
     }
 
@@ -854,10 +891,12 @@ mod tests {
 
         let result = tool.execute(args, &context).await;
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Search query too long"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Search query too long")
+        );
     }
 
     #[tokio::test]
@@ -868,9 +907,11 @@ mod tests {
 
         let result = tool.execute(args, &context).await;
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Web search is disabled"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Web search is disabled")
+        );
     }
 }

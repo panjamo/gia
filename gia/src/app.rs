@@ -142,7 +142,7 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     // Execute with or without tools
     let (response, usage, _tool_messages) = if let Some(executor) = &tool_executor {
         log_info("Tools enabled - using tool execution loop");
-        execute_with_tools(&mut provider, all_genai_messages, executor).await?
+        execute_with_tools(&mut provider, all_genai_messages, executor, &config.model).await?
     } else {
         let ai_response = provider
             .generate_content_with_chat_messages(all_genai_messages)
@@ -422,6 +422,26 @@ fn initialize_tool_executor(config: &Config) -> Result<crate::tools::ToolExecuto
     Ok(ToolExecutor::new(registry, security))
 }
 
+/// Create Google Search grounding tool for Gemini
+///
+/// When GIA_SEARCH_MODE is unset, this enables Gemini's built-in Google Search grounding.
+/// This is a paid feature that provides automatic web search with citations.
+fn create_google_search_grounding_tool() -> genai::chat::Tool {
+    use serde_json::json;
+
+    genai::chat::Tool::new("google_search_retrieval").with_config(json!({
+        "google_search_retrieval": {}
+    }))
+}
+
+/// Check if we should use Gemini grounding (GIA_SEARCH_MODE unset + Gemini model)
+fn should_use_gemini_grounding(model: &str) -> bool {
+    let search_mode = std::env::var("GIA_SEARCH_MODE").ok();
+    let is_gemini = !model.contains("::") || model.starts_with("gemini");
+
+    search_mode.is_none() && is_gemini
+}
+
 /// Execute with tools (tool calling loop)
 ///
 /// KISS: Simple loop until no more tool calls
@@ -433,6 +453,7 @@ async fn execute_with_tools(
     provider: &mut Box<dyn crate::provider::AiProvider>,
     mut messages: Vec<genai::chat::ChatMessage>,
     executor: &crate::tools::ToolExecutor,
+    model: &str,
 ) -> Result<(String, TokenUsage, Vec<ChatMessageWrapper>)> {
     use genai::chat::ChatRequest;
 
@@ -440,7 +461,13 @@ async fn execute_with_tools(
 
     let mut conversation_wrappers: Vec<ChatMessageWrapper> = Vec::new();
     let mut total_usage = TokenUsage::default();
-    let tools = executor.registry().to_genai_tools();
+    let mut tools = executor.registry().to_genai_tools();
+
+    if should_use_gemini_grounding(model) {
+        tools.push(create_google_search_grounding_tool());
+        log_info("Added Google Search grounding for Gemini (paid feature)");
+        log_info("Set GIA_SEARCH_MODE=duckduckgo or GIA_SEARCH_MODE=brave for free alternatives");
+    }
 
     for iteration in 0..MAX_TOOL_ITERATIONS {
         log_info(&format!(

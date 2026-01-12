@@ -14,5 +14,5 @@ pub use executor::ToolExecutor;
 pub use implementations::{
     ExecuteCommandTool, ListDirectoryTool, ReadFileTool, SearchWebTool, WriteFileTool,
 };
-pub use registry::{GiaTool, ToolRegistry};
+pub use registry::ToolRegistry;
 pub use security::SecurityContext;

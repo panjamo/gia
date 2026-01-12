@@ -95,9 +95,10 @@ cargo run -- --enable-tools --tool-disable write_file,execute_command --tool-all
 # Tool calling with command execution (dangerous - requires confirmation)
 cargo run -- --enable-tools --allow-command-execution --confirm-commands --tool-allow-cwd "run git status and summarize changes"
 
-# Web search with different providers
-cargo run -- --enable-tools "search for latest Rust news"  # Uses DuckDuckGo (default)
-GIA_SEARCH_API=brave GIA_BRAVE_API_KEY=your_key cargo run -- --enable-tools "search for AI developments"
+# Web search with different modes
+cargo run -- --enable-tools "search for latest Rust news"  # Gemini grounding (default, paid)
+GIA_SEARCH_MODE=duckduckgo cargo run -- --enable-tools "search for AI news"  # Free DuckDuckGo
+GIA_SEARCH_MODE=brave GIA_BRAVE_API_KEY=your_key cargo run -- --enable-tools "search"  # Free Brave
 ```
 
 ### Environment Setup
@@ -132,23 +133,37 @@ set GIA_DEFAULT_MODEL=gemini-2.5-pro
 ```
 
 ### Web Search Configuration (Tool Calling)
-Configure search provider for tool calling:
+Configure search mode for tool calling:
 ```bash
-# DuckDuckGo (default - free, no API key required)
-# No configuration needed - works out of the box when --enable-tools is used
+# Default (no variable) → Gemini grounding with Google Search (PAID, ~$0.50 per 1000 searches)
+# Best quality, automatic, includes citations, but costs money per search
 
-# Brave Search (optional - requires free API key from https://brave.com/search/api/)
-export GIA_SEARCH_API="brave"
-export GIA_BRAVE_API_KEY="your_brave_api_key_here"
+# Free alternatives:
+export GIA_SEARCH_MODE="duckduckgo"  # Free DuckDuckGo search
+export GIA_SEARCH_MODE="brave"       # Free Brave (requires API key below)
+export GIA_BRAVE_API_KEY="your_brave_api_key_here"  # Get free key at https://brave.com/search/api/
 
 # Windows
-set GIA_SEARCH_API=brave
+set GIA_SEARCH_MODE=duckduckgo
+# or
+set GIA_SEARCH_MODE=brave
 set GIA_BRAVE_API_KEY=your_brave_api_key_here
 ```
 
-**Search Provider Options:**
-- **DuckDuckGo** (default): Free, no authentication, good for general queries
-- **Brave Search**: Requires API key, more comprehensive results (2000 free queries/month)
+**Search Mode Options:**
+
+| Mode | Provider | Cost | Quality | API Key Required |
+|------|----------|------|---------|------------------|
+| (default/unset) | **Gemini Grounding** | 💰 ~$0.0005/search (Flash)<br>~$0.005/search (Pro) | ⭐⭐⭐⭐⭐ Best | No (uses Gemini key) |
+| `duckduckgo` | DuckDuckGo | 💚 Free | ⭐⭐⭐ Good | No |
+| `brave` | Brave Search | 💚 Free (2000/month) | ⭐⭐⭐⭐ Better | Yes (free tier) |
+
+**Recommendation:**
+- **For best results**: Leave unset (Gemini grounding) - costs ~$0.05 per 100 searches
+- **To save money**: Use `GIA_SEARCH_MODE=duckduckgo` (completely free)
+- **For better free results**: Use `GIA_SEARCH_MODE=brave` with free API key
+
+**Note for Ollama users**: Gemini grounding is not available for Ollama models. They automatically use DuckDuckGo (free) regardless of the setting.
 
 ### Logging
 ```bash
