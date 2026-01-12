@@ -43,6 +43,16 @@ pub enum ContentPartWrapper {
 
     /// Plain text (for any other text content)
     Text(String),
+
+    /// Tool call request from LLM
+    ToolCall {
+        call_id: String,
+        fn_name: String,
+        fn_arguments: serde_json::Value,
+    },
+
+    /// Tool execution result
+    ToolResult { call_id: String, content: String },
 }
 
 impl ContentPartWrapper {
@@ -90,6 +100,10 @@ impl ContentPartWrapper {
                 mime_type, data, ..
             } => ContentPart::from_binary_base64(mime_type.clone(), data.clone(), None),
             ContentPartWrapper::Text(text) => ContentPart::Text(text.clone()),
+            ContentPartWrapper::ToolCall { .. } | ContentPartWrapper::ToolResult { .. } => {
+                // Tool calls and results are handled at the ChatMessage level, not ContentPart level
+                ContentPart::Text(String::new())
+            }
         }
     }
 
@@ -102,7 +116,10 @@ impl ContentPartWrapper {
             ContentPartWrapper::ClipboardText(text) => Some(text.clone()),
             ContentPartWrapper::StdinText(text) => Some(text.clone()),
             ContentPartWrapper::Text(text) => Some(text.clone()),
-            ContentPartWrapper::Image { .. } | ContentPartWrapper::Audio { .. } => None,
+            ContentPartWrapper::Image { .. }
+            | ContentPartWrapper::Audio { .. }
+            | ContentPartWrapper::ToolCall { .. }
+            | ContentPartWrapper::ToolResult { .. } => None,
         }
     }
 

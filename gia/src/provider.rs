@@ -1,6 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use genai::chat::ChatMessage;
+use genai::chat::{ChatMessage, ChatRequest, ChatResponse};
 use std::fmt::Debug;
 
 use crate::conversation::TokenUsage;
@@ -20,6 +20,12 @@ pub trait AiProvider: Debug + Send + Sync {
         &mut self,
         chat_messages: Vec<ChatMessage>,
     ) -> Result<AiResponse>;
+
+    /// Generate content from a ChatRequest (supports tools)
+    async fn generate_content_with_request(
+        &mut self,
+        chat_request: ChatRequest,
+    ) -> Result<ChatResponse>;
 
     /// Get the model name being used
     fn model_name(&self) -> &str;

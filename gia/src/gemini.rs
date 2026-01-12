@@ -6,7 +6,7 @@ use crate::provider::{AiProvider, AiResponse};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use genai::Client;
-use genai::chat::{ChatMessage, ChatRequest};
+use genai::chat::{ChatMessage, ChatRequest, ChatResponse};
 use genai::resolver::{AuthData, AuthResolver};
 
 #[derive(Debug)]
@@ -331,6 +331,73 @@ impl AiProvider for GeminiClient {
                         // For non-rate-limit errors, return immediately
                         return Err(e);
                     }
+                }
+            }
+        }
+    }
+
+    async fn generate_content_with_request(
+        &mut self,
+        chat_request: ChatRequest,
+    ) -> Result<ChatResponse> {
+        let starting_key_index = self.current_key_index;
+        let total_keys = self.api_keys.len();
+        let mut attempts = 0;
+
+        loop {
+            let current_key = self.api_keys[self.current_key_index].clone();
+            attempts += 1;
+
+            log_info(&format!(
+                "Attempt {} with API key {}/{}",
+                attempts,
+                self.current_key_index + 1,
+                total_keys
+            ));
+
+            let api_key_clone = current_key.clone();
+            let auth_resolver = AuthResolver::from_resolver_fn(move |_model_iden| {
+                Ok(Some(AuthData::from_single(api_key_clone.clone())))
+            });
+
+            let client = Client::builder().with_auth_resolver(auth_resolver).build();
+
+            match client
+                .exec_chat(&self.model, chat_request.clone(), None)
+                .await
+            {
+                Ok(response) => {
+                    log_info(&format!(
+                        "Successfully received response using API key {}/{}",
+                        self.current_key_index + 1,
+                        total_keys
+                    ));
+                    return Ok(response);
+                }
+                Err(e) => {
+                    let error_debug = format!("{:?}", e);
+                    let error_debug_lower = error_debug.to_lowercase();
+
+                    if error_debug.contains("429")
+                        || error_debug.contains("Too Many Requests")
+                        || error_debug.contains("503")
+                        || error_debug_lower.contains("overloaded")
+                    {
+                        log_warn(&format!(
+                            "Rate limit/overload on API key {}/{}",
+                            self.current_key_index + 1,
+                            total_keys
+                        ));
+
+                        self.current_key_index = self.next_key_index();
+
+                        if self.current_key_index == starting_key_index {
+                            return Err(anyhow::anyhow!("All {} API keys exhausted", total_keys));
+                        }
+                        continue;
+                    }
+
+                    return Err(e).context("Failed to send chat request");
                 }
             }
         }

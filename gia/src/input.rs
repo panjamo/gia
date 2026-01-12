@@ -522,6 +522,13 @@ mod tests {
             audio_device: None,
             list_audio_devices: false,
             no_save: false,
+            enable_tools: false,
+            tool_allow_cwd: false,
+            tool_allowed_dir: None,
+            tool_disable: Vec::new(),
+            allow_command_execution: false,
+            command_timeout: 30,
+            confirm_commands: false,
         };
 
         get_input_text(&mut config, None).unwrap();
@@ -615,6 +622,13 @@ mod tests {
             audio_device: None,
             list_audio_devices: false,
             no_save: false,
+            enable_tools: false,
+            tool_allow_cwd: false,
+            tool_allowed_dir: None,
+            tool_disable: Vec::new(),
+            allow_command_execution: false,
+            command_timeout: 30,
+            confirm_commands: false,
         };
 
         let result = get_input_text(&mut config, None);
@@ -643,6 +657,13 @@ mod tests {
             audio_device: None,
             list_audio_devices: false,
             no_save: false,
+            enable_tools: false,
+            tool_allow_cwd: false,
+            tool_allowed_dir: None,
+            tool_disable: Vec::new(),
+            allow_command_execution: false,
+            command_timeout: 30,
+            confirm_commands: false,
         };
 
         let result = get_input_text(&mut config, Some("Override prompt"));
@@ -787,6 +808,13 @@ mod tests {
             audio_device: None,
             list_audio_devices: false,
             no_save: false,
+            enable_tools: false,
+            tool_allow_cwd: false,
+            tool_allowed_dir: None,
+            tool_disable: Vec::new(),
+            allow_command_execution: false,
+            command_timeout: 30,
+            confirm_commands: false,
         };
 
         get_input_text(&mut config, None).unwrap();
@@ -862,6 +890,13 @@ mod tests {
             audio_device: None,
             list_audio_devices: false,
             no_save: false,
+            enable_tools: false,
+            tool_allow_cwd: false,
+            tool_allowed_dir: None,
+            tool_disable: Vec::new(),
+            allow_command_execution: false,
+            command_timeout: 30,
+            confirm_commands: false,
         };
 
         get_input_text(&mut config, None).unwrap();
@@ -919,6 +954,13 @@ mod tests {
             audio_device: None,
             list_audio_devices: false,
             no_save: false,
+            enable_tools: false,
+            tool_allow_cwd: false,
+            tool_allowed_dir: None,
+            tool_disable: Vec::new(),
+            allow_command_execution: false,
+            command_timeout: 30,
+            confirm_commands: false,
         };
 
         get_input_text(&mut config, None).unwrap();
