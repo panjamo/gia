@@ -5,7 +5,10 @@ use rubato::{
     Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
 use std::fs;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
 use crate::logging::{log_debug, log_info};
 
@@ -249,6 +252,10 @@ pub fn record_audio_native(device_name: Option<&str>) -> Result<String> {
     let recording = Arc::new(Mutex::new(true));
     let recording_clone = Arc::clone(&recording);
 
+    // Packet counter for visual feedback (print dot every N packets)
+    let packet_count = Arc::new(AtomicUsize::new(0));
+    let packet_count_clone = Arc::clone(&packet_count);
+
     // Build input stream based on sample format - write directly to WAV
     let stream = match config.sample_format() {
         cpal::SampleFormat::F32 => device.build_input_stream(
@@ -260,39 +267,48 @@ pub fn record_audio_native(device_name: Option<&str>) -> Result<String> {
                     for &sample in data {
                         let _ = writer.write_sample((sample * 32767.0) as i16);
                     }
+                    packet_count_clone.fetch_add(1, Ordering::Relaxed);
                 }
             },
             |err| log_debug(&format!("Stream error: {err}")),
             None,
         ),
-        cpal::SampleFormat::I16 => device.build_input_stream(
-            &config.into(),
-            move |data: &[i16], _: &cpal::InputCallbackInfo| {
-                if *recording_clone.lock().unwrap()
-                    && let Some(ref mut writer) = *writer_clone.lock().unwrap()
-                {
-                    for &sample in data {
-                        let _ = writer.write_sample(sample);
+        cpal::SampleFormat::I16 => {
+            let packet_count_clone = Arc::clone(&packet_count);
+            device.build_input_stream(
+                &config.into(),
+                move |data: &[i16], _: &cpal::InputCallbackInfo| {
+                    if *recording_clone.lock().unwrap()
+                        && let Some(ref mut writer) = *writer_clone.lock().unwrap()
+                    {
+                        for &sample in data {
+                            let _ = writer.write_sample(sample);
+                        }
+                        packet_count_clone.fetch_add(1, Ordering::Relaxed);
                     }
-                }
-            },
-            |err| log_debug(&format!("Stream error: {err}")),
-            None,
-        ),
-        cpal::SampleFormat::U16 => device.build_input_stream(
-            &config.into(),
-            move |data: &[u16], _: &cpal::InputCallbackInfo| {
-                if *recording_clone.lock().unwrap()
-                    && let Some(ref mut writer) = *writer_clone.lock().unwrap()
-                {
-                    for &sample in data {
-                        let _ = writer.write_sample((sample as i32 - 32768) as i16);
+                },
+                |err| log_debug(&format!("Stream error: {err}")),
+                None,
+            )
+        }
+        cpal::SampleFormat::U16 => {
+            let packet_count_clone = Arc::clone(&packet_count);
+            device.build_input_stream(
+                &config.into(),
+                move |data: &[u16], _: &cpal::InputCallbackInfo| {
+                    if *recording_clone.lock().unwrap()
+                        && let Some(ref mut writer) = *writer_clone.lock().unwrap()
+                    {
+                        for &sample in data {
+                            let _ = writer.write_sample((sample as i32 - 32768) as i16);
+                        }
+                        packet_count_clone.fetch_add(1, Ordering::Relaxed);
                     }
-                }
-            },
-            |err| log_debug(&format!("Stream error: {err}")),
-            None,
-        ),
+                },
+                |err| log_debug(&format!("Stream error: {err}")),
+                None,
+            )
+        }
         _ => {
             return Err(anyhow::anyhow!(
                 "Unsupported sample format: {:?}",
@@ -306,7 +322,13 @@ pub fn record_audio_native(device_name: Option<&str>) -> Result<String> {
     stream.play().context("Failed to start audio stream")?;
     log_debug("Audio stream started");
 
-    // Immediate visual feedback - recording is now active
+    // Wait for first audio packet to arrive before showing dialog
+    // This ensures audio is actually flowing before user sees the confirmation
+    while packet_count.load(Ordering::Relaxed) == 0 {
+        thread::sleep(Duration::from_millis(1));
+    }
+
+    // Immediate visual feedback - recording is now active (after first packet received)
     eprintln!("🎤 SPEAK NOW!");
 
     // Show message dialog to stop recording (no MessageType to avoid Windows notification sound)
