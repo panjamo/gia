@@ -6,8 +6,6 @@ use rubato::{
 };
 use std::fs;
 use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
 
 use crate::logging::{log_debug, log_info};
 
@@ -308,19 +306,18 @@ pub fn record_audio_native(device_name: Option<&str>) -> Result<String> {
     stream.play().context("Failed to start audio stream")?;
     log_debug("Audio stream started");
 
-    // Wait a bit for stream to initialize
-    thread::sleep(Duration::from_millis(100));
+    // Immediate visual feedback - recording is now active
+    eprintln!("🎤 SPEAK NOW!");
 
-    // Show message dialog to stop recording
+    // Show message dialog to stop recording (no MessageType to avoid Windows notification sound)
     log_debug("Showing message dialog to stop recording");
     let dialog_text = format!(
-        "🎙️  Recording in progress from device:\n{}\n\nClick Yes to stop and continue, or No to abort.",
+        "🎙️  Recording in progress from device:\n{}\n\nClick Yes to take over the recording, No to cancel",
         device_display_name
     );
     let user_confirmed = MessageDialog::new()
-        .set_title("Stop Recording")
+        .set_title("Recording...")
         .set_text(&dialog_text)
-        .set_type(native_dialog::MessageType::Info)
         .show_confirm()
         .context("Failed to show recording dialog")?;
 
