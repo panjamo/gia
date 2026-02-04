@@ -45,6 +45,9 @@ async fn main() -> Result<()> {
             source = cause.source();
         }
 
+        // Check if this is a user-cancelled recording (not an actual error)
+        let is_user_cancelled = last_cause.contains("Recording cancelled by user");
+
         // Extract the most relevant part of the error message
         // Look for "Request failed with status code" pattern
         let error_msg = if let Some(start_idx) = last_cause.find("Request failed with status code")
@@ -66,25 +69,27 @@ async fn main() -> Result<()> {
             }
         }
 
-        // Show error notification
-        #[cfg(target_os = "macos")]
-        {
-            let _ = std::process::Command::new("osascript")
-                .arg("-e")
-                .arg(format!(
-                    "display notification \"{}\" with title \"GIA Error\"",
-                    error_msg.replace('\"', "'")
-                ))
-                .output();
-        }
+        // Show error notification (skip for user-cancelled recording)
+        if !is_user_cancelled {
+            #[cfg(target_os = "macos")]
+            {
+                let _ = std::process::Command::new("osascript")
+                    .arg("-e")
+                    .arg(format!(
+                        "display notification \"{}\" with title \"GIA Error\"",
+                        error_msg.replace('\"', "'")
+                    ))
+                    .output();
+            }
 
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = Notification::new()
-                .summary("GIA Error")
-                .body(&error_msg)
-                .icon("dialog-error")
-                .show();
+            #[cfg(not(target_os = "macos"))]
+            {
+                let _ = Notification::new()
+                    .summary("GIA Error")
+                    .body(&error_msg)
+                    .icon("dialog-error")
+                    .show();
+            }
         }
 
         // Also return the error for CLI users

@@ -210,16 +210,16 @@ Content-Length: 44
         // We can't easily test the GUI's HTTP client directly, but we can test
         // that our mock server responds correctly
         let response = std::process::Command::new("curl")
-            .args(&["-s", &url])
+            .args(["-s", &url])
             .output();
 
         running.store(false, Ordering::Relaxed);
 
-        if let Ok(output) = response {
-            if output.status.success() {
-                let body = str::from_utf8(&output.stdout).unwrap();
-                assert!(body.contains("llama3.2"));
-            }
+        if let Ok(output) = response
+            && output.status.success()
+        {
+            let body = str::from_utf8(&output.stdout).unwrap();
+            assert!(body.contains("llama3.2"));
         }
         // If curl is not available, test passes anyway
     }
@@ -358,15 +358,15 @@ fn test_ollama_model_fetching() {
     use std::process::Command;
 
     let output = Command::new("curl")
-        .args(&["-s", "http://localhost:11434/api/tags"])
+        .args(["-s", "http://localhost:11434/api/tags"])
         .output();
 
-    if let Ok(output) = output {
-        if output.status.success() {
-            let body = str::from_utf8(&output.stdout).unwrap();
-            // Should be valid JSON with models
-            assert!(body.contains("models") || body.contains("name"));
-        }
+    if let Ok(output) = output
+        && output.status.success()
+    {
+        let body = str::from_utf8(&output.stdout).unwrap();
+        // Should be valid JSON with models
+        assert!(body.contains("models") || body.contains("name"));
     }
     // If curl is not available, skip this test
 }

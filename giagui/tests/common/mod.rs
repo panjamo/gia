@@ -187,7 +187,7 @@ pub fn is_headless() -> bool {
 #[macro_export]
 macro_rules! skip_if_headless {
     () => {
-        if crate::common::is_headless() {
+        if $crate::common::is_headless() {
             eprintln!("Skipping GUI test: No display available (headless environment)");
             return;
         }
@@ -228,8 +228,8 @@ mod tests {
 
         // Should have correct extensions on Windows
         if cfg!(windows) {
-            assert!(giagui_path.extension().map_or(false, |ext| ext == "exe"));
-            assert!(gia_path.extension().map_or(false, |ext| ext == "exe"));
+            assert!(giagui_path.extension().is_some_and(|ext| ext == "exe"));
+            assert!(gia_path.extension().is_some_and(|ext| ext == "exe"));
         }
     }
 

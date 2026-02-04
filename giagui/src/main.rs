@@ -551,7 +551,6 @@ impl eframe::App for GiaApp {
                                                     "Gemini 2.5 Flash-Lite",
                                                 );
 
-
                                                 // Add Ollama models if available
                                                 let ollama_models = {
                                                     let models = self.ollama_models.lock().unwrap();
@@ -890,13 +889,7 @@ impl GiaApp {
 
         thread::spawn(move || {
             let result = match Command::new("gia")
-                .args([
-                    "--record-audio",
-                    "--role",
-                    &role,
-                    "--no-save",
-                    &prompt,
-                ])
+                .args(["--record-audio", "--role", &role, "--no-save", &prompt])
                 .output()
             {
                 Ok(output) => {

@@ -58,7 +58,7 @@ impl TestConfig {
         ];
 
         let file_path = self.temp_path().join(name);
-        fs::write(&file_path, &png_data).expect("Failed to write test image");
+        fs::write(&file_path, png_data).expect("Failed to write test image");
         file_path
     }
 
@@ -162,7 +162,7 @@ pub fn has_ollama() -> bool {
 #[macro_export]
 macro_rules! skip_without_api_key {
     () => {
-        if !crate::common::has_api_key() {
+        if !$crate::common::has_api_key() {
             eprintln!("Skipping test: GEMINI_API_KEY not set");
             return;
         }
@@ -173,7 +173,7 @@ macro_rules! skip_without_api_key {
 #[macro_export]
 macro_rules! skip_without_ollama {
     () => {
-        if !crate::common::has_ollama() {
+        if !$crate::common::has_ollama() {
             eprintln!("Skipping test: Ollama not available on localhost:11434");
             return;
         }
