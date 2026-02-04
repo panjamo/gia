@@ -328,8 +328,8 @@ mod tests {
 
         // Test that explicit command line argument overrides environment variable
         unsafe { env::set_var("GIA_DEFAULT_MODEL", "gemini-2.5-pro") };
-        let config = Config::from_args_with_test(&["--model", "gemini-2.0-flash"]);
-        assert_eq!(config.model, "gemini-2.0-flash");
+        let config = Config::from_args_with_test(&["--model", "Gemini 2.5 Flash-Lite"]);
+        assert_eq!(config.model, "Gemini 2.5 Flash-Lite");
 
         // Clean up
         unsafe { env::remove_var("GIA_DEFAULT_MODEL") };

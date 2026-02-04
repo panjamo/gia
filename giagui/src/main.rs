@@ -550,16 +550,7 @@ impl eframe::App for GiaApp {
                                                     "gemini-2.5-flash-lite".to_string(),
                                                     "Gemini 2.5 Flash-Lite",
                                                 );
-                                                ui.selectable_value(
-                                                    &mut self.model,
-                                                    "gemini-2.0-flash".to_string(),
-                                                    "Gemini 2.0 Flash",
-                                                );
-                                                ui.selectable_value(
-                                                    &mut self.model,
-                                                    "gemini-2.0-flash-lite".to_string(),
-                                                    "Gemini 2.0 Flash-Lite",
-                                                );
+
 
                                                 // Add Ollama models if available
                                                 let ollama_models = {
@@ -904,8 +895,6 @@ impl GiaApp {
                     "--role",
                     &role,
                     "--no-save",
-                    "--model",
-                    "gemini-2.0-flash-lite",
                     &prompt,
                 ])
                 .output()

@@ -604,8 +604,9 @@ impl ConversationSummary {
             .map(|m| {
                 let content = Conversation::extract_text_content(m);
                 // Truncate to first 50 characters for summary
-                if content.len() > 50 {
-                    format!("{}...", &content[..47])
+                if content.chars().count() > 50 {
+                    let truncated: String = content.chars().take(47).collect();
+                    format!("{}...", truncated)
                 } else {
                     content
                 }
