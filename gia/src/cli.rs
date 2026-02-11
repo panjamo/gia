@@ -42,6 +42,14 @@ pub struct Config {
     pub ordered_content: Vec<ContentSource>, // ordered content for multimodal requests
     pub spinner: bool,                       // true = show spinner during AI request
     pub no_save: bool, // true = don't save to conversation history (transcribe-only mode)
+    // Tool calling options
+    pub enable_tools: bool,   // true = enable tool/function calling
+    pub tool_allow_cwd: bool, // true = allow tools to access current working directory
+    pub tool_allowed_dir: Option<String>, // Some(dir) = allow tools to access specific directory
+    pub tool_disable: Vec<String>, // list of tools to disable
+    pub allow_command_execution: bool, // true = allow ExecuteCommandTool
+    pub command_timeout: u64, // command execution timeout in seconds
+    pub confirm_commands: bool, // true = require confirmation before executing commands
 }
 
 impl Config {
@@ -110,6 +118,21 @@ impl Config {
             ordered_content: Vec::new(), // will be populated in input.rs
             spinner: matches.get_flag("spinner"),
             no_save: matches.get_flag("no-save"),
+            // Tool calling options
+            enable_tools: matches.get_flag("enable-tools"),
+            tool_allow_cwd: matches.get_flag("tool-allow-cwd"),
+            tool_allowed_dir: matches.get_one::<String>("tool-allowed-dir").cloned(),
+            tool_disable: matches
+                .get_many::<String>("tool-disable")
+                .unwrap_or_default()
+                .cloned()
+                .collect(),
+            allow_command_execution: matches.get_flag("allow-command-execution"),
+            command_timeout: matches
+                .get_one::<String>("command-timeout")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(30),
+            confirm_commands: matches.get_flag("confirm-commands"),
         }
     }
 
@@ -265,6 +288,54 @@ impl Config {
                     .value_parser(["bash", "zsh", "fish", "powershell", "nushell"])
                     .action(clap::ArgAction::Set),
             )
+            .next_help_heading("Tool Options (Experimental)")
+            .arg(
+                Arg::new("enable-tools")
+                    .long("enable-tools")
+                    .help("Enable tool/function calling (allows AI to read files, list directories, etc.)")
+                    .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("tool-allow-cwd")
+                    .long("tool-allow-cwd")
+                    .help("Allow tools to access current working directory (requires --enable-tools)")
+                    .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("tool-allowed-dir")
+                    .long("tool-allowed-dir")
+                    .help("Allow tools to access specific directory (requires --enable-tools)")
+                    .value_name("DIR")
+                    .action(clap::ArgAction::Set),
+            )
+            .arg(
+                Arg::new("tool-disable")
+                    .long("tool-disable")
+                    .help("Disable specific tools (comma-separated: read_file,write_file,list_directory,search_web,execute_command)")
+                    .value_name("TOOLS")
+                    .value_delimiter(',')
+                    .action(clap::ArgAction::Append),
+            )
+            .arg(
+                Arg::new("allow-command-execution")
+                    .long("allow-command-execution")
+                    .help("Allow ExecuteCommandTool to run shell commands (requires --enable-tools). DANGEROUS: Use with caution!")
+                    .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("command-timeout")
+                    .long("command-timeout")
+                    .help("Command execution timeout in seconds (default: 30)")
+                    .value_name("SECS")
+                    .default_value("30")
+                    .action(clap::ArgAction::Set),
+            )
+            .arg(
+                Arg::new("confirm-commands")
+                    .long("confirm-commands")
+                    .help("Require user confirmation before executing each command (recommended with --allow-command-execution)")
+                    .action(clap::ArgAction::SetTrue),
+            )
     }
 
     fn handle_completions(shell: &str) {
@@ -390,6 +461,21 @@ mod tests {
                 ordered_content: Vec::new(),
                 spinner: matches.get_flag("spinner"),
                 no_save: matches.get_flag("no-save"),
+                // Tool calling options
+                enable_tools: matches.get_flag("enable-tools"),
+                tool_allow_cwd: matches.get_flag("tool-allow-cwd"),
+                tool_allowed_dir: matches.get_one::<String>("tool-allowed-dir").cloned(),
+                tool_disable: matches
+                    .get_many::<String>("tool-disable")
+                    .unwrap_or_default()
+                    .cloned()
+                    .collect(),
+                allow_command_execution: matches.get_flag("allow-command-execution"),
+                command_timeout: matches
+                    .get_one::<String>("command-timeout")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(30),
+                confirm_commands: matches.get_flag("confirm-commands"),
             }
         }
     }

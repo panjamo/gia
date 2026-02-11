@@ -82,6 +82,23 @@ cargo run -- "Tell me a joke" -T                         # Uses default: de-DE
 cargo run -- --record-audio --role EN --no-save         # English transcription only
 cargo run -- --record-audio --role DE --no-save         # German transcription only
 cargo run -- "Transcribe this" --record-audio --no-save # Custom prompt transcription
+
+# Tool calling (function calling) - enable AI to use tools
+cargo run -- --enable-tools --tool-allow-cwd "analyze this codebase and summarize the architecture"
+cargo run -- --enable-tools --tool-allow-cwd "search the web for rust async best practices"
+cargo run -- --enable-tools --tool-allowed-dir /tmp "create a summary of important files in /tmp"
+
+# Tool calling with specific tools disabled
+cargo run -- --enable-tools --tool-disable search_web --tool-allow-cwd "analyze files only"
+cargo run -- --enable-tools --tool-disable write_file,execute_command --tool-allow-cwd "read-only analysis"
+
+# Tool calling with command execution (dangerous - requires confirmation)
+cargo run -- --enable-tools --allow-command-execution --confirm-commands --tool-allow-cwd "run git status and summarize changes"
+
+# Web search with different modes
+cargo run -- --enable-tools "search for latest Rust news"  # Gemini grounding (default, paid)
+GIA_SEARCH_MODE=duckduckgo cargo run -- --enable-tools "search for AI news"  # Free DuckDuckGo
+GIA_SEARCH_MODE=brave GIA_BRAVE_API_KEY=your_key cargo run -- --enable-tools "search"  # Free Brave
 ```
 
 ### Environment Setup
@@ -114,6 +131,39 @@ export GIA_DEFAULT_MODEL="ollama::llama3.2"
 # Windows
 set GIA_DEFAULT_MODEL=gemini-2.5-pro
 ```
+
+### Web Search Configuration (Tool Calling)
+Configure search mode for tool calling:
+```bash
+# Default (no variable) → Gemini grounding with Google Search (PAID, ~$0.50 per 1000 searches)
+# Best quality, automatic, includes citations, but costs money per search
+
+# Free alternatives:
+export GIA_SEARCH_MODE="duckduckgo"  # Free DuckDuckGo search
+export GIA_SEARCH_MODE="brave"       # Free Brave (requires API key below)
+export GIA_BRAVE_API_KEY="your_brave_api_key_here"  # Get free key at https://brave.com/search/api/
+
+# Windows
+set GIA_SEARCH_MODE=duckduckgo
+# or
+set GIA_SEARCH_MODE=brave
+set GIA_BRAVE_API_KEY=your_brave_api_key_here
+```
+
+**Search Mode Options:**
+
+| Mode | Provider | Cost | Quality | API Key Required |
+|------|----------|------|---------|------------------|
+| (default/unset) | **Gemini Grounding** | 💰 ~$0.0005/search (Flash)<br>~$0.005/search (Pro) | ⭐⭐⭐⭐⭐ Best | No (uses Gemini key) |
+| `duckduckgo` | DuckDuckGo | 💚 Free | ⭐⭐⭐ Good | No |
+| `brave` | Brave Search | 💚 Free (2000/month) | ⭐⭐⭐⭐ Better | Yes (free tier) |
+
+**Recommendation:**
+- **For best results**: Leave unset (Gemini grounding) - costs ~$0.05 per 100 searches
+- **To save money**: Use `GIA_SEARCH_MODE=duckduckgo` (completely free)
+- **For better free results**: Use `GIA_SEARCH_MODE=brave` with free API key
+
+**Note for Ollama users**: Gemini grounding is not available for Ollama models. They automatically use DuckDuckGo (free) regardless of the setting.
 
 ### Logging
 ```bash

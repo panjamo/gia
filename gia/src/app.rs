@@ -118,16 +118,41 @@ pub async fn run_app(mut config: Config) -> Result<()> {
 
     // Spinner already started earlier if requested
 
-    let ai_response = provider
-        .generate_content_with_chat_messages(all_genai_messages)
-        .await
-        .context("Failed to generate content")?;
+    // Initialize tools if enabled
+    let tool_executor = if config.enable_tools {
+        // Show warning when tools are enabled
+        eprintln!("\n⚠️  Tools enabled!");
+        eprintln!("   The AI can:");
+        eprintln!("   - Read and write files");
+        eprintln!("   - List directories");
+        eprintln!("   - Search the web");
+        if config.allow_command_execution {
+            eprintln!("   - Execute shell commands (DANGEROUS!)");
+            if config.confirm_commands {
+                eprintln!("   - You will be asked to confirm each command");
+            }
+        }
+        eprintln!();
+
+        Some(initialize_tool_executor(&config)?)
+    } else {
+        None
+    };
+
+    // Execute with or without tools
+    let (response, usage, _tool_messages) = if let Some(executor) = &tool_executor {
+        log_info("Tools enabled - using tool execution loop");
+        execute_with_tools(&mut provider, all_genai_messages, executor, &config.model).await?
+    } else {
+        let ai_response = provider
+            .generate_content_with_chat_messages(all_genai_messages)
+            .await
+            .context("Failed to generate content")?;
+        (ai_response.content, ai_response.usage, Vec::new())
+    };
 
     // Spinner is automatically killed when dropped here
     drop(_spinner);
-
-    let response = ai_response.content;
-    let usage = ai_response.usage;
 
     // Build resources from ordered content
     let mut resources = Vec::new();
@@ -326,6 +351,186 @@ fn build_content_part_wrappers(
     ));
 
     Ok(wrappers)
+}
+
+/// Initialize tool executor from config
+///
+/// KISS: Simple function that creates ToolExecutor with registered tools
+/// DRY: Centralized tool registration
+fn initialize_tool_executor(config: &Config) -> Result<crate::tools::ToolExecutor> {
+    use crate::tools::*;
+    use std::time::Duration;
+
+    let mut registry = ToolRegistry::new();
+
+    // Get disabled tools from config
+    let disabled_tools: std::collections::HashSet<String> = config
+        .tool_disable
+        .iter()
+        .map(|s| s.to_lowercase())
+        .collect();
+
+    // Register tools (KISS: straightforward registration)
+    if !disabled_tools.contains("read_file") {
+        registry.register(Box::new(ReadFileTool));
+        log_info("Registered tool: read_file");
+    }
+
+    if !disabled_tools.contains("write_file") {
+        registry.register(Box::new(WriteFileTool));
+        log_info("Registered tool: write_file");
+    }
+
+    if !disabled_tools.contains("list_directory") {
+        registry.register(Box::new(ListDirectoryTool));
+        log_info("Registered tool: list_directory");
+    }
+
+    if !disabled_tools.contains("search_web") {
+        registry.register(Box::new(SearchWebTool));
+        log_info("Registered tool: search_web");
+    }
+
+    if config.allow_command_execution && !disabled_tools.contains("execute_command") {
+        registry.register(Box::new(ExecuteCommandTool));
+        log_info("Registered tool: execute_command");
+    }
+
+    // Build security context from config
+    let mut security = SecurityContext::new()
+        .with_max_file_size(10 * 1024 * 1024) // 10MB
+        .with_allow_web_search(true)
+        .with_allow_command_execution(config.allow_command_execution)
+        .with_command_timeout(Duration::from_secs(config.command_timeout))
+        .with_confirm_commands(config.confirm_commands);
+
+    if config.tool_allow_cwd {
+        security = security
+            .allow_current_dir()
+            .context("Failed to allow current directory")?;
+    }
+
+    if let Some(ref dir) = config.tool_allowed_dir {
+        security = security.with_allowed_dir(dir);
+    }
+
+    log_info(&format!(
+        "Tool executor initialized with {} tool(s)",
+        registry.len()
+    ));
+
+    Ok(ToolExecutor::new(registry, security))
+}
+
+/// Create Google Search grounding tool for Gemini
+///
+/// When GIA_SEARCH_MODE is unset, this enables Gemini's built-in Google Search grounding.
+/// This is a paid feature that provides automatic web search with citations.
+fn create_google_search_grounding_tool() -> genai::chat::Tool {
+    use serde_json::json;
+
+    genai::chat::Tool::new("google_search_retrieval").with_config(json!({
+        "google_search_retrieval": {}
+    }))
+}
+
+/// Check if we should use Gemini grounding (GIA_SEARCH_MODE unset + Gemini model)
+fn should_use_gemini_grounding(model: &str) -> bool {
+    let search_mode = std::env::var("GIA_SEARCH_MODE").ok();
+    let is_gemini = !model.contains("::") || model.starts_with("gemini");
+
+    search_mode.is_none() && is_gemini
+}
+
+/// Execute with tools (tool calling loop)
+///
+/// KISS: Simple loop until no more tool calls
+/// This function implements the tool execution loop:
+/// 1. Send messages with tools to LLM
+/// 2. If LLM returns tool calls, execute them and loop back
+/// 3. If LLM returns text, return final response
+async fn execute_with_tools(
+    provider: &mut Box<dyn crate::provider::AiProvider>,
+    mut messages: Vec<genai::chat::ChatMessage>,
+    executor: &crate::tools::ToolExecutor,
+    model: &str,
+) -> Result<(String, TokenUsage, Vec<ChatMessageWrapper>)> {
+    use genai::chat::ChatRequest;
+
+    const MAX_TOOL_ITERATIONS: usize = 10;
+
+    let mut conversation_wrappers: Vec<ChatMessageWrapper> = Vec::new();
+    let mut total_usage = TokenUsage::default();
+    let mut tools = executor.registry().to_genai_tools();
+
+    if should_use_gemini_grounding(model) {
+        tools.push(create_google_search_grounding_tool());
+        log_info("Added Google Search grounding for Gemini (paid feature)");
+        log_info("Set GIA_SEARCH_MODE=duckduckgo or GIA_SEARCH_MODE=brave for free alternatives");
+    }
+
+    for iteration in 0..MAX_TOOL_ITERATIONS {
+        log_info(&format!(
+            "Tool iteration {}/{}",
+            iteration + 1,
+            MAX_TOOL_ITERATIONS
+        ));
+
+        let chat_request = ChatRequest::new(messages.clone()).with_tools(tools.clone());
+        let chat_response = provider
+            .generate_content_with_request(chat_request)
+            .await
+            .context("Failed to generate content with tools")?;
+
+        if let Some(prompt) = chat_response.usage.prompt_tokens {
+            total_usage.prompt_tokens =
+                Some(total_usage.prompt_tokens.unwrap_or(0) + (prompt as u32));
+        }
+        if let Some(completion) = chat_response.usage.completion_tokens {
+            total_usage.completion_tokens =
+                Some(total_usage.completion_tokens.unwrap_or(0) + (completion as u32));
+        }
+        if let Some(total) = chat_response.usage.total_tokens {
+            total_usage.total_tokens = Some(total_usage.total_tokens.unwrap_or(0) + (total as u32));
+        }
+
+        let tool_calls = chat_response.tool_calls();
+
+        if tool_calls.is_empty() {
+            let final_text = chat_response
+                .first_text()
+                .unwrap_or("(no text)")
+                .to_string();
+
+            let assistant_wrapper = ChatMessageWrapper {
+                role: "Assistant".to_string(),
+                content: MessageContentWrapper::Text {
+                    text: final_text.clone(),
+                },
+            };
+            conversation_wrappers.push(assistant_wrapper);
+
+            return Ok((final_text, total_usage, conversation_wrappers));
+        }
+
+        log_info(&format!("LLM requested {} tool call(s)", tool_calls.len()));
+
+        let tool_calls_owned: Vec<_> = tool_calls.iter().cloned().cloned().collect();
+        let assistant_tool_msg = genai::chat::ChatMessage::from(tool_calls_owned.clone());
+        messages.push(assistant_tool_msg);
+
+        let tool_responses = executor.execute_tool_calls(&tool_calls_owned).await;
+
+        for tool_response in tool_responses {
+            let tool_msg = genai::chat::ChatMessage::from(tool_response);
+            messages.push(tool_msg);
+        }
+    }
+
+    Err(anyhow::anyhow!(
+        "Tool execution loop exceeded maximum iterations ({})",
+        MAX_TOOL_ITERATIONS
+    ))
 }
 
 fn resolve_conversation(
