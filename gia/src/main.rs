@@ -18,7 +18,6 @@ mod role;
 mod spinner;
 
 use anyhow::Result;
-use notify_rust::Notification;
 
 use crate::app::run_app;
 use crate::cli::Config;
