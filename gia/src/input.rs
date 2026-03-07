@@ -286,7 +286,10 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
     // 2. Audio recording when present
     if config.record_audio {
         log_info("Audio recording requested");
-        match record_audio(config.audio_device.as_deref()) {
+        match record_audio(
+            config.audio_device.as_deref(),
+            config.audio_dialog_text.as_deref(),
+        ) {
             Ok(audio_path) => {
                 log_info(&format!("Audio recorded to: {audio_path}"));
                 config
@@ -520,6 +523,7 @@ mod tests {
             ordered_content: Vec::new(),
             spinner: false,
             audio_device: None,
+            audio_dialog_text: None,
             list_audio_devices: false,
             no_save: false,
         };
@@ -613,6 +617,7 @@ mod tests {
             ordered_content: Vec::new(),
             spinner: false,
             audio_device: None,
+            audio_dialog_text: None,
             list_audio_devices: false,
             no_save: false,
         };
@@ -641,6 +646,7 @@ mod tests {
             ordered_content: Vec::new(),
             spinner: false,
             audio_device: None,
+            audio_dialog_text: None,
             list_audio_devices: false,
             no_save: false,
         };
@@ -785,6 +791,7 @@ mod tests {
             ordered_content: Vec::new(),
             spinner: false,
             audio_device: None,
+            audio_dialog_text: None,
             list_audio_devices: false,
             no_save: false,
         };
@@ -860,6 +867,7 @@ mod tests {
             ordered_content: Vec::new(),
             spinner: false,
             audio_device: None,
+            audio_dialog_text: None,
             list_audio_devices: false,
             no_save: false,
         };
@@ -917,6 +925,7 @@ mod tests {
             ordered_content: Vec::new(),
             spinner: false,
             audio_device: None,
+            audio_dialog_text: None,
             list_audio_devices: false,
             no_save: false,
         };

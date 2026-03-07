@@ -216,6 +216,9 @@ gia --list-audio-devices                                    # List available dev
 gia --audio-device "Microphone Array" --record-audio        # Use specific device
 GIA_AUDIO_DEVICE="Microphone Array" gia --record-audio     # Use env var
 
+# Audio recording with custom dialog text (URL-encoded, %0A = newline):
+gia --record-audio --audio-dialog-text "Please%20speak%20your%20command%0APress%20Yes%20when%20done"
+
 # Transcribe-only mode (no conversation history saved):
 gia --record-audio --role EN --no-save         # English transcription only
 gia --record-audio --role DE --no-save         # German transcription only
@@ -339,6 +342,7 @@ gia -s -b                         # Show latest conversation (file + browser)
 - `-t, --role <NAME>` - Load role/task from ~/.gia/roles/ or ~/.gia/tasks/ (can be used multiple times)
 - `-a, --record-audio` - Record audio input natively (auto-generates prompt if no text provided)
 - `--audio-device <DEVICE>` - Specify audio input device for recording (overrides GIA_AUDIO_DEVICE)
+- `--audio-dialog-text <TEXT>` - URL-encoded text shown before the recording confirmation dialog (e.g. `Hello%0AWorld` for newlines)
 - `--list-audio-devices` - List all available audio input devices and exit
 - `-c, --clipboard-input` - Add clipboard content to prompt (auto-detects images vs text)
 - `-f, --file <FILE_OR_DIR>` - Add file or directory to prompt (auto-detects media vs text; directories processed recursively)

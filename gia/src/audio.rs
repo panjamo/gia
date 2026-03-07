@@ -199,7 +199,10 @@ fn get_audio_device(device_name: Option<&str>) -> Result<cpal::Device> {
 
 /// Record audio natively using cpal (fast recording to WAV, then quick ogg-opus conversion)
 /// Returns the path to the recorded Opus file
-pub fn record_audio_native(device_name: Option<&str>) -> Result<String> {
+pub fn record_audio_native(
+    device_name: Option<&str>,
+    dialog_prefix: Option<&str>,
+) -> Result<String> {
     log_debug("Starting native audio recording with cpal");
 
     // Generate unique filenames for WAV and Opus
@@ -333,9 +336,15 @@ pub fn record_audio_native(device_name: Option<&str>) -> Result<String> {
 
     // Show message dialog to stop recording (no MessageType to avoid Windows notification sound)
     log_debug("Showing message dialog to stop recording");
+    let prefix = dialog_prefix
+        .map(|s| {
+            let decoded = urlencoding::decode(s).unwrap_or_else(|_| s.into());
+            format!("{}\n\n", decoded)
+        })
+        .unwrap_or_default();
     let dialog_text = format!(
-        "🎙️  Recording in progress from device:\n{}\n\nClick Yes to take over the recording, No to cancel",
-        device_display_name
+        "{}🎙️  Recording in progress from device:\n{}\n\nClick Yes to take over the recording, No to cancel",
+        prefix, device_display_name
     );
     let user_confirmed = MessageDialog::new()
         .set_title("Recording...")
@@ -444,9 +453,9 @@ pub fn record_audio_native(device_name: Option<&str>) -> Result<String> {
 /// 1. device_name parameter (from CLI --audio-device)
 /// 2. GIA_AUDIO_DEVICE environment variable
 /// 3. Default system audio input device
-pub fn record_audio(device_name: Option<&str>) -> Result<String> {
+pub fn record_audio(device_name: Option<&str>, dialog_prefix: Option<&str>) -> Result<String> {
     log_debug("Starting native audio recording...");
-    record_audio_native(device_name)
+    record_audio_native(device_name, dialog_prefix)
 }
 
 #[cfg(test)]

@@ -37,6 +37,7 @@ pub struct Config {
     pub model: String,
     pub record_audio: bool,                  // true = record audio input
     pub audio_device: Option<String>,        // None = default/env, Some(name) = specific device
+    pub audio_dialog_text: Option<String>,   // Optional prefix text shown in recording dialog
     pub list_audio_devices: bool,            // true = list audio devices and exit
     pub roles: Vec<String>,                  // role names to load from ~/.gia/<role>.md
     pub ordered_content: Vec<ContentSource>, // ordered content for multimodal requests
@@ -105,6 +106,7 @@ impl Config {
             model: matches.get_one::<String>("model").unwrap().clone(),
             record_audio: matches.get_flag("record-audio"),
             audio_device: matches.get_one::<String>("audio-device").cloned(),
+            audio_dialog_text: matches.get_one::<String>("audio-dialog-text").cloned(),
             list_audio_devices: matches.get_flag("list-audio-devices"),
             roles,
             ordered_content: Vec::new(), // will be populated in input.rs
@@ -151,6 +153,13 @@ impl Config {
                     .long("audio-device")
                     .help("Specify audio input device name for recording. Overrides GIA_AUDIO_DEVICE environment variable. Use --list-audio-devices to see available devices.")
                     .value_name("DEVICE")
+                    .action(clap::ArgAction::Set),
+            )
+            .arg(
+                Arg::new("audio-dialog-text")
+                    .long("audio-dialog-text")
+                    .help("URL-encoded text shown before the recording dialog message (e.g. Hello%0AWorld for newlines).")
+                    .value_name("TEXT")
                     .action(clap::ArgAction::Set),
             )
             .arg(
@@ -385,6 +394,7 @@ mod tests {
                 model: matches.get_one::<String>("model").unwrap().clone(),
                 record_audio: matches.get_flag("record-audio"),
                 audio_device: matches.get_one::<String>("audio-device").cloned(),
+                audio_dialog_text: matches.get_one::<String>("audio-dialog-text").cloned(),
                 list_audio_devices: matches.get_flag("list-audio-devices"),
                 roles,
                 ordered_content: Vec::new(),

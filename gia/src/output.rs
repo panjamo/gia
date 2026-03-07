@@ -454,6 +454,7 @@ mod tests {
             ],
             spinner: false,
             audio_device: None,
+            audio_dialog_text: None,
             list_audio_devices: false,
             no_save: false,
         };
@@ -485,6 +486,7 @@ mod tests {
             ordered_content: vec![],
             spinner: false,
             audio_device: None,
+            audio_dialog_text: None,
             list_audio_devices: false,
             no_save: false,
         };
