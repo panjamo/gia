@@ -43,6 +43,7 @@ pub struct Config {
     pub ordered_content: Vec<ContentSource>, // ordered content for multimodal requests
     pub spinner: bool,                       // true = show spinner during AI request
     pub no_save: bool, // true = don't save to conversation history (transcribe-only mode)
+    pub markdown_output: bool, // true = output raw markdown to stdout (skip conversion)
 }
 
 impl Config {
@@ -112,6 +113,7 @@ impl Config {
             ordered_content: Vec::new(), // will be populated in input.rs
             spinner: matches.get_flag("spinner"),
             no_save: matches.get_flag("no-save"),
+            markdown_output: matches.get_flag("markdown-output"),
         }
     }
 
@@ -267,6 +269,13 @@ impl Config {
                     .action(clap::ArgAction::SetTrue),
             )
             .arg(
+                Arg::new("markdown-output")
+                    .short('M')
+                    .long("markdown")
+                    .help("Output raw markdown to stdout (skip plain-text conversion)")
+                    .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
                 Arg::new("completions")
                     .long("completions")
                     .help("Generate shell completion script")
@@ -400,6 +409,7 @@ mod tests {
                 ordered_content: Vec::new(),
                 spinner: matches.get_flag("spinner"),
                 no_save: matches.get_flag("no-save"),
+                markdown_output: matches.get_flag("markdown-output"),
             }
         }
     }

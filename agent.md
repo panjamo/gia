@@ -16,7 +16,7 @@ GIA is a CLI tool for interacting with Google's Gemini API. It supports multimod
 ### Critical Features
 1. **Multi-API Key Support**: Pipe-separated keys with automatic fallback on 429 errors
 2. **Input Sources**: CLI args, clipboard (text/images), stdin, text files
-3. **Output Destinations**: stdout (default), clipboard
+3. **Output Destinations**: stdout (default), clipboard, raw markdown (`-M`/`--markdown`)
 4. **Conversation Persistence**: JSON-based storage in `~/.gia/conversations/`
 5. **Context Management**: Automatic truncation to maintain context window
 

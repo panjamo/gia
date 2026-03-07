@@ -248,10 +248,14 @@ pub fn output_text_with_usage(
         }
         OutputMode::Stdout => {
             log_info("Writing response to stdout");
-            let plain_text = markdown_to_text::convert(text);
-            let plain_text = plain_text.replace('\t', "  ");
-            let wrapped_text = wrap_text(&plain_text, 100);
-            println!("{wrapped_text}");
+            if config.markdown_output {
+                print!("{text}");
+            } else {
+                let plain_text = markdown_to_text::convert(text);
+                let plain_text = plain_text.replace('\t', "  ");
+                let wrapped_text = wrap_text(&plain_text, 100);
+                println!("{wrapped_text}");
+            }
             Ok(())
         }
         OutputMode::Tts(lang) => {
@@ -457,6 +461,7 @@ mod tests {
             audio_dialog_text: None,
             list_audio_devices: false,
             no_save: false,
+            markdown_output: false,
         };
 
         let metadata = build_footer_metadata(&config, None);
@@ -489,6 +494,7 @@ mod tests {
             audio_dialog_text: None,
             list_audio_devices: false,
             no_save: false,
+            markdown_output: false,
         };
 
         let metadata = build_footer_metadata(&config, None);

@@ -301,6 +301,10 @@ gia "Write a poem about coding" -o
 # Output to file (~/.gia/outputs/) AND open browser preview:
 gia "Generate markdown documentation" -b
 
+# Output raw markdown (skip plain-text conversion, useful for piping):
+gia "Write a summary" -M
+gia "Write a summary" --markdown
+
 # With additional input and clipboard output:
 gia "Translate to Spanish" -c -o
 ```
@@ -348,6 +352,7 @@ gia -s -b                         # Show latest conversation (file + browser)
 - `-f, --file <FILE_OR_DIR>` - Add file or directory to prompt (auto-detects media vs text; directories processed recursively)
 - `-o, --clipboard-output` - Write response to clipboard instead of stdout
 - `-b, --browser-output` - Write output to file (~/.gia/outputs/, path copied to clipboard) AND open browser preview
+- `-M, --markdown` - Output raw markdown to stdout (skip plain-text conversion, useful for piping to markdown renderers)
 - `-r, --resume [ID]` - Resume last conversation or specify conversation ID
 - `-R` - Resume the very last conversation
 - `-l, --list-conversations [NUMBER]` - List saved conversations (optionally limit number)

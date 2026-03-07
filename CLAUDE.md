@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Cargo workspace containing two binaries:
 
-1. **gia** - Command-line tool that sends prompts to Google's Gemini API and returns AI responses. Supports multiple input sources (command line, clipboard, stdin, files) and output destinations (stdout, clipboard). Supports multimodal interactions with automatic detection of media files (JPEG, PNG, WebP, HEIC, PDF, MP3, MP4, etc.). Also supports local Ollama models.
+1. **gia** - Command-line tool that sends prompts to Google's Gemini API and returns AI responses. Supports multiple input sources (command line, clipboard, stdin, files) and output destinations (stdout, raw markdown, clipboard, browser preview, TTS). Supports multimodal interactions with automatic detection of media files (JPEG, PNG, WebP, HEIC, PDF, MP3, MP4, etc.). Also supports local Ollama models.
 
 2. **giagui** - GUI wrapper for gia using the egui framework. Must have gia installed and available in PATH.
 
@@ -175,11 +175,12 @@ This is a Cargo workspace with shared dependencies and build configuration:
 3. Stdin content (automatically detected when available)
 4. File content (with `-f` flag) - automatically detects media files vs text files, can be used multiple times
 
-**Output Destinations**: Four output options:
-1. Stdout (default)
-2. Clipboard (with `-o` flag)
-3. Browser preview (with `-b` flag)
-4. Text-to-speech (with `-T` or `--tts` flag)
+**Output Destinations**: Five output options:
+1. Stdout (default, plain text with markdown converted)
+2. Stdout raw markdown (with `-M` or `--markdown` flag, skips plain-text conversion)
+3. Clipboard (with `-o` flag)
+4. Browser preview (with `-b` flag)
+5. Text-to-speech (with `-T` or `--tts` flag)
 
 **Conversation Management**: Persistent conversation storage allowing users to resume previous conversations:
 - Local JSON-based storage in `~/.gia/conversations/`
