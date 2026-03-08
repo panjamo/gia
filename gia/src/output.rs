@@ -244,7 +244,13 @@ pub fn output_text_with_usage(
 
         OutputMode::Clipboard => {
             log_info("Writing response to clipboard");
-            write_clipboard(text)
+            if config.markdown_output {
+                write_clipboard(text)
+            } else {
+                let plain_text = markdown_to_text::convert(text);
+                let plain_text = plain_text.replace('\t', "  ");
+                write_clipboard(&plain_text)
+            }
         }
         OutputMode::Stdout => {
             log_info("Writing response to stdout");
