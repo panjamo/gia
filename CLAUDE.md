@@ -148,13 +148,14 @@ This is a Cargo workspace with shared dependencies and build configuration:
 
 ### Module Structure (gia CLI)
 - `gia/src/main.rs` - CLI argument parsing, main application flow
-- `gia/src/gemini.rs` - Gemini API client with rate limit fallback logic
+- `gia/src/gemini.rs` - Gemini API client with rate limit fallback logic and tool-calling loop
 - `gia/src/ollama.rs` - Ollama API client for local LLM support
 - `gia/src/provider.rs` - Provider abstraction and factory
 - `gia/src/api_key.rs` - API key management (multiple keys, validation, fallback)
 - `gia/src/clipboard.rs` - Clipboard operations using arboard
 - `gia/src/conversation.rs` - Conversation management with persistent storage
 - `gia/src/logging.rs` - Structured logging to stderr
+- `gia/src/tools.rs` - LLM tool/function-calling registry (`GiaTool` trait + `ClipboardTool`)
 
 ### Module Structure (giagui GUI)
 - `giagui/src/main.rs` - Single-file egui application
@@ -169,11 +170,12 @@ This is a Cargo workspace with shared dependencies and build configuration:
 
 **Multi-API Key Support**: The application supports pipe-separated API keys (`key1|key2|key3`) and automatically falls back to alternative keys when encountering 429 rate limit errors. This is handled in `gemini.rs` with cooperation from `api_key.rs`.
 
-**Input Sources**: Four input sources can be combined:
+**Input Sources**: Five input sources can be combined:
 1. Command line arguments (primary prompt)
 2. Clipboard content (with `-c` flag) - supports both text and images
 3. Stdin content (automatically detected when available)
 4. File content (with `-f` flag) - automatically detects media files vs text files, can be used multiple times
+5. Clipboard via LLM tool-calling - the AI can request clipboard content itself (text or image) when instructed in the prompt (e.g. "use the clipboard")
 
 **Output Destinations**: Five output options:
 1. Stdout (default, plain text with markdown converted)
@@ -187,6 +189,11 @@ This is a Cargo workspace with shared dependencies and build configuration:
 - Automatic conversation history inclusion in prompts
 - Context window management with automatic truncation
 - Support for resuming latest or specific conversations
+
+**LLM Tool-Calling**: The Gemini client advertises a registry of tools to the model and handles the function-calling loop:
+- `tools.rs` defines the `GiaTool` trait and the `all_tools()` registry
+- `ClipboardTool` (`get_clipboard_content`) lets the AI fetch clipboard text or image when instructed (e.g. "use the clipboard" or "Zwischenablage")
+- New tools can be added by implementing `GiaTool` and registering them in `all_tools()`
 
 **Error Handling**: Comprehensive error handling with user-friendly messages for common issues like missing API keys, authentication failures, and rate limits.
 

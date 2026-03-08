@@ -17,6 +17,7 @@ This workspace contains two binaries:
   - `-f` flag: Automatically detects media files (JPEG, PNG, WebP, HEIC, PDF, OGG, OPUS, MP3, M4A, MP4) vs text files
   - Supports directories (processes all files recursively with auto-detection)
 - Optional additional input from clipboard or stdin (auto-detects text vs images)
+- **LLM tool-calling** - AI can request clipboard content itself (text or image) via function calling when instructed in the prompt
 - Output responses to stdout (default) or clipboard
 - Persistent conversation history with resume capability
 - Multi-API key support with automatic fallback
@@ -240,6 +241,19 @@ echo "data to process" | gia "Analyze this data"
 # Use roles/tasks (searches roles/ first, then tasks/):
 gia -t rust-dev "Optimize this function" -c
 gia -t code-review -t security-audit "Review changes"
+```
+
+### LLM tool-calling (AI-driven clipboard access)
+
+The AI can request clipboard content itself — no `-c` flag needed. Just mention the clipboard in your prompt:
+```bash
+# AI fetches clipboard text when instructed:
+gia "Explain the code in the clipboard"
+gia "Summarize the clipboard content"
+
+# AI fetches clipboard image when instructed:
+gia "Describe the image in the clipboard"
+gia "What does the screenshot in the Zwischenablage show?"
 ```
 
 ### Adding input sources
