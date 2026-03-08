@@ -16,6 +16,7 @@ mod output;
 mod provider;
 mod role;
 mod spinner;
+mod tools;
 
 use anyhow::Result;
 use notify_rust::Notification;

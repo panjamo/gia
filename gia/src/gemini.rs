@@ -6,7 +6,7 @@ use crate::provider::{AiProvider, AiResponse};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use genai::Client;
-use genai::chat::{ChatMessage, ChatRequest};
+use genai::chat::{ChatMessage, ChatRole, ChatRequest, ContentPart, MessageContent, ToolResponse};
 use genai::resolver::{AuthData, AuthResolver};
 
 #[derive(Debug)]
@@ -148,46 +148,97 @@ impl GeminiClient {
 
         let client = Client::builder().with_auth_resolver(auth_resolver).build();
 
-        // Create the chat request
-        let chat_request = ChatRequest::new(messages);
+        // Build tool definitions from the registry and advertise them to the LLM
+        let tools = crate::tools::all_tools();
+        let tool_definitions = tools.iter().map(|t| t.definition()).collect::<Vec<_>>();
+
+        let mut chat_request = ChatRequest::new(messages).with_tools(tool_definitions);
         log_trace("=== Full Chat Request ===");
         log_trace(&format!("Model: {}", self.model));
         log_trace(&format!("Request Debug: {:?}", chat_request));
         log_trace("=== End Full Chat Request ===");
 
-        // Send the request using genai
-        let chat_response = match client.exec_chat(&self.model, chat_request, None).await {
-            Ok(response) => response,
-            Err(e) => {
-                // Log the raw error before adding context
-                log_debug(&format!("Raw genai error: {}", e));
-                log_debug(&format!("Raw genai error debug: {:?}", e));
-                return Err(e).context("Failed to send chat request to Gemini API");
+        // Tool-use loop: repeat until the model returns a text response
+        let (generated_text, usage) = loop {
+            let chat_response = match client.exec_chat(&self.model, chat_request.clone(), None).await {
+                Ok(response) => response,
+                Err(e) => {
+                    log_debug(&format!("Raw genai error: {}", e));
+                    log_debug(&format!("Raw genai error debug: {:?}", e));
+                    return Err(e).context("Failed to send chat request to Gemini API");
+                }
+            };
+
+            log_trace("=== Full Chat Response ===");
+            log_trace(&format!("Content: {:?}", chat_response.content));
+            log_trace(&format!("Reasoning Content: {:?}", chat_response.reasoning_content));
+            log_trace(&format!("Model Iden: {:?}", chat_response.model_iden));
+            log_trace(&format!("Usage: {:?}", chat_response.usage));
+            log_trace(&format!("Response Debug: {:?}", chat_response));
+            log_trace("=== End Full Chat Response ===");
+
+            // Check for tool calls without consuming the response
+            let has_tool_calls = !chat_response.tool_calls().is_empty();
+
+            if !has_tool_calls {
+                // Final text response – extract usage and text, then exit loop
+                let usage = TokenUsage {
+                    prompt_tokens: chat_response.usage.prompt_tokens.map(|t| t as u32),
+                    completion_tokens: chat_response.usage.completion_tokens.map(|t| t as u32),
+                    total_tokens: chat_response.usage.total_tokens.map(|t| t as u32),
+                };
+                let text = chat_response
+                    .first_text()
+                    .context("Failed to extract text from Gemini response")?
+                    .to_string();
+                break (text, usage);
+            }
+
+            // Execute each tool call via the registry
+            let tool_calls = chat_response.into_tool_calls();
+            let mut tool_responses: Vec<ToolResponse> = Vec::new();
+            // Binary blobs (e.g. images) can't fit in a ToolResponse (text-only), so
+            // we collect them and inject them as a follow-up User message.
+            let mut binary_parts: Vec<ContentPart> = Vec::new();
+
+            for tool_call in &tool_calls {
+                log_info(&format!("LLM requested tool: {}", tool_call.fn_name));
+
+                let result = if let Some(tool) = tools.iter().find(|t| t.name() == tool_call.fn_name) {
+                    match tool.execute(&tool_call.fn_arguments) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            log_error(&format!("Tool '{}' failed: {e}", tool_call.fn_name));
+                            crate::tools::ToolResult::text(format!("(Tool error: {e})"))
+                        }
+                    }
+                } else {
+                    log_warn(&format!("Unknown tool called by LLM: {}", tool_call.fn_name));
+                    crate::tools::ToolResult::text(format!("(Unknown tool: {})", tool_call.fn_name))
+                };
+
+                tool_responses.push(ToolResponse::new(tool_call.call_id.clone(), result.text));
+
+                if let Some(binary) = result.binary {
+                    binary_parts.push(ContentPart::from_binary_base64(binary.mime_type, binary.base64, None));
+                }
+            }
+
+            // Append tool calls (assistant turn) and responses (tool turn) to the conversation
+            chat_request = chat_request.append_message(tool_calls);
+            for tool_response in tool_responses {
+                chat_request = chat_request.append_message(tool_response);
+            }
+
+            // Inject any binary blobs as a User message (ToolResponse is text-only)
+            if !binary_parts.is_empty() {
+                chat_request = chat_request.append_message(ChatMessage {
+                    role: ChatRole::User,
+                    content: MessageContent::from_parts(binary_parts),
+                    options: None,
+                });
             }
         };
-
-        log_trace("=== Full Chat Response ===");
-        log_trace(&format!("Content: {:?}", chat_response.content));
-        log_trace(&format!(
-            "Reasoning Content: {:?}",
-            chat_response.reasoning_content
-        ));
-        log_trace(&format!("Model Iden: {:?}", chat_response.model_iden));
-        log_trace(&format!("Usage: {:?}", chat_response.usage));
-        log_trace(&format!("Response Debug: {:?}", chat_response));
-        log_trace("=== End Full Chat Response ===");
-
-        // Extract usage information if available
-        let usage = TokenUsage {
-            prompt_tokens: chat_response.usage.prompt_tokens.map(|t| t as u32),
-            completion_tokens: chat_response.usage.completion_tokens.map(|t| t as u32),
-            total_tokens: chat_response.usage.total_tokens.map(|t| t as u32),
-        };
-
-        // Extract the response text
-        let generated_text = chat_response
-            .first_text()
-            .context("Failed to extract text from Gemini response")?;
 
         // Check if the generated text is empty or just whitespace
         if generated_text.trim().is_empty() {
@@ -203,7 +254,7 @@ impl GeminiClient {
         ));
 
         Ok(AiResponse {
-            content: generated_text.to_string(),
+            content: generated_text,
             usage,
         })
     }
