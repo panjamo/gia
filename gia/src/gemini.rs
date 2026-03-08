@@ -14,10 +14,11 @@ pub struct GeminiClient {
     api_keys: Vec<String>,
     current_key_index: usize,
     model: String,
+    enable_tools: bool,
 }
 
 impl GeminiClient {
-    pub fn new(model: String, api_keys: Vec<String>, preferred_key_index: usize) -> Result<Self> {
+    pub fn new(model: String, api_keys: Vec<String>, preferred_key_index: usize, enable_tools: bool) -> Result<Self> {
         if api_keys.is_empty() {
             return Err(anyhow::anyhow!("No API keys provided"));
         }
@@ -57,6 +58,7 @@ impl GeminiClient {
             api_keys,
             current_key_index,
             model,
+            enable_tools,
         })
     }
 
@@ -148,11 +150,16 @@ impl GeminiClient {
 
         let client = Client::builder().with_auth_resolver(auth_resolver).build();
 
-        // Build tool definitions from the registry and advertise them to the LLM
+        // Advertise tools only when the caller determined it appropriate (e.g. audio input present)
         let tools = crate::tools::all_tools();
-        let tool_definitions = tools.iter().map(|t| t.definition()).collect::<Vec<_>>();
-
-        let mut chat_request = ChatRequest::new(messages).with_tools(tool_definitions);
+        let mut chat_request = if self.enable_tools {
+            let tool_definitions = tools.iter().map(|t| t.definition()).collect::<Vec<_>>();
+            log_info("Tools enabled for this request (audio input detected)");
+            ChatRequest::new(messages).with_tools(tool_definitions)
+        } else {
+            log_info("Tools disabled for this request");
+            ChatRequest::new(messages)
+        };
         log_trace("=== Full Chat Request ===");
         log_trace(&format!("Model: {}", self.model));
         log_trace(&format!("Request Debug: {:?}", chat_request));
@@ -412,7 +419,7 @@ mod tests {
         ];
         let model = "gemini-2.5-flash-lite".to_string();
 
-        let client = GeminiClient::new(model.clone(), test_keys.clone(), 0);
+        let client = GeminiClient::new(model.clone(), test_keys.clone(), 0, false);
         assert!(client.is_ok());
 
         let client = client.unwrap();
@@ -426,7 +433,7 @@ mod tests {
         let empty_keys = vec![];
         let model = "gemini-2.5-flash-lite".to_string();
 
-        let result = GeminiClient::new(model, empty_keys, 0);
+        let result = GeminiClient::new(model, empty_keys, 0, false);
         assert!(result.is_err());
     }
 
@@ -435,7 +442,7 @@ mod tests {
         let test_keys = vec!["AIzaSyKey1ForTesting123456789012345".to_string()];
         let model = "gemini-2.5-flash-lite".to_string();
 
-        let client = GeminiClient::new(model, test_keys, 0);
+        let client = GeminiClient::new(model, test_keys, 0, false);
         assert!(client.is_ok());
 
         let client = client.unwrap();
@@ -452,7 +459,7 @@ mod tests {
         ];
         let model = "gemini-2.5-flash-lite".to_string();
 
-        let mut client = GeminiClient::new(model, test_keys, 0).unwrap();
+        let mut client = GeminiClient::new(model, test_keys, 0, false).unwrap();
         client.current_key_index = 0;
 
         // Test round-robin cycling
@@ -474,7 +481,7 @@ mod tests {
 
         // Create multiple clients and verify starting index is within valid range
         for _ in 0..10 {
-            let client = GeminiClient::new(model.clone(), test_keys.clone(), 0).unwrap();
+            let client = GeminiClient::new(model.clone(), test_keys.clone(), 0, false).unwrap();
             assert!(client.current_key_index < test_keys.len());
         }
     }
@@ -486,7 +493,7 @@ mod tests {
             "AIzaSyKey1ForTesting123456789012345".to_string(),
             "AIzaSyKey2ForTesting123456789012345".to_string(),
         ];
-        let client = GeminiClient::new("gemini-2.5-flash-lite".to_string(), two_keys, 0).unwrap();
+        let client = GeminiClient::new("gemini-2.5-flash-lite".to_string(), two_keys, 0, false).unwrap();
         assert_eq!(client.api_keys.len(), 2);
 
         // Test with 5 keys
@@ -497,7 +504,7 @@ mod tests {
             "AIzaSyKey4ForTesting123456789012345".to_string(),
             "AIzaSyKey5ForTesting123456789012345".to_string(),
         ];
-        let client = GeminiClient::new("gemini-2.5-flash-lite".to_string(), five_keys, 1).unwrap();
+        let client = GeminiClient::new("gemini-2.5-flash-lite".to_string(), five_keys, 1, false).unwrap();
         assert_eq!(client.api_keys.len(), 5);
     }
 
@@ -511,15 +518,15 @@ mod tests {
         let model = "gemini-2.5-flash-lite".to_string();
 
         // Test with preferred index 1
-        let client = GeminiClient::new(model.clone(), test_keys.clone(), 1).unwrap();
+        let client = GeminiClient::new(model.clone(), test_keys.clone(), 1, false).unwrap();
         assert_eq!(client.current_key_index, 1);
 
         // Test with preferred index 2
-        let client = GeminiClient::new(model.clone(), test_keys.clone(), 2).unwrap();
+        let client = GeminiClient::new(model.clone(), test_keys.clone(), 2, false).unwrap();
         assert_eq!(client.current_key_index, 2);
 
         // Test with out-of-range index (should fall back to 0)
-        let client = GeminiClient::new(model.clone(), test_keys.clone(), 10).unwrap();
+        let client = GeminiClient::new(model.clone(), test_keys.clone(), 10, false).unwrap();
         assert_eq!(client.current_key_index, 0);
     }
 
@@ -536,14 +543,14 @@ mod tests {
         // Simulate creating a new conversation with a specific key
         let initial_key_index = 1;
         let client1 =
-            GeminiClient::new(model.clone(), test_keys.clone(), initial_key_index).unwrap();
+            GeminiClient::new(model.clone(), test_keys.clone(), initial_key_index, false).unwrap();
         assert_eq!(client1.current_key_index, initial_key_index);
         assert_eq!(client1.current_api_key_index(), Some(initial_key_index));
 
         // Simulate resuming the conversation with the same key index
         let resumed_key_index = initial_key_index;
         let client2 =
-            GeminiClient::new(model.clone(), test_keys.clone(), resumed_key_index).unwrap();
+            GeminiClient::new(model.clone(), test_keys.clone(), resumed_key_index, false).unwrap();
         assert_eq!(client2.current_key_index, resumed_key_index);
 
         // Both clients should use the same key for caching
@@ -561,7 +568,7 @@ mod tests {
         ];
         let model = "gemini-2.5-flash-lite".to_string();
 
-        let client = GeminiClient::new(model, test_keys, 1).unwrap();
+        let client = GeminiClient::new(model, test_keys, 1, false).unwrap();
 
         // Test the trait method
         let provider: &dyn AiProvider = &client;
@@ -640,7 +647,7 @@ mod tests {
         ];
         let model = "gemini-2.5-flash-lite".to_string();
 
-        let mut client = GeminiClient::new(model, test_keys, 0).unwrap();
+        let mut client = GeminiClient::new(model, test_keys, 0, false).unwrap();
         let starting_index = client.current_key_index;
 
         // Simulate cycling through all keys

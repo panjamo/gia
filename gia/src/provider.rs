@@ -40,6 +40,8 @@ pub struct ProviderConfig {
     pub model: String,
     pub api_keys: Vec<String>,
     pub preferred_api_key_index: usize,
+    /// Advertise LLM tools to the model. Set to true when audio input is present.
+    pub enable_tools: bool,
 }
 
 /// Factory for creating AI providers
@@ -63,6 +65,7 @@ impl ProviderFactory {
                     model_name.to_string(),
                     config.api_keys,
                     config.preferred_api_key_index,
+                    config.enable_tools,
                 )?;
                 Ok(Box::new(client))
             }
@@ -90,6 +93,7 @@ mod tests {
             model: "ollama::llama3.2".to_string(),
             api_keys: Vec::new(),
             preferred_api_key_index: 0,
+            enable_tools: false,
         };
         let result = ProviderFactory::create_provider(config);
         assert!(result.is_ok());
@@ -102,6 +106,7 @@ mod tests {
             model: "unknown::model".to_string(),
             api_keys: Vec::new(),
             preferred_api_key_index: 0,
+            enable_tools: false,
         };
         let result = ProviderFactory::create_provider(config);
         assert!(result.is_err());
@@ -118,6 +123,7 @@ mod tests {
                 "AIzaSyKey3ForTesting123456789012345".to_string(),
             ],
             preferred_api_key_index: 2,
+            enable_tools: false,
         };
 
         assert_eq!(config.preferred_api_key_index, 2);
@@ -131,6 +137,7 @@ mod tests {
             model: "gemini-2.5-flash".to_string(),
             api_keys: vec!["AIzaSyKey1ForTesting123456789012345".to_string()],
             preferred_api_key_index: 1,
+            enable_tools: false,
         };
 
         let cloned = original.clone();

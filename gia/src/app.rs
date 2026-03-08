@@ -73,11 +73,18 @@ pub async fn run_app(mut config: Config) -> Result<()> {
     // Truncate conversation if it's getting too long
     conversation.truncate_if_needed(get_context_window_limit());
 
+    // Advertise the clipboard tool only when audio input is present — the user may say
+    // "use the clipboard" during recording, and the LLM needs the tool to fulfil that.
+    let enable_tools = config.ordered_content.iter().any(|s| {
+        matches!(s, ContentSource::AudioRecording(_))
+    });
+
     // Initialize AI provider with preferred API key index from conversation (for caching)
     let provider_config = ProviderConfig {
         model: config.model.clone(),
         api_keys: api_keys.clone(),
         preferred_api_key_index: conversation.metadata.api_key_index,
+        enable_tools,
     };
 
     let mut provider = ProviderFactory::create_provider(provider_config)

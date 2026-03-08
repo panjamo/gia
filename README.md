@@ -17,7 +17,7 @@ This workspace contains two binaries:
   - `-f` flag: Automatically detects media files (JPEG, PNG, WebP, HEIC, PDF, OGG, OPUS, MP3, M4A, MP4) vs text files
   - Supports directories (processes all files recursively with auto-detection)
 - Optional additional input from clipboard or stdin (auto-detects text vs images)
-- **LLM tool-calling** - AI can request clipboard content itself (text or image) via function calling when instructed in the prompt
+- **LLM tool-calling** - When recording audio, the AI can fetch clipboard content itself (text or image) if you say so during the recording
 - Output responses to stdout (default) or clipboard
 - Persistent conversation history with resume capability
 - Multi-API key support with automatic fallback
@@ -243,18 +243,18 @@ gia -t rust-dev "Optimize this function" -c
 gia -t code-review -t security-audit "Review changes"
 ```
 
-### LLM tool-calling (AI-driven clipboard access)
+### LLM tool-calling (AI-driven clipboard access during audio)
 
-The AI can request clipboard content itself — no `-c` flag needed. Just mention the clipboard in your prompt:
+When audio input is present, the AI can fetch clipboard content on its own — no `-c` flag needed. Simply say so while recording:
 ```bash
-# AI fetches clipboard text when instructed:
-gia "Explain the code in the clipboard"
-gia "Summarize the clipboard content"
+# Record audio and tell the AI to use the clipboard:
+gia -a   # then speak: "Explain the code in my clipboard"
+gia -a   # then speak: "Nutze die Zwischenablage und erkläre den Code"
 
-# AI fetches clipboard image when instructed:
-gia "Describe the image in the clipboard"
-gia "What does the screenshot in the Zwischenablage show?"
+# Also works when passing an audio file:
+gia "Process this" -f recording.mp3   # audio triggers tool availability
 ```
+> Note: the clipboard tool is only offered to the AI when audio input is part of the request. For text-only prompts, use `-c` instead.
 
 ### Adding input sources
 ```bash

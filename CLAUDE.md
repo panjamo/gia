@@ -175,7 +175,7 @@ This is a Cargo workspace with shared dependencies and build configuration:
 2. Clipboard content (with `-c` flag) - supports both text and images
 3. Stdin content (automatically detected when available)
 4. File content (with `-f` flag) - automatically detects media files vs text files, can be used multiple times
-5. Clipboard via LLM tool-calling - the AI can request clipboard content itself (text or image) when instructed in the prompt (e.g. "use the clipboard")
+5. Clipboard via LLM tool-calling - when audio input is present, the AI can request clipboard content itself (text or image) if instructed during recording
 
 **Output Destinations**: Five output options:
 1. Stdout (default, plain text with markdown converted)
@@ -192,7 +192,8 @@ This is a Cargo workspace with shared dependencies and build configuration:
 
 **LLM Tool-Calling**: The Gemini client advertises a registry of tools to the model and handles the function-calling loop:
 - `tools.rs` defines the `GiaTool` trait and the `all_tools()` registry
-- `ClipboardTool` (`get_clipboard_content`) lets the AI fetch clipboard text or image when instructed (e.g. "use the clipboard" or "Zwischenablage")
+- `ClipboardTool` (`get_clipboard_content`) lets the AI fetch clipboard text or image during audio requests — e.g. say "use the clipboard" while recording
+- Tools are **only advertised when audio input is present** (`ContentSource::AudioRecording`); all other request types send no tools, preventing unsolicited clipboard access
 - New tools can be added by implementing `GiaTool` and registering them in `all_tools()`
 
 **Error Handling**: Comprehensive error handling with user-friendly messages for common issues like missing API keys, authentication failures, and rate limits.
