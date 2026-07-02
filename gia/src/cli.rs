@@ -36,6 +36,7 @@ pub struct Config {
     pub show_conversation: Option<String>, // Some(id) = show specific conversation
     pub model: String,
     pub record_audio: bool,                  // true = record audio input
+    pub record_audio_ptt: bool,              // true = push-to-talk audio recording
     pub audio_device: Option<String>,        // None = default/env, Some(name) = specific device
     pub audio_dialog_text: Option<String>,   // Optional prefix text shown in recording dialog
     pub list_audio_devices: bool,            // true = list audio devices and exit
@@ -106,6 +107,7 @@ impl Config {
             show_conversation: matches.get_one::<String>("show-conversation").cloned(),
             model: matches.get_one::<String>("model").unwrap().clone(),
             record_audio: matches.get_flag("record-audio"),
+            record_audio_ptt: matches.get_flag("record-audio-ptt"),
             audio_device: matches.get_one::<String>("audio-device").cloned(),
             audio_dialog_text: matches.get_one::<String>("audio-dialog-text").cloned(),
             list_audio_devices: matches.get_flag("list-audio-devices"),
@@ -148,6 +150,13 @@ impl Config {
                     .short('a')
                     .long("record-audio")
                     .help("Record audio input natively (no external dependencies required)")
+                    .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("record-audio-ptt")
+                    .short('A')
+                    .long("record-audio-ptt")
+                    .help("Push-to-talk recording: hold SPACE to talk, release to pause, ENTER to finish, ESC to cancel")
                     .action(clap::ArgAction::SetTrue),
             )
             .arg(
@@ -402,6 +411,7 @@ mod tests {
                 show_conversation: matches.get_one::<String>("show-conversation").cloned(),
                 model: matches.get_one::<String>("model").unwrap().clone(),
                 record_audio: matches.get_flag("record-audio"),
+                record_audio_ptt: matches.get_flag("record-audio-ptt"),
                 audio_device: matches.get_one::<String>("audio-device").cloned(),
                 audio_dialog_text: matches.get_one::<String>("audio-dialog-text").cloned(),
                 list_audio_devices: matches.get_flag("list-audio-devices"),

@@ -283,13 +283,21 @@ pub fn get_input_text(config: &mut Config, prompt_override: Option<&str>) -> Res
             .push(ContentSource::CommandLinePrompt(prompt_to_use.to_string()));
     }
 
-    // 2. Audio recording when present
-    if config.record_audio {
+    // 2. Audio recording when present (classic dialog-driven or push-to-talk)
+    if config.record_audio || config.record_audio_ptt {
         log_info("Audio recording requested");
-        match record_audio(
-            config.audio_device.as_deref(),
-            config.audio_dialog_text.as_deref(),
-        ) {
+        let recording_result = if config.record_audio_ptt {
+            crate::audio::record_audio_push_to_talk(
+                config.audio_device.as_deref(),
+                config.audio_dialog_text.as_deref(),
+            )
+        } else {
+            record_audio(
+                config.audio_device.as_deref(),
+                config.audio_dialog_text.as_deref(),
+            )
+        };
+        match recording_result {
             Ok(audio_path) => {
                 log_info(&format!("Audio recorded to: {audio_path}"));
                 config
@@ -519,6 +527,7 @@ mod tests {
             show_conversation: None,
             model: "test-model".to_string(),
             record_audio: false,
+            record_audio_ptt: false,
             roles: vec![],
             ordered_content: Vec::new(),
             spinner: false,
@@ -526,6 +535,7 @@ mod tests {
             audio_dialog_text: None,
             list_audio_devices: false,
             no_save: false,
+            markdown_output: false,
         };
 
         get_input_text(&mut config, None).unwrap();
@@ -613,6 +623,7 @@ mod tests {
             show_conversation: None,
             model: "test-model".to_string(),
             record_audio: false,
+            record_audio_ptt: false,
             roles: vec![],
             ordered_content: Vec::new(),
             spinner: false,
@@ -620,6 +631,7 @@ mod tests {
             audio_dialog_text: None,
             list_audio_devices: false,
             no_save: false,
+            markdown_output: false,
         };
 
         let result = get_input_text(&mut config, None);
@@ -642,6 +654,7 @@ mod tests {
             show_conversation: None,
             model: "test-model".to_string(),
             record_audio: false,
+            record_audio_ptt: false,
             roles: vec![],
             ordered_content: Vec::new(),
             spinner: false,
@@ -649,6 +662,7 @@ mod tests {
             audio_dialog_text: None,
             list_audio_devices: false,
             no_save: false,
+            markdown_output: false,
         };
 
         let result = get_input_text(&mut config, Some("Override prompt"));
@@ -787,6 +801,7 @@ mod tests {
             show_conversation: None,
             model: "test-model".to_string(),
             record_audio: false,
+            record_audio_ptt: false,
             roles: vec![],
             ordered_content: Vec::new(),
             spinner: false,
@@ -794,6 +809,7 @@ mod tests {
             audio_dialog_text: None,
             list_audio_devices: false,
             no_save: false,
+            markdown_output: false,
         };
 
         get_input_text(&mut config, None).unwrap();
@@ -863,6 +879,7 @@ mod tests {
             show_conversation: None,
             model: "test-model".to_string(),
             record_audio: false,
+            record_audio_ptt: false,
             roles: vec![],
             ordered_content: Vec::new(),
             spinner: false,
@@ -870,6 +887,7 @@ mod tests {
             audio_dialog_text: None,
             list_audio_devices: false,
             no_save: false,
+            markdown_output: false,
         };
 
         get_input_text(&mut config, None).unwrap();
@@ -921,6 +939,7 @@ mod tests {
             show_conversation: None,
             model: "test-model".to_string(),
             record_audio: false,
+            record_audio_ptt: false,
             roles: vec![],
             ordered_content: Vec::new(),
             spinner: false,
@@ -928,6 +947,7 @@ mod tests {
             audio_dialog_text: None,
             list_audio_devices: false,
             no_save: false,
+            markdown_output: false,
         };
 
         get_input_text(&mut config, None).unwrap();

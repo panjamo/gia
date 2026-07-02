@@ -1,16 +1,35 @@
 use anyhow::{Context, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use device_query::{DeviceQuery, DeviceState, Keycode};
 use native_dialog::MessageDialog;
 use rubato::{
     Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
 use std::fs;
+use std::io::Write;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 use crate::logging::{log_debug, log_info};
+
+/// Shared handle type for the WAV writer used by the cpal callback
+type WavWriterHandle = Arc<Mutex<Option<hound::WavWriter<std::io::BufWriter<std::fs::File>>>>>;
+
+/// A live cpal recording session: the audio stream plus the shared state the
+/// input callback writes to. Dropping `stream` stops the callback.
+struct RecordingSession {
+    stream: cpal::Stream,
+    writer: WavWriterHandle,
+    /// Gate for whether incoming samples are written to the WAV (push-to-talk)
+    recording: Arc<Mutex<bool>>,
+    /// Counts callback invocations while `recording` is true (visual feedback)
+    packet_count: Arc<AtomicUsize>,
+    wav_path: String,
+    opus_path: String,
+    device_display_name: String,
+}
 
 /// Resample audio data to a target sample rate
 /// Returns resampled data and the target sample rate
@@ -197,14 +216,15 @@ fn get_audio_device(device_name: Option<&str>) -> Result<cpal::Device> {
         .ok_or_else(|| anyhow::anyhow!("No default input device available"))
 }
 
-/// Record audio natively using cpal (fast recording to WAV, then quick ogg-opus conversion)
-/// Returns the path to the recorded Opus file
-pub fn record_audio_native(
+/// Build and start a cpal input stream that records to a temp WAV file.
+///
+/// `initial_recording` controls whether samples are captured immediately
+/// (`true` for the classic dialog-driven recording, `false` for push-to-talk
+/// which starts paused until the user holds a key).
+fn setup_recording_stream(
     device_name: Option<&str>,
-    dialog_prefix: Option<&str>,
-) -> Result<String> {
-    log_debug("Starting native audio recording with cpal");
-
+    initial_recording: bool,
+) -> Result<RecordingSession> {
     // Generate unique filenames for WAV and Opus
     let temp_dir = std::env::temp_dir();
     let timestamp = std::time::SystemTime::now()
@@ -244,18 +264,18 @@ pub fn record_audio_native(
         sample_format: hound::SampleFormat::Int,
     };
 
-    let writer = Arc::new(Mutex::new(Some(
+    let writer: WavWriterHandle = Arc::new(Mutex::new(Some(
         hound::WavWriter::create(&wav_path, spec).context("Failed to create WAV writer")?,
     )));
     let writer_clone = Arc::clone(&writer);
 
     log_debug("WAV writer created successfully");
 
-    // Flag to signal recording stop
-    let recording = Arc::new(Mutex::new(true));
+    // Gate for whether incoming samples are written to the WAV
+    let recording = Arc::new(Mutex::new(initial_recording));
     let recording_clone = Arc::clone(&recording);
 
-    // Packet counter for visual feedback (print dot every N packets)
+    // Packet counter for visual feedback (only increments while recording)
     let packet_count = Arc::new(AtomicUsize::new(0));
     let packet_count_clone = Arc::clone(&packet_count);
 
@@ -321,45 +341,32 @@ pub fn record_audio_native(
     }
     .context("Failed to build input stream")?;
 
-    // Start recording
+    // Start the stream (samples are only written when `recording` is true)
     stream.play().context("Failed to start audio stream")?;
     log_debug("Audio stream started");
 
-    // Wait for first audio packet to arrive before showing dialog
-    // This ensures audio is actually flowing before user sees the confirmation
-    while packet_count.load(Ordering::Relaxed) == 0 {
-        thread::sleep(Duration::from_millis(1));
-    }
+    Ok(RecordingSession {
+        stream,
+        writer,
+        recording,
+        packet_count,
+        wav_path,
+        opus_path,
+        device_display_name,
+    })
+}
 
-    // Immediate visual feedback - recording is now active (after first packet received)
-    eprintln!("🎤 SPEAK NOW!");
-
-    // Show message dialog to stop recording (no MessageType to avoid Windows notification sound)
-    log_debug("Showing message dialog to stop recording");
-    let prefix = dialog_prefix
-        .map(|s| {
-            let decoded = urlencoding::decode(s).unwrap_or_else(|_| s.into());
-            format!("{}\n\n", decoded)
-        })
-        .unwrap_or_default();
-    let dialog_text = format!(
-        "{}🎙️  Recording in progress from device:\n{}\n\nClick Yes to take over the recording, No to cancel",
-        prefix, device_display_name
-    );
-    let user_confirmed = MessageDialog::new()
-        .set_title("Recording...")
-        .set_text(&dialog_text)
-        .show_confirm()
-        .context("Failed to show recording dialog")?;
-
-    if !user_confirmed {
-        log_debug("User pressed Cancel, aborting");
-        *recording.lock().unwrap() = false;
-        drop(stream);
-        return Err(anyhow::anyhow!("Recording cancelled by user"));
-    }
-
-    log_debug("User clicked OK, stopping recording");
+/// Stop the stream, finalize the WAV file and encode it to Opus.
+/// Returns the path to the resulting Opus file.
+fn finalize_recording(session: RecordingSession) -> Result<String> {
+    let RecordingSession {
+        stream,
+        writer,
+        recording,
+        wav_path,
+        opus_path,
+        ..
+    } = session;
 
     // Stop recording
     *recording.lock().unwrap() = false;
@@ -377,24 +384,31 @@ pub fn record_audio_native(
 
     log_debug("WAV file finalized");
 
-    // Check WAV file size
+    // Check WAV file size. A WAV with only a header (44 bytes) and no samples
+    // means nothing was captured (e.g. push-to-talk with SPACE never held).
     let wav_size = fs::metadata(&wav_path)
         .context("Failed to get WAV file metadata")?
         .len();
 
-    if wav_size == 0 {
+    if wav_size <= 44 {
+        let _ = fs::remove_file(&wav_path);
         return Err(anyhow::anyhow!("WAV file is empty - no audio recorded"));
     }
 
     log_info(&format!("✅ Recorded WAV file: {wav_size} bytes"));
 
-    // Convert WAV to Opus using ogg-opus (fast since WAV is already recorded)
+    wav_to_opus(&wav_path, &opus_path)
+}
+
+/// Read a finalized WAV file, resample if necessary and encode it to Opus.
+/// Removes the WAV file afterwards and returns the path to the Opus file.
+fn wav_to_opus(wav_path: &str, opus_path: &str) -> Result<String> {
     log_debug("Converting WAV to Opus with ogg-opus...");
     eprintln!("🔄 Converting to Opus format...");
 
     // Read WAV file back using hound
     let mut reader =
-        hound::WavReader::open(&wav_path).context("Failed to open WAV file for conversion")?;
+        hound::WavReader::open(wav_path).context("Failed to open WAV file for conversion")?;
     let wav_spec = reader.spec();
 
     // Read all samples as i16
@@ -402,6 +416,11 @@ pub fn record_audio_native(
         .samples::<i16>()
         .collect::<Result<Vec<i16>, _>>()
         .context("Failed to read audio samples from WAV file")?;
+
+    if audio_data.is_empty() {
+        let _ = fs::remove_file(wav_path);
+        return Err(anyhow::anyhow!("WAV file is empty - no audio recorded"));
+    }
 
     // Resample if necessary (handles any sample rate -> supported rate)
     let (resampled_data, target_rate) =
@@ -427,10 +446,10 @@ pub fn record_audio_native(
     }.context("Failed to encode audio to Opus format")?;
 
     // Write Opus file
-    fs::write(&opus_path, &opus_data).context("Failed to write Opus file")?;
+    fs::write(opus_path, &opus_data).context("Failed to write Opus file")?;
 
     // Clean up WAV file
-    let _ = fs::remove_file(&wav_path);
+    let _ = fs::remove_file(wav_path);
 
     // Verify Opus file
     let opus_size = opus_data.len() as u64;
@@ -443,7 +462,134 @@ pub fn record_audio_native(
     log_info(&format!("✅ Converted to Opus: {opus_size} bytes"));
     eprintln!("✅ Audio recording complete!");
 
-    Ok(opus_path)
+    Ok(opus_path.to_string())
+}
+
+/// Record audio natively using cpal (fast recording to WAV, then quick ogg-opus conversion)
+/// Returns the path to the recorded Opus file
+pub fn record_audio_native(
+    device_name: Option<&str>,
+    dialog_prefix: Option<&str>,
+) -> Result<String> {
+    log_debug("Starting native audio recording with cpal");
+
+    let session = setup_recording_stream(device_name, true)?;
+
+    // Wait for first audio packet to arrive before showing dialog
+    // This ensures audio is actually flowing before user sees the confirmation
+    while session.packet_count.load(Ordering::Relaxed) == 0 {
+        thread::sleep(Duration::from_millis(1));
+    }
+
+    // Immediate visual feedback - recording is now active (after first packet received)
+    eprintln!("🎤 SPEAK NOW!");
+
+    // Show message dialog to stop recording (no MessageType to avoid Windows notification sound)
+    log_debug("Showing message dialog to stop recording");
+    let prefix = dialog_prefix
+        .map(|s| {
+            let decoded = urlencoding::decode(s).unwrap_or_else(|_| s.into());
+            format!("{}\n\n", decoded)
+        })
+        .unwrap_or_default();
+    let dialog_text = format!(
+        "{}🎙️  Recording in progress from device:\n{}\n\nClick Yes to take over the recording, No to cancel",
+        prefix, session.device_display_name
+    );
+    let user_confirmed = MessageDialog::new()
+        .set_title("Recording...")
+        .set_text(&dialog_text)
+        .show_confirm()
+        .context("Failed to show recording dialog")?;
+
+    if !user_confirmed {
+        log_debug("User pressed Cancel, aborting");
+        *session.recording.lock().unwrap() = false;
+        drop(session.stream);
+        return Err(anyhow::anyhow!("Recording cancelled by user"));
+    }
+
+    log_debug("User clicked OK, stopping recording");
+    finalize_recording(session)
+}
+
+/// Push-to-talk audio recording.
+///
+/// The microphone is armed but paused: audio is only captured while SPACE is
+/// held. Releasing SPACE pauses capture (paused gaps are simply omitted, so the
+/// result is one continuous stream). ENTER finishes and encodes, ESC cancels.
+///
+/// Key state is read via poll-based global keyboard state (`device_query`), which
+/// works on Windows and macOS without terminal key-release events. On macOS the
+/// first run prompts for the Input Monitoring permission.
+pub fn record_audio_push_to_talk(
+    device_name: Option<&str>,
+    dialog_prefix: Option<&str>,
+) -> Result<String> {
+    log_debug("Starting push-to-talk audio recording with cpal");
+
+    // Start armed but paused: no samples are captured until SPACE is held
+    let session = setup_recording_stream(device_name, false)?;
+
+    // Optional caller-provided header text (URL-encoded, same as the dialog flow)
+    if let Some(s) = dialog_prefix {
+        let decoded = urlencoding::decode(s).unwrap_or_else(|_| s.into());
+        eprintln!("{decoded}");
+    }
+    eprintln!("   Hold SPACE to talk · release to pause · ENTER to finish · ESC to cancel");
+
+    // Raw mode so the held SPACE / ENTER / ESC keys don't echo to the terminal
+    let raw_enabled = crossterm::terminal::enable_raw_mode().is_ok();
+
+    let ds = DeviceState::new();
+    let mut finished = false;
+    let mut cancelled = false;
+    let mut last_talking: Option<bool> = None;
+
+    loop {
+        let keys = ds.get_keys();
+        let talking = keys.contains(&Keycode::Space);
+        *session.recording.lock().unwrap() = talking;
+
+        if keys.contains(&Keycode::Enter) {
+            finished = true;
+            break;
+        }
+        if keys.contains(&Keycode::Escape) {
+            cancelled = true;
+            break;
+        }
+
+        // Update the status line only when the talk/pause state changes
+        if last_talking != Some(talking) {
+            let status = if talking {
+                "🎤 REC   "
+            } else {
+                "⏸  paused"
+            };
+            eprint!("\r{status}");
+            let _ = std::io::stderr().flush();
+            last_talking = Some(talking);
+        }
+
+        thread::sleep(Duration::from_millis(15));
+    }
+
+    if raw_enabled {
+        let _ = crossterm::terminal::disable_raw_mode();
+    }
+    eprintln!(); // move off the status line
+
+    if cancelled {
+        log_debug("Push-to-talk cancelled by user (ESC)");
+        *session.recording.lock().unwrap() = false;
+        drop(session.stream);
+        return Err(anyhow::anyhow!("Recording cancelled by user"));
+    }
+
+    debug_assert!(finished);
+    log_debug("Push-to-talk finished (ENTER), encoding");
+    finalize_recording(session)
 }
 
 /// Record audio using native Rust implementation (cpal + ogg-opus)

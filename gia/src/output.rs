@@ -450,6 +450,7 @@ mod tests {
             show_conversation: None,
             model: "openai::gpt-4".to_string(),
             record_audio: false,
+            record_audio_ptt: false,
             roles: vec!["assistant".to_string()],
             ordered_content: vec![
                 ContentSource::ImageFile("test.jpg".to_string()),
@@ -487,6 +488,7 @@ mod tests {
             show_conversation: None,
             model: "openai::gpt-4".to_string(),
             record_audio: false,
+            record_audio_ptt: false,
             roles: vec![],
             ordered_content: vec![],
             spinner: false,

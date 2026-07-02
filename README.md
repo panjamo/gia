@@ -12,7 +12,7 @@ This workspace contains two binaries:
 
 - Uses command line arguments as the main prompt
 - **Roles & Tasks** - Load AI role definitions and task instructions from markdown files
-- **Audio recording** - Record audio prompts natively with `-a` flag (no external dependencies)
+- **Audio recording** - Record audio prompts natively with `-a` flag, or push-to-talk with `-A` (hold SPACE to talk); no external dependencies
 - **Smart file support** - Include any files or directories
   - `-f` flag: Automatically detects media files (JPEG, PNG, WebP, HEIC, PDF, OGG, OPUS, MP3, M4A, MP4) vs text files
   - Supports directories (processes all files recursively with auto-detection)
@@ -153,7 +153,7 @@ gia -h              # Short help with basic usage
 
 GIA automatically combines input from multiple sources:
 - **Command line**: Main prompt (required, except when using `-a` alone)
-- **Audio recording**: With `-a` flag (native recording, no external dependencies)
+- **Audio recording**: With `-a` flag (native recording), or `-A` for push-to-talk (hold SPACE); no external dependencies
 - **Stdin**: Automatically detected when piped
 - **Clipboard**: With `-c` flag only
 - **Text files**: With `-f` flag (any extension)
@@ -207,6 +207,11 @@ gia -t code-review -t security-audit "Review this PR"
 # Audio recording (auto-generates prompt):
 gia --record-audio
 gia -a  # Short option
+
+# Push-to-talk recording (hold SPACE to talk, release to pause, ENTER to finish, ESC to cancel):
+gia --record-audio-ptt
+gia -A  # Short option
+gia -A --role EN --no-save   # Push-to-talk transcription only
 
 # Audio recording with custom prompt:
 gia --record-audio "Transcribe and summarize this audio"
@@ -345,6 +350,7 @@ gia -s -b                         # Show latest conversation (file + browser)
 - `[PROMPT_TEXT]` - Prompt text for the AI (main input)
 - `-t, --role <NAME>` - Load role/task from ~/.gia/roles/ or ~/.gia/tasks/ (can be used multiple times)
 - `-a, --record-audio` - Record audio input natively (auto-generates prompt if no text provided)
+- `-A, --record-audio-ptt` - Push-to-talk recording: hold SPACE to talk, release to pause, ENTER to finish, ESC to cancel (macOS: needs Input Monitoring permission)
 - `--audio-device <DEVICE>` - Specify audio input device for recording (overrides GIA_AUDIO_DEVICE)
 - `--audio-dialog-text <TEXT>` - URL-encoded text shown before the recording confirmation dialog (e.g. `Hello%0AWorld` for newlines)
 - `--list-audio-devices` - List all available audio input devices and exit
